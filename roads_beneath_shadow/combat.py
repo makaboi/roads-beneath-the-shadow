@@ -58,6 +58,7 @@ class CombatConfig:
     location_text: str = "Steel clears leather. Rain hisses through the broken window."
     objective: str | None = None
     max_rounds: int | None = None
+    objective_enemy_invulnerable: bool = False
     difficulty: CombatDifficulty | str | None = None
 
 
@@ -151,15 +152,19 @@ class CombatEngine:
                 color=Color.DIM,
             )
 
-        if config.surprise_round and enemies:
+        if config.surprise_round and enemies and not config.objective_enemy_invulnerable:
             first = next((enemy for enemy in enemies if enemy.alive), None)
             if first:
                 damage = self._player_damage(state, first, power=False)
                 first.hp = max(0, first.hp - damage)
-                self.ui.write(f"You seize the opening and strike {first.name} for {damage} damage!", color=Color.GREEN)
+                self.ui.write(
+                    f"You seize the opening and strike {first.name} for {damage} damage!",
+                    color=Color.GREEN,
+                )
 
         round_number = 1
         active = next((enemy for enemy in enemies if enemy.alive), enemies[0])
+        defensive_objective = config.objective_enemy_invulnerable
         while character.alive and any(enemy.alive for enemy in enemies):
             self._prepare_round(enemies)
             if not any(enemy.alive for enemy in enemies):
@@ -169,28 +174,50 @@ class CombatEngine:
             self._plan_intents(enemies)
             self._show_status(state, enemies, round_number, active)
 
-            actions = ["attack", "power", "defend", "item", "inspect"]
-            options = [
-                "Attack",
-                f"Power attack (-{self._profile.power_focus_cost} Focus, become Exposed)",
-                "Defend (halve all attacks, recover 1 Focus)",
-                "Use an item",
-                "Inspect enemy",
-            ]
-            if sum(enemy.alive for enemy in enemies) > 1:
+            if defensive_objective:
+                actions = ["defend", "item", "inspect"]
+                options = [
+                    "Defend (halve all attacks, recover 1 Focus)",
+                    "Use an item",
+                    "Inspect enemy",
+                ]
+            else:
+                actions = ["attack", "power", "defend", "item", "inspect"]
+                options = [
+                    "Attack",
+                    f"Power attack (-{self._profile.power_focus_cost} Focus, become Exposed)",
+                    "Defend (halve all attacks, recover 1 Focus)",
+                    "Use an item",
+                    "Inspect enemy",
+                ]
+            if not defensive_objective and sum(enemy.alive for enemy in enemies) > 1:
                 actions.append("target")
                 options.append(f"Change target (current: {active.name})")
-            if self._origin and self._origin.ability_name:
+            if (
+                self._origin
+                and self._origin.ability_name
+                and (
+                    not defensive_objective or self._origin.ability_id == "field_remedy"
+                )
+            ):
                 actions.append("origin")
                 availability = "spent" if self._ability_used else "-1 Focus"
                 options.append(f"{self._origin.ability_name} ({availability})")
             if config.mara_aid:
-                actions.append("mara")
-                options.append("Mara: Crossing Blades (-1 Focus, disrupt)")
+                actions.append("mara_guard" if defensive_objective else "mara")
+                options.append(
+                    "Mara: Crossing Guard (-1 Focus, defend)"
+                    if defensive_objective
+                    else "Mara: Crossing Blades (-1 Focus, disrupt)"
+                )
             if config.tobin_aid:
-                actions.append("tobin")
-                options.append("Tobin: Pinning Shot (-1 Focus, weaken)")
-            if config.allow_flee:
+                actions.append("tobin_guard" if defensive_objective else "tobin")
+                options.append(
+                    "Tobin: Deflecting Shot (-1 Focus, defend)"
+                    if defensive_objective
+                    else "Tobin: Pinning Shot (-1 Focus, weaken)"
+                )
+            if config.allow_flee and not defensive_objective:
                 actions.append("flee")
                 options.append("Attempt to flee")
 
@@ -215,13 +242,16 @@ class CombatEngine:
                     )
                     continue
                 character.focus -= self._profile.power_focus_cost
+                self._player_statuses["exposed"] = 1
                 damage = self._player_damage(state, active, power=True)
                 active.hp = max(0, active.hp - damage)
-                interrupted = active.current_intent in INTENTS and INTENTS[active.current_intent].interruptible
+                interrupted = (
+                    active.current_intent in INTENTS
+                    and INTENTS[active.current_intent].interruptible
+                )
                 active.statuses["staggered"] = 1
                 active.statuses.pop("guarded", None)
                 active.statuses.pop("vulnerable", None)
-                self._player_statuses["exposed"] = 1
                 text = f"Your committed blow deals {damage} damage to {active.name}"
                 text += " and interrupts its intent" if interrupted else ""
                 text += ", but leaves you Exposed!"
@@ -256,6 +286,18 @@ class CombatEngine:
                 consumes_turn, defended = self._use_origin_ability(state, active)
                 if not consumes_turn:
                     continue
+            elif action in {"mara_guard", "tobin_guard"}:
+                if character.focus <= 0:
+                    self.ui.write("You have no Focus left. Choose another action.", color=Color.YELLOW)
+                    continue
+                character.focus -= 1
+                defended = True
+                companion = (
+                    "Mara crosses your guard"
+                    if action == "mara_guard"
+                    else "Tobin's arrow turns the charge aside"
+                )
+                self.ui.write(f"{companion} and buys a heartbeat.", color=Color.CYAN)
             elif action == "mara":
                 if character.focus <= 0:
                     self.ui.write("You have no Focus left. Choose another action.", color=Color.YELLOW)
@@ -493,7 +535,11 @@ class CombatEngine:
         self.ui.write("Bleeding costs you 1 Health.", color=Color.MAGENTA)
         self._decrement_status(self._player_statuses, "bleeding")
 
-    def _use_origin_ability(self, state: GameState, enemy: Enemy) -> tuple[bool, bool]:
+    def _use_origin_ability(
+        self,
+        state: GameState,
+        enemy: Enemy,
+    ) -> tuple[bool, bool]:
         character = state.character
         origin = self._origin
         if not origin or not origin.ability_id:
@@ -518,12 +564,17 @@ class CombatEngine:
             )
             return True, True
         if origin.ability_id == "flanking_strike":
+            self._player_statuses["evade"] = 1
             weapon_attack = ITEMS[character.weapon].attack if character.weapon else 0
-            damage = self.rng.randint(1, 3) + character.cunning + weapon_attack + self._profile.outgoing_bonus
+            damage = (
+                self.rng.randint(1, 3)
+                + character.cunning
+                + weapon_attack
+                + self._profile.outgoing_bonus
+            )
             enemy.hp = max(0, enemy.hp - damage)
             enemy.statuses.pop("guarded", None)
             enemy.statuses["vulnerable"] = 1
-            self._player_statuses["evade"] = 1
             self.ui.write(
                 f"FLANKING STRIKE — You bypass Armor for {damage} damage; {enemy.name} is Vulnerable and you gain Evasion.",
                 color=Color.GREEN,
@@ -699,4 +750,92 @@ def ghorak() -> Enemy:
         intent_pattern=("command", "cleave", "brace", "heavy"),
         phase_two_pattern=("menace", "cleave", "execution"),
         phase_threshold=0.5,
+    )
+
+
+def black_rider_echo(*, final: bool = False) -> Enemy:
+    return Enemy(
+        "Black Rider",
+        max_hp=999,
+        hp=999,
+        attack_min=6 if final else 3,
+        attack_max=9 if final else 5,
+        armor=3,
+        description="A hooded shape that cannot be slain here; survive until the seal answers.",
+        archetype="nazgul",
+        intent_pattern=("menace", "heavy", "quick"),
+        phase_two_pattern=("menace", "execution", "cleave") if final else (),
+        phase_threshold=0.5 if final else 0.0,
+    )
+
+
+def ash_sapper() -> Enemy:
+    return Enemy(
+        "Ash-Hand Sapper",
+        max_hp=10,
+        hp=10,
+        attack_min=3,
+        attack_max=5,
+        armor=0,
+        description="An Orc engineer carrying pitch and a hooked demolition hammer.",
+        archetype="saboteur",
+        intent_pattern=("aim", "heavy", "quick"),
+    )
+
+
+def ash_commander() -> Enemy:
+    return Enemy(
+        "Ash-Hand Commander",
+        max_hp=14,
+        hp=14,
+        attack_min=4,
+        attack_max=7,
+        armor=1,
+        description="Ghorak's surviving lieutenant drives the formation with threats.",
+        archetype="commander",
+        intent_pattern=("command", "strike", "heavy"),
+    )
+
+
+def ash_archer() -> Enemy:
+    return Enemy(
+        "Ash-Hand Archer",
+        max_hp=9,
+        hp=9,
+        attack_min=3,
+        attack_max=6,
+        armor=0,
+        description="A black-fletched archer searching for the bridge ropes.",
+        archetype="archer",
+        intent_pattern=("aim", "quick", "strike"),
+    )
+
+
+def chain_troll() -> Enemy:
+    return Enemy(
+        "Chain Troll",
+        max_hp=30,
+        hp=30,
+        attack_min=5,
+        attack_max=9,
+        armor=3,
+        description="A blinded cave troll armored in floodgate chains.",
+        archetype="boss",
+        intent_pattern=("guard", "heavy", "cleave"),
+        phase_two_pattern=("execution", "menace", "heavy"),
+        phase_threshold=0.5,
+    )
+
+
+def teren_false_ranger() -> Enemy:
+    return Enemy(
+        "Teren the False Ranger",
+        max_hp=22,
+        hp=22,
+        attack_min=4,
+        attack_max=8,
+        armor=1,
+        description="A Ranger oath-breaker who knows every lesson Calenor taught you.",
+        archetype="duelist",
+        intent_pattern=("quick", "aim", "heavy"),
     )

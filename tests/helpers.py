@@ -21,9 +21,21 @@ class VictoryCombat:
 class EpisodePlayer:
     """Reads rendered headings and chooses a coherent completionist route."""
 
-    def __init__(self, opening_choice: int = 1, origin_choice: int = 1, *, real_combat: bool = False) -> None:
+    prompt_limit = 500
+
+    def __init__(
+        self,
+        opening_choice: int = 1,
+        origin_choice: int = 1,
+        *,
+        road_choice: int = 1,
+        midgewater_topic: int = 2,
+        real_combat: bool = False,
+    ) -> None:
         self.opening_choice = opening_choice
         self.origin_choice = origin_choice
+        self.road_choice = road_choice
+        self.midgewater_topic = midgewater_topic
         self.real_combat = real_combat
         self.output: list[str] = []
         self.cursor = 0
@@ -35,11 +47,15 @@ class EpisodePlayer:
 
     def read(self, prompt: str) -> str:
         self.prompt_count += 1
-        if self.prompt_count > 500:
-            raise AssertionError("Script exceeded 500 prompts; likely stuck in a loop")
+        if self.prompt_count > self.prompt_limit:
+            raise AssertionError(
+                f"Script exceeded {self.prompt_limit} prompts; likely stuck in a loop"
+            )
         context = "\n".join(self.output[self.cursor :])
         self.cursor = len(self.output)
+        return self._answer(prompt, context)
 
+    def _answer(self, prompt: str, context: str) -> str:
         if "Traveler's name" in prompt:
             return "Arin"
         if "MAIN MENU" in context:
@@ -82,9 +98,9 @@ class EpisodePlayer:
         if "TOBIN READS NED'S NAME" in context:
             return "1"
         if "CHOOSE THE APPROACH TO MIDGEWATER" in context:
-            return "1"
+            return str(self.road_choice)
         if "WHILE TOBIN SLEEPS" in context:
-            return "2"
+            return str(self.midgewater_topic)
         if "WHO TAKES THE LAST WATCH?" in context:
             return "1"
         if "HOW DO YOU REACH NED?" in context:
@@ -120,3 +136,66 @@ class EpisodePlayer:
         if focus_matches and int(focus_matches[-1][0]) > 0:
             return "2"
         return "1"
+
+
+class PartTwoPlayer(EpisodePlayer):
+    """Chooses the high-Hope completionist route through Part II."""
+
+    prompt_limit = 300
+
+    def _answer(self, prompt: str, context: str) -> str:
+        fixed = {
+            "WHAT DO YOU CARRY DOWN?": "Calenor's lesson",
+            "MARA HEARS THE RIDER ABOVE": "Trust her",
+            "HOW DO YOU BUY FOUR ROUNDS?": "broken sword",
+            "THE HALL ASKS FOR A NAME": "road-name",
+            "WHO HOLDS THE DARK WITH YOU?": "stand together",
+            "WHAT MUST SURVIVE AT ECHO BRIDGE?": "Defend the ropes",
+            "WHO DO YOU REACH FIRST?": "prisoners",
+            "THE SLUICE HORN SOUNDS. CHOOSE.": "Rescue the captives",
+            "HOW DO YOU FREE THEM?": "Pick the cage locks",
+            "THE CHAINS ARE ARMOR AND LEASH": "Turn the flood wheel",
+            "WHAT BECOMES OF THE DROWNED MILE?": "Drain the Drowned Mile",
+            "MARA TOUCHES THE COLD SHACKLE": "Share the forge truth",
+            "THE COLD SHACKLE REMAINS": "Name the forge truth",
+            "CHOOSE A WAY THROUGH THE REFUGE": "child-height handprints",
+            "THE HOUSE BURNS AGAIN": "Search every room",
+            "A WOMAN HIDES SOMETHING BENEATH THE FLOOR": "Lift the board",
+            "THE CHILD REACHES FOR CALENOR": "Take his hand",
+            "HOW DO YOU ANSWER TEREN?": "Present the evidence",
+            "IF TEREN YIELDS, WHAT FATE WILL FOLLOW?": "Spare Teren",
+            "HOW DO YOU BREAK THE SPOKE-CHAIN?": "Warden oath",
+            "WHAT ARE YOUR FIRST WORDS TO CALENOR?": "Bring him home",
+            "HOW DO YOU JUDGE CALENOR?": "Forgive Calenor",
+            "SET THE RITUAL": "Divide among willing voices",
+            "THE STAR WHISPERS BENEATH YOUR SKIN": "Reject the star",
+            "WHERE DO YOU STAND FOR SIX ROUNDS?": "Hold the center",
+            "WHAT BECOMES OF THE LAST SEAL?": "Remake the seal",
+        }
+        for heading, label in fixed.items():
+            if heading in context:
+                return self._visible_choice(context, label)
+        if "EXPLORE THE HALL OF EIGHT" in context:
+            for label in (
+                "Cipher Archive",
+                "Erased Statue",
+                "Dead Testimony",
+                "Take the road to Echo Bridge",
+            ):
+                if label in context:
+                    return self._visible_choice(context, label)
+        if "HOW DO YOU REACH ECHO BRIDGE?" in context:
+            label = "Warden stair" if "Warden stair" in context else "exposed bridgehead"
+            return self._visible_choice(context, label)
+        if "ASK CALENOR THE THREE TRUTHS" in context:
+            for label in ("Why hide", "What did Teren", "Why must the Rider"):
+                if label in context:
+                    return self._visible_choice(context, label)
+        return super()._answer(prompt, context)
+
+    @staticmethod
+    def _visible_choice(context: str, label: str) -> str:
+        match = re.search(rf"\[(\d+)\]\s+[^\n]*{re.escape(label)}", context)
+        if not match:
+            raise AssertionError(f"Expected choice containing {label!r}\nContext:\n{context}")
+        return match.group(1)

@@ -30,6 +30,22 @@ VALID_SCENE_IDS = frozenset(
         "final_battle",
         "cliffhanger",
         "complete",
+        "part2_descent",
+        "part2_pursuit",
+        "part2_hall",
+        "part2_hall_exploration",
+        "part2_echo_bridge",
+        "part2_drowned_mile",
+        "part2_prisoners",
+        "part2_chain_troll",
+        "part2_house_under_ash",
+        "part2_burning_memory",
+        "part2_teren",
+        "part2_calenor_prison",
+        "part2_calenor_reunion",
+        "part2_last_seal",
+        "part2_final_battle",
+        "part2_seal_choice",
     }
 )
 

@@ -49,6 +49,41 @@ class PlayerProfileTests(unittest.TestCase):
             self.assertEqual(loaded.completed_runs, 1)
             self.assertEqual(loaded.endings["shadow_claim"], 1)
 
+    def test_same_journey_records_one_ending_per_episode(self) -> None:
+        profile = PlayerProfile()
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]), journey_id="road-7")
+        state.scene = "complete"
+        state.ending = "fellowship"
+        profile.record(state)
+
+        state.chapter = 2
+        state.ending = "living_road"
+        profile.record(state)
+        profile.record(state)
+
+        self.assertEqual(profile.completed_runs, 2)
+        self.assertEqual(profile.recorded_journeys, ["road-7:part_1", "road-7:part_2"])
+
+    def test_old_unqualified_record_still_deduplicates_part_one(self) -> None:
+        profile = PlayerProfile(recorded_journeys=["legacy-road"], completed_runs=1)
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]), journey_id="legacy-road")
+        state.scene = "complete"
+        state.ending = "fellowship"
+
+        self.assertEqual(profile.record(state), [])
+        self.assertEqual(profile.completed_runs, 1)
+
+    def test_maximum_length_episode_record_survives_profile_loading(self) -> None:
+        profile = PlayerProfile()
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]), journey_id="r" * 128)
+        state.chapter = 2
+        state.ending = "living_road"
+
+        profile.record(state)
+        loaded = PlayerProfile.from_dict({"recorded_journeys": profile.recorded_journeys})
+
+        self.assertEqual(loaded.recorded_journeys, [f"{'r' * 128}:part_2"])
+
     def test_incomplete_journey_cannot_be_recorded(self) -> None:
         state = GameState(Character.from_origin("Arin", ORIGINS[2]))
         with self.assertRaises(ValueError):
@@ -94,6 +129,87 @@ class PlayerProfileTests(unittest.TestCase):
             self.assertEqual(loaded.completed_runs, 1)
             self.assertIn("The Road Opens", transcript)
             self.assertIn("Completed journeys: 1", transcript)
+
+    def test_part_two_living_road_unlocks_only_part_two_achievements(self) -> None:
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]))
+        state.chapter = 2
+        state.scene = "complete"
+        state.ending = "living_road"
+        state.character.hope = 8
+        state.character.corruption = 0
+        state.flags.update(
+            {
+                "part2_testimony_first": True,
+                "part2_testimony_second": True,
+                "part2_testimony_third": True,
+                "part2_prisoners_rescued": True,
+                "part_two_mara_present": True,
+                "part_two_tobin_present": False,
+                "part2_star_rejected": True,
+            }
+        )
+
+        unlocked = PlayerProfile().record(state)
+
+        self.assertEqual(
+            unlocked,
+            ["part_two", "names_remembered", "none_forsaken", "no_name_for_shadow"],
+        )
+        self.assertNotIn("part_one", unlocked)
+        self.assertNotIn("unbroken_hope", unlocked)
+
+    def test_no_name_for_shadow_rejects_every_explicit_star_power_path(self) -> None:
+        forbidden = (
+            "accepted_star_power",
+            "used_star_in_final",
+            "part2_star_commanded",
+            "part2_spoke_hidden_name",
+            "part2_star_read_memory",
+            "part2_star_broke_chain",
+            "part2_star_bargain",
+        )
+        for flag in forbidden:
+            with self.subTest(flag=flag):
+                state = GameState(Character.from_origin("Arin", ORIGINS[0]))
+                state.chapter = 2
+                state.scene = "complete"
+                state.ending = "living_road"
+                state.flags.update({"part2_star_rejected": True, flag: True})
+
+                unlocked = PlayerProfile().record(state)
+
+                self.assertIn("part_two", unlocked)
+                self.assertNotIn("no_name_for_shadow", unlocked)
+
+    def test_part_two_endings_do_not_count_toward_fates_witnessed(self) -> None:
+        profile = PlayerProfile(
+            endings={"fellowship": 1, "hidden_road": 1, "living_road": 1},
+            completed_runs=3,
+        )
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]))
+        state.ending = "keeper_of_secrets"
+
+        unlocked = profile.record(state)
+
+        self.assertNotIn("fates_witnessed", unlocked)
+
+    def test_zero_count_part_one_ending_does_not_count_as_witnessed(self) -> None:
+        profile = PlayerProfile(
+            endings={
+                "fellowship": 1,
+                "hidden_road": 1,
+                "keeper_of_secrets": 1,
+                "shadow_claim": 0,
+                "living_road": 1,
+            },
+            completed_runs=4,
+        )
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]))
+        state.ending = "fellowship"
+
+        unlocked = profile.record(state)
+
+        self.assertNotIn("fates_witnessed", unlocked)
 
 
 if __name__ == "__main__":

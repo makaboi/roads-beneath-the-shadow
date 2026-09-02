@@ -8,19 +8,49 @@ from collections.abc import Sequence
 from .artwork import (
     ANCIENT_ROAD_DISCOVERY_ART,
     BLACK_RIDER_CLIFFHANGER_ART,
+    BREE_WAYFARER_ORIGIN_ART,
     BREE_STREETS_ART,
+    BROKEN_LANTERN_ART,
+    CALENOR_BURNING_HOUSE_MEMORY_ART,
+    CALENOR_CACHE_CONTENTS_ART,
+    CALENOR_LAST_LESSON_ART,
+    CALENOR_LETTER_ART,
+    DEAD_ROAD_MOSAIC_ART,
+    DROWNED_ARMORY_ART,
+    DROWNED_WATCH_POST_ART,
+    EDRIN_DELIVERS_STAR_ART,
+    EDRIN_RANGER_CIPHER_ART,
+    EDRINS_ROOM_ART,
     FINAL_RUINS_BATTLE_ART,
+    FIGHT_BESIDE_MARA_ART,
+    FLOODED_DITCH_RIDER_ART,
     GHORAK_ASH_HAND_INTRO_ART,
+    GHORAK_PRISONER_TRAIL_ART,
+    HEALERS_APPRENTICE_ORIGIN_ART,
+    HIDDEN_HEARTH_STAR_ART,
+    KITCHEN_ESCAPE_ART,
+    MARA_DRAWS_BLADES_ART,
+    MARA_FIRE_CONFESSION_ART,
     MARSH_WARG_INTRO_ART,
     MIDGEWATER_RUINS_ART,
+    NED_RETURNS_STAR_RAY_ART,
     NORTH_GATE_ART,
+    NORTH_ROAD_SCOUT_ORIGIN_ART,
     NORTH_WAYHOUSE_ART,
+    ORC_CAPTAIN_PARLEY_ART,
     ORC_ATTACK_ART,
     ORC_TRACKER_INTRO_ART,
+    PONY_PANTRY_CHOICE_ART,
     PRANCING_PONY_EXTERIOR_ART,
     PRANCING_PONY_INTERIOR_ART,
+    RANGER_TRAIL_MARKS_ART,
+    ROAD_FROM_BREE_ART,
+    STAR_KEY_BROKEN_ART,
+    STAR_KEY_REFORGED_ART,
     THIRD_STONE_DISCOVERY_ART,
     TITLE_ART_EXPANDED,
+    TOBIN_REED_ARRIVES_ART,
+    WAYHOUSE_SHRINE_ART,
 )
 from .combat import (
     CombatConfig,
@@ -37,12 +67,13 @@ from .content import (
     ENDING_TEXT,
     ITEMS,
     ORIGINS,
+    PART_ONE_ENDINGS,
     QUEST_MISSING_WATCHMAN,
     QUEST_THIRD_STONE,
     QUEST_WAYHOUSE,
-    STAR_ART,
 )
 from .models import Character, GameState
+from .part_two import PartTwoEpisode, begin_part_two, part_two_ending_breakdown
 from .profile import ACHIEVEMENTS, PlayerProfile, ProfileManager
 from .savegame import SaveManager
 from .settings import SettingsManager, UserSettings
@@ -88,6 +119,11 @@ class Game:
         self.profile = profile
         selected_difficulty = difficulty or DIFFICULTY_MODES[self.user_settings.difficulty]
         self.combat = CombatEngine(ui, self.rng, difficulty=selected_difficulty)
+        self.part_two = PartTwoEpisode(
+            ui,
+            self._story_choice,
+            lambda state, enemies, config: self.combat.run(state, enemies, config),
+        )
         self.state: GameState | None = None
 
     def run(self) -> None:
@@ -103,7 +139,12 @@ class Game:
                 color=Color.YELLOW,
                 bold=True,
             )
-            self.ui.write("Part I — The Black Rider's Letter".center(68), color=Color.DIM)
+            subtitle = (
+                "Part II — The Dead Road"
+                if self.state is not None and self.state.chapter == 2
+                else "Part I — The Black Rider's Letter"
+            )
+            self.ui.write(subtitle.center(68), color=Color.DIM)
             options: list[str] = []
             routes: list[str] = []
             if self.state is not None and not self.state.ending:
@@ -164,7 +205,22 @@ class Game:
             if selected is None:
                 continue
             origin = ORIGINS[selected - 1]
+            origin_art, origin_alt = (
+                (
+                    BREE_WAYFARER_ORIGIN_ART,
+                    "A sturdy Bree traveler waits beneath a hedge gate with an ash staff.",
+                ),
+                (
+                    NORTH_ROAD_SCOUT_ORIGIN_ART,
+                    "A hooded North-road scout studies tracks beside the road.",
+                ),
+                (
+                    HEALERS_APPRENTICE_ORIGIN_ART,
+                    "A healer's apprentice kneels beside an open field kit with herbs and an ash staff.",
+                ),
+            )[selected - 1]
             self.ui.write()
+            self.ui.art(origin_art, Color.SILVER, alt_text=origin_alt)
             self.ui.narrate(origin.description, color=Color.CYAN)
             confirmed = self.ui.choose("Accept this background?", ["Yes", "Choose again"])
             if confirmed == 1:
@@ -172,6 +228,11 @@ class Game:
 
         character = Character.from_origin(name, origin)
         self.state = GameState(character=character)
+        self.ui.art(
+            CALENOR_LAST_LESSON_ART,
+            Color.YELLOW,
+            alt_text="Calenor teaches a younger traveler to read trail signs beside a campfire.",
+        )
         lesson = self.ui.choose(
             "What lesson from Calenor do you carry?",
             [
@@ -201,9 +262,14 @@ class Game:
         while self.state is not None:
             if self.state.ending:
                 self._show_ending()
-                return
+                if self.state.ending:
+                    return
+                continue
             scene = self.state.scene
-            if scene == "chapter1_intro":
+            if scene.startswith("part2_"):
+                if not self.part_two.run_scene(self.state):
+                    return
+            elif scene == "chapter1_intro":
                 self._chapter_one_intro()
             elif scene == "chapter1_decision":
                 if not self._chapter_one_decision():
@@ -278,8 +344,17 @@ class Game:
             Color.YELLOW,
             alt_text="A low fire burns inside a silent, crowded inn.",
         )
+        self.ui.art(
+            EDRIN_DELIVERS_STAR_ART,
+            Color.SILVER,
+            alt_text="The wounded messenger Edrin offers a sealed letter and broken silver star.",
+        )
         self.ui.write('"Calenor sent me," he whispers.', color=Color.CYAN)
-        self.ui.art(STAR_ART, Color.SILVER, alt_text="A broken silver pendant shaped as an eight-pointed star.")
+        self.ui.art(
+            STAR_KEY_BROKEN_ART,
+            Color.SILVER,
+            alt_text="A broken silver pendant shaped as an eight-pointed star.",
+        )
         self.ui.narrate(
             "He presses a sealed letter and a broken eight-pointed silver star into your hands. One "
             "ray has been snapped away. The pendant is unnaturally cold."
@@ -296,6 +371,11 @@ class Game:
             alt_text="An arrow shatters the window as three Orc scouts force their way inside.",
         )
         self.ui.write('"The silver star. Take its bearer alive."', color=Color.RED, bold=True)
+        self.ui.art(
+            MARA_DRAWS_BLADES_ART,
+            Color.MAGENTA,
+            alt_text="Mara throws back her cloak and draws two short blades.",
+        )
         self.ui.narrate(
             "A traveler named Mara steps between you and the Orcs and draws two short blades."
         )
@@ -325,6 +405,11 @@ class Game:
 
     def _branch_fight(self) -> None:
         assert self.state is not None
+        self.ui.art(
+            FIGHT_BESIDE_MARA_ART,
+            Color.RED,
+            alt_text="You and Mara stand back-to-back against the Orc attackers.",
+        )
         self.ui.narrate(
             "You step beside Mara and draw your weapon. For the first time that night, she smiles. "
             '"Good. Take the scout. The scarred one is mine."'
@@ -342,6 +427,11 @@ class Game:
     def _branch_hide(self) -> None:
         assert self.state is not None
         character = self.state.character
+        self.ui.art(
+            HIDDEN_HEARTH_STAR_ART,
+            Color.YELLOW,
+            alt_text="You hide the broken silver star beneath a split hearthstone as Orc boots approach.",
+        )
         self.ui.narrate(
             "You slip the star inside a split beneath the hearthstone and tuck Calenor's letter "
             "behind your belt. The captain sees your empty hand and hesitates. Mara uses that "
@@ -362,6 +452,11 @@ class Game:
     def _branch_search(self) -> None:
         assert self.state is not None
         character = self.state.character
+        self.ui.art(
+            EDRIN_RANGER_CIPHER_ART,
+            Color.SILVER,
+            alt_text="An oak-leaf Ranger token and black arrowhead lie beside the fallen Edrin.",
+        )
         self.ui.narrate(
             "You drop beside the messenger while Mara meets the first blade. Sewn beneath his "
             "collar is an oak-leaf token scored with Calenor's private cipher: NORTH GATE. THIRD STONE."
@@ -384,6 +479,11 @@ class Game:
     def _branch_escape(self) -> bool:
         assert self.state is not None
         character = self.state.character
+        self.ui.art(
+            KITCHEN_ESCAPE_ART,
+            Color.BLUE,
+            alt_text="Broken crockery leads toward an open rain door and the stable wall beyond.",
+        )
         self.ui.narrate(
             "You shoulder through the kitchen as crockery bursts behind you. The rain door stands "
             "open. Beyond it: the stable yard, a low wall, and freedom. Mara is still fighting inside."
@@ -440,6 +540,11 @@ class Game:
         assert self.state is not None
         character = self.state.character
         self.ui.write('"Why does the Shadow fear a broken trinket?" you call.', color=Color.CYAN)
+        self.ui.art(
+            ORC_CAPTAIN_PARLEY_ART,
+            Color.RED,
+            alt_text="The scarred Orc captain raises a fist and stills every blade in the inn.",
+        )
         self.ui.narrate("The captain raises one fist. For an instant, the Orcs wait.")
         choice = self._story_choice(
             "PRESS YOUR QUESTION",
@@ -541,6 +646,11 @@ class Game:
             recovered = character.heal(max(8, character.max_hp // 2))
             if recovered:
                 self.ui.write(f"Mara binds your wounds. You recover {recovered} Health.", color=Color.GREEN)
+            self.ui.art(
+                CALENOR_LETTER_ART,
+                Color.SILVER,
+                alt_text="Calenor's rain-stained letter bears an eight-pointed star and a road leading north.",
+            )
             self.ui.narrate(
                 "At last you break Calenor's seal. Most of the page is blank. Three lines occupy its "
                 "center in the square hand he used when a lesson mattered:\n\n"
@@ -552,6 +662,11 @@ class Game:
             self.state.add_journal("Calenor's letter says to carry the star north and seek the stones of the lost kingdom.")
             self.state.add_quest(QUEST_THIRD_STONE)
 
+            self.ui.art(
+                TOBIN_REED_ARRIVES_ART,
+                Color.BLUE,
+                alt_text="Tobin Reed stands rain-soaked in the wrecked inn, clutching his watch badge.",
+            )
             self.ui.narrate(
                 "A young member of the Bree watch pushes through the crowd. Tobin Reed is broad-faced, "
                 "rain-soaked, and trying not to look at Edrin's body. His partner, Ned Barley, vanished "
@@ -661,6 +776,11 @@ class Game:
     def _explore_messenger_room(self) -> bool:
         assert self.state is not None
         self.ui.title("EDRIN'S ROOM")
+        self.ui.art(
+            EDRINS_ROOM_ART,
+            Color.SILVER,
+            alt_text="Edrin's attic room holds muddy tracks, an untouched bed, a candle, and a blood-pink basin.",
+        )
         self.ui.narrate(
             "Edrin rented the smallest room beneath the eaves. The bed is untouched. Mud from the "
             "Greenway dries in crescents across the floor, and a washbasin contains water gone pink "
@@ -713,6 +833,11 @@ class Game:
         assert self.state is not None
         character = self.state.character
         self.ui.title("THE STABLE YARD")
+        self.ui.art(
+            BROKEN_LANTERN_ART,
+            Color.YELLOW,
+            alt_text="A broken watch-lantern lies beside huge wolf tracks in the rain.",
+        )
         self.ui.narrate(
             "Tobin holds a shuttered lantern low while you cross the churned yard. The Orcs entered "
             "on foot, but outside the wall their prints mingle with something broader: a great wolf's "
@@ -755,6 +880,11 @@ class Game:
     def _explore_kitchen(self) -> bool:
         assert self.state is not None
         self.ui.title("WHAT THE ROAD ALLOWS")
+        self.ui.art(
+            PONY_PANTRY_CHOICE_ART,
+            Color.YELLOW,
+            alt_text="A sword, healing herbs, and a smoke flask wait on the Prancing Pony pantry table.",
+        )
         self.ui.narrate(
             "Butterbur opens the locked pantry without being asked. The Pony cannot spare much if "
             "Bree is besieged, but he sets three bundles on the table. You may carry only one without "
@@ -789,6 +919,11 @@ class Game:
         assert self.state is not None
         character = self.state.character
         self.ui.title("THE WOMAN WITH TWO BLADES")
+        self.ui.art(
+            MARA_FIRE_CONFESSION_ART,
+            Color.MAGENTA,
+            alt_text="Mara cleans her twin knives beside dying embers, a shackle scar visible at her wrist.",
+        )
         self.ui.narrate(
             "Mara cleans her knives with a strip torn from an Orc cloak. In the quiet she looks "
             "younger than she did in battle, but not less tired. A narrow burn circles her left wrist, "
@@ -927,6 +1062,11 @@ class Game:
             if "calenor_map" not in character.inventory:
                 character.add_item("calenor_map")
                 character.add_item("ranger_cloak")
+            self.ui.art(
+                CALENOR_CACHE_CONTENTS_ART,
+                Color.SILVER,
+                alt_text="Calenor's hidden cache holds a folded Ranger cloak, a map, and a sealed note.",
+            )
             self.ui.narrate(
                 "Inside lies Calenor's weathered cloak, a waxed road-map, and a note written only days ago. "
                 "The map shows a ruined wayhouse at the edge of Midgewater, built over a stair called the "
@@ -973,9 +1113,9 @@ class Game:
         character = self.state.character
         self.ui.clear()
         self.ui.art(
-            BREE_STREETS_ART,
+            ROAD_FROM_BREE_ART,
             Color.BLUE,
-            alt_text="Bree fades behind the company as the eastern road enters the wild.",
+            alt_text="Bree's last lamps recede behind a narrow road into the wild.",
         )
         self.ui.title("OUT THROUGH THE HEDGE")
         self.ui.narrate(
@@ -996,6 +1136,11 @@ class Game:
         if route == 1:
             self.state.flags["followed_ranger_marks"] = True
             character.hope += 1
+            self.ui.art(
+                RANGER_TRAIL_MARKS_ART,
+                Color.GREEN,
+                alt_text="Calenor's trail marks appear beneath a root beside a pale turned stone and red thread.",
+            )
             self.ui.narrate(
                 "At every fork you find Calenor's sign: three cuts beneath a root, a stone turned pale "
                 "side upward. Once, a fresh red thread clings to the mark. He passed this way hurt, "
@@ -1003,6 +1148,11 @@ class Game:
             )
         elif route == 2:
             self.state.flags["tracked_ghorak"] = True
+            self.ui.art(
+                GHORAK_PRISONER_TRAIL_ART,
+                Color.RED,
+                alt_text="Orc boots, a huge paw print, and a prisoner's dragging foot cross the muddy road.",
+            )
             if character.cunning >= 3 or self.state.flags.get("learned_bree_tracking"):
                 self.state.flags["ambush_warning"] = True
                 self.ui.narrate(
@@ -1015,6 +1165,11 @@ class Game:
         else:
             self.state.flags["took_cart_road"] = True
             character.mara_trust -= 1
+            self.ui.art(
+                FLOODED_DITCH_RIDER_ART,
+                Color.BLUE,
+                alt_text="Three travelers hide in a flooded ditch while a mounted shadow passes overhead.",
+            )
             self.ui.narrate(
                 "The cart-road is fast and exposed. Once, hoofbeats approach from behind. You lie in "
                 "a flooded ditch while a rider-shaped darkness passes without a lantern. Mara waits "
@@ -1058,6 +1213,11 @@ class Game:
                 return False
             if topic == 1:
                 self.state.flags["asked_about_adoption"] = True
+                self.ui.art(
+                    CALENOR_BURNING_HOUSE_MEMORY_ART,
+                    Color.RED,
+                    alt_text="A Ranger approaches a child beneath a starless sky as a North Downs house burns.",
+                )
                 self.ui.narrate(
                     '"He never told me," Mara says. "But once, fevered, he spoke of a house burning near '
                     "the North Downs and a child beneath a sky with no stars. He believed finding you was "
@@ -1113,9 +1273,9 @@ class Game:
         character = self.state.character
         if not self.state.flags.get("missing_watchman_intro_seen"):
             self.ui.art(
-                MIDGEWATER_RUINS_ART,
+                DROWNED_WATCH_POST_ART,
                 Color.SILVER,
-                alt_text="A drowned watch post leans over mist and marsh water.",
+                alt_text="Ned hangs in a black-rope snare above a drowned watch post.",
             )
             self.ui.title("THE LOST WHISTLE")
             self.ui.narrate(
@@ -1255,11 +1415,21 @@ class Game:
         else:
             self.state.flags["won_marsh_fight"] = True
             self.state.flags["ned_survived"] = True
+            self.ui.art(
+                NED_RETURNS_STAR_RAY_ART,
+                Color.SILVER,
+                alt_text="Wounded Ned extends the missing silver ray toward the broken star-key.",
+            )
             self.ui.narrate(
                 "The warg shudders into stillness. Ned cuts a silver point from inside his coat. It "
                 "flies from his palm to your broken pendant. With a sound like winter ice cracking, "
                 "the missing ray joins its place and the completed eight-pointed star-key wakes."
             )
+        self.ui.art(
+            STAR_KEY_REFORGED_ART,
+            Color.SILVER,
+            alt_text="The completed eight-pointed star-key wakes with silver light.",
+        )
         if "star_key" not in character.inventory:
             character.remove_item("silver_star")
             character.add_item("star_key")
@@ -1371,6 +1541,11 @@ class Game:
                 self.state.play_minutes += 8
                 return True
             if route == "armory":
+                self.ui.art(
+                    DROWNED_ARMORY_ART,
+                    Color.BLUE,
+                    alt_text="A leaf-shaped sword rests on a stone table in the flooded wayhouse armory.",
+                )
                 self.ui.narrate(
                     "Bronze hooks line a room half full of black water. Most weapons have become rust, "
                     "but one leaf-shaped short sword lies sealed in oilcloth beneath the captain's table. "
@@ -1386,6 +1561,11 @@ class Game:
                     self.ui.write("You equip the North-kingdom Blade. Attack greatly increased.", color=Color.GREEN)
                 self.state.visit("wayhouse_armory")
             elif route == "archive":
+                self.ui.art(
+                    DEAD_ROAD_MOSAIC_ART,
+                    Color.SILVER,
+                    alt_text="A floor mosaic shows silver roads and one black route ending at a split crown.",
+                )
                 self.ui.narrate(
                     "A mosaic map covers the archive floor. Silver roads join Fornost, Amon Sul, and "
                     "places whose names have worn away. One black line was added later. It descends from "
@@ -1403,6 +1583,11 @@ class Game:
                     )
                 self.state.visit("wayhouse_archive")
             else:
+                self.ui.art(
+                    WAYHOUSE_SHRINE_ART,
+                    Color.MAGENTA,
+                    alt_text="A stone chair faces a polished wall where a crowned reflection raises its hand.",
+                )
                 self.ui.narrate(
                     "The chamber contains no altar—only a stone chair facing a polished wall. In its "
                     "surface you see Calenor chained below the hills. Behind him stands a figure wearing "
@@ -1671,18 +1856,20 @@ class Game:
         flags = self.state.flags
 
         flags["part_two_hidden_route_known"] = self._knows_hidden_road()
-        flags["part_two_star_resisted"] = character.hope > character.corruption
-        flags["part_two_shadow_foothold"] = character.corruption > character.hope
-        flags["part_two_companions_united"] = bool(
-            flags.get("ned_survived")
-            and character.mara_trust >= 2
-            and character.tobin_trust >= 2
-        )
         flags["part_two_ned_safe"] = bool(flags.get("ned_survived"))
         flags["part_two_neds_watch_continues"] = bool(
             not flags.get("ned_survived") and character.tobin_trust >= 2
         )
-        flags["part_two_mara_distrusts_player"] = character.mara_trust < 0
+        flags["part_two_mara_present"] = True
+        tobin_continues = flags.get("tobin_chose_to_continue") or flags.get(
+            "tobin_carries_neds_watch"
+        )
+        tobin_left = flags.get("tobin_returns_with_ned") or flags.get(
+            "tobin_stays_at_threshold"
+        )
+        flags["part_two_tobin_present"] = bool(
+            tobin_continues or (not tobin_left and character.tobin_trust >= 2)
+        )
 
     def _ending_copy(self) -> tuple[str, str]:
         """Return ending prose, replacing the obsolete early-exit Hidden Road copy."""
@@ -1752,6 +1939,11 @@ class Game:
         self.state.ending = ending
         self.state.scene = "complete"
 
+    def _begin_part_two(self) -> None:
+        assert self.state is not None
+        self._prepare_part_two_consequences()
+        begin_part_two(self.state)
+
     def _show_ending(self) -> None:
         assert self.state is not None and self.state.ending is not None
         unlocked = self._record_completed_journey()
@@ -1762,7 +1954,12 @@ class Game:
         character = self.state.character
         self.ui.write()
         self.ui.title("THE ROAD YOU MADE")
-        for label, consequence in self._ending_breakdown():
+        breakdown = (
+            part_two_ending_breakdown(self.state)
+            if self.state.chapter == 2
+            else self._ending_breakdown()
+        )
+        for label, consequence in breakdown:
             self.ui.write(f"{label}: {consequence}")
         self.ui.write()
         self.ui.write(
@@ -1770,30 +1967,56 @@ class Game:
             f"Mara {character.mara_trust:+d}   Tobin {character.tobin_trust:+d}",
             color=Color.DIM,
         )
-        self.ui.write("These consequences are carried into Part II.", color=Color.YELLOW, bold=True)
-        self.ui.write()
-        self.ui.write("PART I COMPLETE", color=Color.YELLOW, bold=True)
-        self.ui.narrate("The road continues in Part II: The Dead Road.", color=Color.CYAN)
+        if self.state.chapter == 2:
+            self.ui.narrate(
+                "An underground map illuminates another sealed spoke beneath ruined Fornost.",
+                color=Color.SILVER,
+            )
+            self.ui.narrate(
+                "We guarded the road. The Shadow was waking the city.", color=Color.SILVER
+            )
+            self.ui.write(
+                "These choices shape the road to Fornost.", color=Color.YELLOW, bold=True
+            )
+            self.ui.write()
+            self.ui.write("PART II COMPLETE", color=Color.YELLOW, bold=True)
+            self.ui.narrate(
+                "The road continues in Part III: The Waking City.", color=Color.CYAN
+            )
+        else:
+            self.ui.write(
+                "These consequences are carried into Part II.", color=Color.YELLOW, bold=True
+            )
+            self.ui.write()
+            self.ui.write("PART I COMPLETE", color=Color.YELLOW, bold=True)
+            self.ui.narrate("The road continues in Part II: The Dead Road.", color=Color.CYAN)
         if unlocked:
             self.ui.write()
             self.ui.title("ACHIEVEMENTS UNLOCKED")
             for achievement in unlocked:
                 self.ui.write(f"* {ACHIEVEMENTS[achievement]}", color=Color.GREEN)
-        choice = self.ui.choose("What next?", ["Save this journey", "Return to the main menu"])
+        options = ["Save this journey", "Return to the main menu"]
+        if self.state.chapter == 1 and self.state.ending in PART_ONE_ENDINGS:
+            options.append("Begin Part II — The Dead Road")
+        choice = self.ui.choose("What next?", options)
         if choice == 1:
             self._save_menu()
+        elif choice == 3:
+            self._begin_part_two()
 
     def _record_completed_journey(self) -> list[str]:
         """Record a completed route exactly once, even if its save is reopened."""
 
         assert self.state is not None
-        if self.profile is None or self.state.flags.get("profile_recorded"):
+        recorded_flag = f"profile_recorded_part_{self.state.chapter}"
+        legacy_recorded = self.state.chapter == 1 and self.state.flags.get("profile_recorded")
+        if self.profile is None or self.state.flags.get(recorded_flag) or legacy_recorded:
             return []
         try:
             unlocked = self.profile.record(self.state)
         except OSError:
             return []
-        self.state.flags["profile_recorded"] = True
+        self.state.flags[recorded_flag] = True
         return unlocked
 
     def _show_chronicle(self) -> None:

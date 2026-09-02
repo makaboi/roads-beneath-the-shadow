@@ -12,6 +12,9 @@ license = { text = "All rights reserved" }
 authors = [{ name = "makaboi" }]
 dependencies = []
 
+[project.optional-dependencies]
+test = ["Pillow==12.3.0"]
+
 [project.scripts]
 roads-beneath-shadow = "roads_beneath_shadow.__main__:main"
 

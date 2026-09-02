@@ -7,8 +7,14 @@ from roads_beneath_shadow.combat import (
     CombatDifficulty,
     CombatEngine,
     CombatResult,
+    ash_archer,
+    ash_commander,
+    ash_sapper,
+    black_rider_echo,
+    chain_troll,
     ghorak,
     orc_scout,
+    teren_false_ranger,
 )
 from roads_beneath_shadow.content import ITEMS, ORIGINS
 from roads_beneath_shadow.models import Character, Enemy, GameState
@@ -33,6 +39,26 @@ class CombatTests(unittest.TestCase):
         choices = iter(answers)
         output: list[str] = []
         return TerminalUI(color=False, fast=True, input_fn=lambda _: next(choices), output_fn=output.append), output
+
+    def test_part_two_enemy_factories_return_fresh_tactical_archetypes(self) -> None:
+        first = chain_troll()
+        second = chain_troll()
+        self.assertIsNot(first, second)
+        self.assertEqual((first.max_hp, first.armor), (30, 3))
+        self.assertEqual(first.intent_pattern, ("guard", "heavy", "cleave"))
+        self.assertEqual(first.phase_two_pattern, ("execution", "menace", "heavy"))
+        self.assertEqual(first.phase_threshold, 0.5)
+
+        rider = black_rider_echo(final=True)
+        self.assertEqual(rider.max_hp, 999)
+        self.assertEqual(rider.intent_pattern, ("menace", "heavy", "quick"))
+        self.assertEqual(rider.phase_two_pattern, ("menace", "execution", "cleave"))
+
+        formation = (ash_sapper(), ash_commander(), ash_archer(), teren_false_ranger())
+        self.assertEqual(
+            [enemy.archetype for enemy in formation],
+            ["saboteur", "commander", "archer", "duelist"],
+        )
 
     def test_attack_can_win_encounter(self) -> None:
         answers = iter(["1"])
@@ -139,6 +165,44 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(enemy.hp, 46)
         self.assertTrue(any("STAND FAST" in line for line in output))
         self.assertTrue(any("counter" in line.lower() for line in output))
+
+    def test_invulnerable_objective_offers_only_defensive_actions(self) -> None:
+        offered: tuple[str, ...] = ()
+
+        def select(title: str, options: Sequence[str]) -> int:
+            nonlocal offered
+            self.assertEqual(title, "Choose your action")
+            offered = tuple(options)
+            return 1
+
+        ui = PolicyUI(select)
+        state = GameState(Character.from_origin("Arin", ORIGINS[1]))
+        enemy = Enemy("Objective Shade", 50, 50, 3, 3, intent_pattern=("strike",))
+
+        result = CombatEngine(ui, random.Random(4)).run(
+            state,
+            [enemy],
+            CombatConfig(
+                max_rounds=1,
+                surprise_round=True,
+                mara_aid=True,
+                tobin_aid=True,
+                objective_enemy_invulnerable=True,
+            ),
+        )
+
+        self.assertEqual(result, CombatResult.VICTORY)
+        self.assertEqual(enemy.hp, enemy.max_hp)
+        self.assertEqual(
+            offered,
+            (
+                "Defend (halve all attacks, recover 1 Focus)",
+                "Use an item",
+                "Inspect enemy",
+                "Mara: Crossing Guard (-1 Focus, defend)",
+                "Tobin: Deflecting Shot (-1 Focus, defend)",
+            ),
+        )
 
     def test_healer_ability_restores_health_and_wards_damage(self) -> None:
         ui, output = self._ui(["6"])

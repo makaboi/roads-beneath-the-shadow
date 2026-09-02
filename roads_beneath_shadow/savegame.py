@@ -163,5 +163,7 @@ class SaveManager:
             raise ValueError("scene must be 'complete' if and only if an ending is set")
         if not 1 <= state.chapter <= 1_000:
             raise ValueError("chapter must be between 1 and 1000")
+        if state.scene.startswith("part2_") and state.chapter != 2:
+            raise ValueError("Part II scenes require chapter 2")
         if not 0 <= state.play_minutes <= 10_000_000:
             raise ValueError("play_minutes must be between 0 and 10000000")

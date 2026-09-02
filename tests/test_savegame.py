@@ -250,6 +250,40 @@ class SaveManagerTests(unittest.TestCase):
             loaded = saves.load(1)
             self.assertEqual((loaded.scene, loaded.ending), ("complete", "fellowship"))
 
+    def test_accepts_active_part_two_scene_at_chapter_two(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            saves = SaveManager(Path(temporary))
+            state = GameState(Character.from_origin("Mira", ORIGINS[0]))
+            state.chapter = 2
+            state.scene = "part2_last_seal"
+
+            saves.save(1, state)
+
+            loaded = saves.load(1)
+            self.assertEqual((loaded.chapter, loaded.scene), (2, "part2_last_seal"))
+
+    def test_accepts_completed_living_road_ending(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            saves = SaveManager(Path(temporary))
+            state = GameState(Character.from_origin("Mira", ORIGINS[0]))
+            state.chapter = 2
+            state.scene = "complete"
+            state.ending = "living_road"
+
+            saves.save(1, state)
+
+            loaded = saves.load(1)
+            self.assertEqual((loaded.scene, loaded.ending), ("complete", "living_road"))
+
+    def test_rejects_part_two_scene_at_chapter_one(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            saves = SaveManager(Path(temporary))
+            state = GameState(Character.from_origin("Mira", ORIGINS[0]))
+            state.scene = "part2_last_seal"
+
+            with self.assertRaisesRegex(ValueError, "Part II scenes require chapter 2"):
+                saves.save(1, state)
+
 
 if __name__ == "__main__":
     unittest.main()

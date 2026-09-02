@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .content import ENDING_TEXT, ORIGINS
+from .content import ENDING_TEXT, ORIGINS, PART_ONE_ENDINGS
 from .models import GameState
 from .savegame import default_save_directory
 
@@ -24,8 +24,11 @@ ACHIEVEMENTS = {
     "road_scholar": "Keeper of Signs — Recover twelve or more journal clues.",
     "many_roads": "Many Roads — Complete Part I with every origin.",
     "fates_witnessed": "Fates Witnessed — Discover four different Part I endings.",
+    "part_two": "The Dead Road — Complete Part II.",
+    "names_remembered": "Names Remembered — Recover all three Warden testimonies.",
+    "none_forsaken": "None Forsaken — Rescue the prisoners and keep every available companion alive.",
+    "no_name_for_shadow": "No Name for the Shadow — Reach the Living Road without accepting the star's power.",
 }
-
 
 @dataclass
 class PlayerProfile:
@@ -62,7 +65,7 @@ class PlayerProfile:
                     str(value)
                     for value in payload.get("recorded_journeys", [])
                     if isinstance(value, str)
-                    and 1 <= len(value) <= 128
+                    and 1 <= len(value) <= 138
                     and value.isprintable()
                 )
             )
@@ -86,32 +89,65 @@ class PlayerProfile:
         if not state.ending:
             raise ValueError("Cannot record a journey before it has an ending")
         journey_id = getattr(state, "journey_id", "")
-        if journey_id and journey_id in self.recorded_journeys:
+        record_key = f"{journey_id}:part_{state.chapter}" if journey_id else ""
+        legacy_part_one_recorded = state.chapter == 1 and journey_id in self.recorded_journeys
+        if record_key and (record_key in self.recorded_journeys or legacy_part_one_recorded):
             return []
-        if journey_id:
-            self.recorded_journeys.append(journey_id)
+        if record_key:
+            self.recorded_journeys.append(record_key)
         self.completed_runs += 1
         self.endings[state.ending] = self.endings.get(state.ending, 0) + 1
         if state.character.origin not in self.origins_completed:
             self.origins_completed.append(state.character.origin)
 
-        candidates = ["part_one"]
-        if (
-            state.flags.get("ned_survived")
-            and state.flags.get("mara_chose_to_continue")
-            and state.flags.get("tobin_chose_to_continue")
-        ):
-            candidates.append("none_left_behind")
-        if state.character.hope >= state.character.corruption + 3:
-            candidates.append("unbroken_hope")
-        if state.character.corruption >= 3:
-            candidates.append("shadow_touched")
-        if len(state.journal) >= 12:
-            candidates.append("road_scholar")
-        if len(self.origins_completed) >= 3:
-            candidates.append("many_roads")
-        if len(self.endings) >= 4:
-            candidates.append("fates_witnessed")
+        if state.chapter == 2:
+            candidates = ["part_two"]
+            if all(
+                state.flags.get(flag, False)
+                for flag in (
+                    "part2_testimony_first",
+                    "part2_testimony_second",
+                    "part2_testimony_third",
+                )
+            ):
+                candidates.append("names_remembered")
+            if state.flags.get("part2_prisoners_rescued") and state.flags.get(
+                "part_two_mara_present"
+            ):
+                candidates.append("none_forsaken")
+            star_power_flags = (
+                "accepted_star_power",
+                "used_star_in_final",
+                "part2_star_commanded",
+                "part2_spoke_hidden_name",
+                "part2_star_read_memory",
+                "part2_star_broke_chain",
+                "part2_star_bargain",
+            )
+            if (
+                state.ending == "living_road"
+                and state.flags.get("part2_star_rejected")
+                and not any(state.flags.get(flag, False) for flag in star_power_flags)
+            ):
+                candidates.append("no_name_for_shadow")
+        else:
+            candidates = ["part_one"]
+            if (
+                state.flags.get("ned_survived")
+                and state.flags.get("mara_chose_to_continue")
+                and state.flags.get("tobin_chose_to_continue")
+            ):
+                candidates.append("none_left_behind")
+            if state.character.hope >= state.character.corruption + 3:
+                candidates.append("unbroken_hope")
+            if state.character.corruption >= 3:
+                candidates.append("shadow_touched")
+            if len(state.journal) >= 12:
+                candidates.append("road_scholar")
+            if len(self.origins_completed) >= 3:
+                candidates.append("many_roads")
+            if sum(self.endings.get(ending, 0) > 0 for ending in PART_ONE_ENDINGS) >= 4:
+                candidates.append("fates_witnessed")
         return [achievement for achievement in candidates if self.unlock(achievement)]
 
 

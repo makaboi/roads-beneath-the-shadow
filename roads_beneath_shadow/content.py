@@ -5,6 +5,11 @@ from __future__ import annotations
 from .models import Item, Origin
 
 
+PART_ONE_ENDINGS = frozenset(
+    {"fellowship", "hidden_road", "keeper_of_secrets", "shadow_claim"}
+)
+
+
 TITLE_ART = r"""
           _   _              _     ____  _               _
          | |_| |__   ___    | |   / ___|| |__   __ _  __| | _____      __
@@ -27,17 +32,6 @@ PONY_ART = r"""
             |      |      |     |  |
          ___|______|______|_____|__|___
         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-"""
-
-
-STAR_ART = r"""
-                         .
-                      .  |  .
-                       \ | /
-                    ---- * ----
-                       / | \
-                      '  |  '
-                         '
 """
 
 
@@ -77,6 +71,12 @@ ITEMS: dict[str, Item] = {
     ),
     "star_key": Item(
         "star_key", "Completed Star-key", "The missing silver ray has joined the pendant, restoring all eight points.", "quest"
+    ),
+    "calenor_broken_sword": Item(
+        "calenor_broken_sword",
+        "Calenor's Broken Sword",
+        "A Ranger blade broken below the hilt; its etched oath still answers the Dead Road.",
+        "quest",
     ),
     "watch_badge": Item(
         "watch_badge", "Bree Watch Badge", "Tobin's brass badge; proof that someone in Bree trusts you.", "quest"
@@ -174,9 +174,31 @@ ENDING_TEXT = {
         "You descend wounded while the Black Rider claims the threshold behind you. The star-key "
         "burns with a mark it did not bear before, and the Dead Road now knows both your name and your fear.",
     ),
+    "living_road": (
+        "THE LIVING ROAD",
+        "The oath belongs to every voice that freely bears it. Calenor walks beside you as the buried roads wake without a master.",
+    ),
+    "last_warden": (
+        "THE LAST WARDEN",
+        "The ancient seal holds again. Calenor remains beneath the hills, keeping the road while you carry his final message north.",
+    ),
+    "road_in_ruin": (
+        "THE ROAD IN RUIN",
+        "Stone, water, and memory fall together. The Rider is barred, but one guardian remains behind where the Dead Road ends.",
+    ),
+    "shadows_name": (
+        "THE SHADOW'S NAME",
+        "The buried network answers your voice. Far beneath Fornost, another sealed spoke opens its eye to the Shadow.",
+    ),
 }
 
 
 QUEST_THIRD_STONE = "Find Calenor's cache behind the north gate's third stone"
 QUEST_MISSING_WATCHMAN = "Find missing watchman Ned Barley in the Midgewater fringe"
 QUEST_WAYHOUSE = "Reach the forgotten North-kingdom wayhouse before Ghorak"
+QUEST_REACH_CALENOR = "Descend the Dead Road and reach Calenor"
+QUEST_LAST_SEAL = "Learn why the silver star is the last seal"
+QUEST_EIGHTH_NAME = "Keep the Eighth Name from the Black Rider"
+QUEST_DEAD_ROAD_FATE = "Decide the fate of the Dead Road"
+QUEST_NAMES_LOST = "Names of the Lost: recover the three Warden testimonies"
+QUEST_PRISONERS_ASH = "Prisoners of Ash: free the road-captives before the sluice opens"

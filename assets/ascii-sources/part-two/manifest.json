@@ -1,0 +1,396 @@
+{
+  "converter": {
+    "executable": "/opt/homebrew/bin/ascii-image-converter",
+    "version": "1.13.1",
+    "arguments": [
+      "--dimensions",
+      "72,20",
+      "--map",
+      " .:-=+*#@"
+    ],
+    "cleanup": [
+      "outer_blank_rows",
+      "trailing_whitespace"
+    ]
+  },
+  "entries": [
+    {
+      "filename": "part-two-title.png",
+      "raw_constant": "PART_TWO_TITLE_ART",
+      "public_art": "PART_TWO_TITLE_ART",
+      "scene": "Part II title",
+      "alt_text": "An eight-pointed star hangs above a stair descending into a black mountain.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a title emblem of an eight-pointed star above a descending stair.\nScene/backdrop: Empty night behind a black mountain cutaway.\nSubject: One oversized eight-pointed star joined to one descending stair silhouette.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "rider-wayhouse-threshold.png",
+      "raw_constant": "RIDER_WAYHOUSE_THRESHOLD_ART",
+      "public_art": "RIDER_WAYHOUSE_THRESHOLD_ART",
+      "scene": "Wayhouse threshold",
+      "alt_text": "A mounted Black Rider fills the broken doorway of a ruined wayhouse.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a threshold portrait of the Black Rider entering the wayhouse.\nScene/backdrop: Broken stone doorway and empty ruined threshold.\nSubject: One mounted hooded Rider filling the doorway.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "calenor-broken-sword.png",
+      "raw_constant": "CALENOR_BROKEN_SWORD_ART",
+      "public_art": "CALENOR_BROKEN_SWORD_ART",
+      "scene": "Broken sword",
+      "alt_text": "Calenor's broken Ranger sword lies across a pale stair above darkness.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an object portrait of Calenor's broken Ranger sword.\nScene/backdrop: One pale stair crossing a black void.\nSubject: One large broken leaf-shaped sword laid diagonally across the stair.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "falling-silver-stair.png",
+      "raw_constant": "FALLING_SILVER_STAIR_ART",
+      "public_art": "FALLING_SILVER_STAIR_ART",
+      "scene": "Falling stair",
+      "alt_text": "A tight group of three travelers descends a collapsing silver stair.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a descent scene on a collapsing silver stair.\nScene/backdrop: Open cavern void with falling stone below.\nSubject: One tight party silhouette of three travelers running downward.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree\nRegeneration correction: Keep exactly three unarmed travelers close together as one compact group; no staff, sword, weapon, or thin carried prop. Behind the stair show only empty black cavern void; no doorway, arch, portal, wall, building, or extra landmark."
+    },
+    {
+      "filename": "rider-pursuit.png",
+      "raw_constant": "RIDER_PURSUIT_INTRO_SPRITE",
+      "public_art": "RIDER_PURSUIT_INTRO_ART",
+      "scene": "Rider pursuit",
+      "alt_text": "A mounted Black Rider descends an impossible stair over a black chasm.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an enemy portrait of the Black Rider pursuing down an impossible stair.\nScene/backdrop: Steep stair suspended over a black chasm.\nSubject: One mounted hooded Rider descending toward the viewer.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "severed-seal-gate.png",
+      "raw_constant": "SEVERED_SEAL_GATE_ART",
+      "public_art": "SEVERED_SEAL_GATE_ART",
+      "scene": "Severed gate",
+      "alt_text": "A massive seal-gate closes across a silver road inside an angular cavern.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a monumental seal-gate closing across the Dead Road.\nScene/backdrop: Angular cavern with a single bright road.\nSubject: One massive closing stone gate bisecting the road.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "dead-road-panorama.png",
+      "raw_constant": "DEAD_ROAD_PANORAMA_ART",
+      "public_art": "DEAD_ROAD_PANORAMA_ART",
+      "scene": "Dead Road panorama",
+      "alt_text": "An ancient buried road crosses a vast underground gulf toward distant arches.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a wide establishing view of the buried Dead Road.\nScene/backdrop: Vast underground gulf with distant arches.\nSubject: One ancient road ribbon crossing the gulf.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree\nRegeneration correction: Show one simple continuous road ribbon over a mostly empty black gulf and only three distant arch silhouettes; no floating islands, stalactites, stalagmites, scattered ledges, railing posts, cobblestone texture, or cave-border decoration."
+    },
+    {
+      "filename": "companions-descending.png",
+      "raw_constant": "COMPANIONS_DESCENDING_ART",
+      "public_art": "COMPANIONS_DESCENDING_ART",
+      "scene": "Companions descend",
+      "alt_text": "A traveler, a twin-blade woman, and an archer descend a steep buried road.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a party descent silhouette for the three continuing companions.\nScene/backdrop: Steep buried road with an empty black drop.\nSubject: One single-file group: traveler, twin-blade woman, and archer.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "hall-eight-wardens.png",
+      "raw_constant": "HALL_EIGHT_WARDENS_ART",
+      "public_art": "HALL_EIGHT_WARDENS_ART",
+      "scene": "Hall of Eight",
+      "alt_text": "Eight stone seats form a ring around an eight-pointed floor seal.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an architectural portrait of the Hall of Eight Wardens.\nScene/backdrop: Octagonal stone chamber with deep black walls.\nSubject: One ring of eight tall stone seats around a central star floor.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, strict overhead flat plan view with the complete ring visible. Put exactly eight separate throne silhouettes at clock positions 12, 1:30, 3, 4:30, 6, 7:30, 9, and 10:30 around the central star. The 6 o'clock seat must be fully visible at bottom center. Thick separated shapes, black gaps between every throne, no crop.\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: exactly eight and only eight countable stone seats; all eight fully visible simultaneously, including one at bottom center; no text, letters, labels, border, watermark, logo, texture, props, fog, gradients, or noise; identifiable at 72x20\nAvoid: perspective views, seven-seat layouts, hidden seats, merged seats, decorative filigree"
+    },
+    {
+      "filename": "erased-eighth-statue.png",
+      "raw_constant": "ERASED_EIGHTH_STATUE_ART",
+      "public_art": "ERASED_EIGHTH_STATUE_ART",
+      "scene": "Erased statue",
+      "alt_text": "An erased stone plinth stands before seven intact guardian statues.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a discovery image centered on the erased eighth memorial.\nScene/backdrop: Flat hall wall with seven shallow guardian silhouettes.\nSubject: One violently erased empty plinth dominating the foreground.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows. EXACTLY SEVEN intact guardian silhouettes must be visible and countable behind the single erased empty plinth.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "wall-names-dim.png",
+      "raw_constant": "WALL_NAMES_DIM_FRAME",
+      "public_art": "WALL_NAMES_AWAKENING_ART",
+      "scene": "Wall of Names dim",
+      "alt_text": "Eight columns of names awaken across a dark stone wall.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create the dormant base frame of the Wall of Names.\nScene/backdrop: Empty dark Hall of Eight wall.\nSubject: One broad carved wall with eight barely visible vertical name-columns.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "wall-names-lit.png",
+      "raw_constant": "WALL_NAMES_LIT_FRAME",
+      "public_art": "WALL_NAMES_AWAKENING_ART",
+      "scene": "Wall of Names lit",
+      "alt_text": "Eight columns of names awaken across a dark stone wall.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Edit the dormant Wall of Names so its same eight columns awaken in white light.\nScene/backdrop: Preserve the exact empty wall, framing, scale, and camera of row 11.\nSubject: The same single carved wall; change illumination only.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: edit target is wall-names-dim.png; preserve exact wall geometry, eight column positions, framing, scale, camera, stairs, pillars, and every contour; change illumination only so all eight broad vertical name-columns awaken in white light; columns may use abstract broad carved marks but no legible writing; no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: any recomposition, camera shift, crop, moved geometry, added objects, legible names, photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "first-warden-testimony.png",
+      "raw_constant": "FIRST_WARDEN_TESTIMONY_ART",
+      "public_art": "FIRST_WARDEN_TESTIMONY_ART",
+      "scene": "First testimony",
+      "alt_text": "A ghostly Warden raises an open hand above a stone seal.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a spectral portrait of the first Warden testimony.\nScene/backdrop: Simple shrine alcove with a low stone seal.\nSubject: One ghostly Warden raising one open hand.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "hidden-warden-stair.png",
+      "raw_constant": "HIDDEN_WARDEN_STAIR_ART",
+      "public_art": "HIDDEN_WARDEN_STAIR_ART",
+      "scene": "Hidden stair",
+      "alt_text": "A narrow hidden stair opens beneath a split crown emblem.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a discovery view of a hidden Warden stair opening.\nScene/backdrop: Plain masonry wall split by a crown emblem.\nSubject: One narrow secret stair emerging beneath the split crown.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "echo-bridge.png",
+      "raw_constant": "ECHO_BRIDGE_ART",
+      "public_art": "ECHO_BRIDGE_ART",
+      "scene": "Echo Bridge",
+      "alt_text": "An ancient bridge spans a bottomless gulf beneath three stone arches.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a wide silhouette of ancient Echo Bridge.\nScene/backdrop: Bottomless cavern gulf beneath three stone arches.\nSubject: One thin bridge spanning the entire gulf.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "orc-sapper.png",
+      "raw_constant": "ORC_SAPPER_INTRO_SPRITE",
+      "public_art": "ORC_SAPPER_INTRO_ART",
+      "scene": "Orc sapper",
+      "alt_text": "A hunched Orc sapper grips a hooked hammer beside a pitch jar.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an enemy portrait of an Ash-Hand Orc sapper.\nScene/backdrop: Sparse bridge ropes fading into black.\nSubject: One hunched Orc holding a hooked hammer beside one large pitch jar.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "echo-bridge-battle.png",
+      "raw_constant": "ECHO_BRIDGE_BATTLE_ART",
+      "public_art": "ECHO_BRIDGE_BATTLE_ART",
+      "scene": "Echo Bridge battle",
+      "alt_text": "A compact hero formation defends bridge ropes from three Orc silhouettes.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a bridge-defense battle tableau with a clear central formation.\nScene/backdrop: Echo Bridge ropes over an empty gulf.\nSubject: One compact three-hero defense formation; three smaller Orc shapes oppose it.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "drowned-mile.png",
+      "raw_constant": "DROWNED_MILE_ART",
+      "public_art": "DROWNED_MILE_ART",
+      "scene": "Drowned Mile",
+      "alt_text": "A half-submerged road and its marker stones vanish into black water.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a flooded-road panorama of the Drowned Mile.\nScene/backdrop: Flat black water under an empty cavern roof.\nSubject: One half-submerged road line with large marker stones receding away.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "drowned-caravan.png",
+      "raw_constant": "DROWNED_CARAVAN_ART",
+      "public_art": "DROWNED_CARAVAN_ART",
+      "scene": "Drowned caravan",
+      "alt_text": "A broken prison cart and snapped wheel lean into shallow floodwater.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a wreck portrait of a drowned prison caravan.\nScene/backdrop: Shallow still floodwater and empty darkness.\nSubject: One broken prison cart with one snapped wheel and hanging chain.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "mara-shackle-forge.png",
+      "raw_constant": "MARA_SHACKLE_FORGE_ART",
+      "public_art": "MARA_SHACKLE_FORGE_ART",
+      "scene": "Mara's shackle forge",
+      "alt_text": "An open shackle rests on a forge anvil while Mara faces it.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a discovery image of Mara confronting the forge that made her shackle.\nScene/backdrop: Sparse dark workshop around one anvil.\nSubject: One oversized open shackle on the anvil; Mara is one secondary silhouette.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "prisoners-iron-cages.png",
+      "raw_constant": "PRISONERS_IRON_CAGES_ART",
+      "public_art": "PRISONERS_IRON_CAGES_ART",
+      "scene": "Prisoners",
+      "alt_text": "Two iron cages hold reaching prisoners above a flooded ledge.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a captivity tableau dominated by iron cages.\nScene/backdrop: Narrow flooded ledge over black water.\nSubject: One paired cage mass containing a few broad reaching silhouettes.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "floodgate-wheel.png",
+      "raw_constant": "FLOODGATE_WHEEL_ART",
+      "public_art": "FLOODGATE_WHEEL_ART",
+      "scene": "Floodgate wheel",
+      "alt_text": "An enormous eight-spoked floodgate wheel rises above rushing water.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a machinery portrait of the ancient floodgate control.\nScene/backdrop: Blocky stone sluice above one band of rushing water.\nSubject: One enormous eight-spoked wheel.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "chain-troll.png",
+      "raw_constant": "CHAIN_TROLL_INTRO_SPRITE",
+      "public_art": "CHAIN_TROLL_INTRO_ART",
+      "scene": "Chain Troll",
+      "alt_text": "A huge chained cave troll fills a narrow sluice tunnel.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an enemy portrait of the chained cave troll.\nScene/backdrop: Narrow empty sluice tunnel.\nSubject: One huge broad-shouldered troll wrapped in thick separated chains.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "chain-troll-battle.png",
+      "raw_constant": "CHAIN_TROLL_BATTLE_ART",
+      "public_art": "CHAIN_TROLL_BATTLE_ART",
+      "scene": "Chain Troll battle",
+      "alt_text": "A chained troll towers over three small defenders beside a flood wheel.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a scale-focused battle image at the flood wheel.\nScene/backdrop: Sluice wall, one wheel, and one band of splashing water.\nSubject: One towering chained troll; three tiny defenders form one secondary group.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "second-warden-testimony.png",
+      "raw_constant": "SECOND_WARDEN_TESTIMONY_ART",
+      "public_art": "SECOND_WARDEN_TESTIMONY_ART",
+      "scene": "Second testimony",
+      "alt_text": "A ghostly armored Warden holds a broken chain above a flooded road marker.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a spectral portrait of the second Warden testimony.\nScene/backdrop: Flooded shrine with one large road marker.\nSubject: One armored ghost Warden holding a broken chain overhead.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "house-under-ash.png",
+      "raw_constant": "HOUSE_UNDER_ASH_ART",
+      "public_art": "HOUSE_UNDER_ASH_ART",
+      "scene": "House Under Ash",
+      "alt_text": "A small stone house lies intact beneath enormous roots in an underground refuge.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an establishing portrait of the intact House Under Ash.\nScene/backdrop: Underground refuge beneath a black root ceiling.\nSubject: One small stone house compressed beneath enormous roots.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "burning-house-memory.png",
+      "raw_constant": "BURNING_HOUSE_MEMORY_FULL_ART",
+      "public_art": "BURNING_HOUSE_MEMORY_FULL_ART",
+      "scene": "Burning memory",
+      "alt_text": "A burning house dominates the night as a child faces an approaching Ranger.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a memory tableau dominated by the childhood house fire.\nScene/backdrop: Empty black night and a flat ground line.\nSubject: One sharply silhouetted burning house; a child and approaching Ranger remain small.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "teren-reveal.png",
+      "raw_constant": "TEREN_REVEAL_ART",
+      "public_art": "TEREN_REVEAL_ART",
+      "scene": "Teren reveal",
+      "alt_text": "Teren reveals a broken Ranger oath emblem beneath his cloak.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a character reveal portrait of Teren the oath-breaker.\nScene/backdrop: Ruined hearth and otherwise empty refuge wall.\nSubject: One hooded Ranger opening his cloak around one broken oath emblem.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "false-ranger-duel.png",
+      "raw_constant": "FALSE_RANGER_DUEL_SPRITE",
+      "public_art": "FALSE_RANGER_DUEL_ART",
+      "scene": "False Ranger duel",
+      "alt_text": "Two Rangers circle in a leaf-blade duel across a star-shaped floor.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a clean duel silhouette between the traveler and Teren.\nScene/backdrop: A PURE SOLID BLACK empty refuge hall with only one broad white eight-pointed star floor mark.\nSubject: Exactly two solid WHITE hooded Ranger silhouettes, fully separated, facing each other with two broad leaf-shaped swords crossing once at center.\nStyle/medium: ultra-high-contrast two-tone retro dark-fantasy woodcut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, centered symmetrical duel, both full bodies fully inside frame, huge empty black negative space\nLighting/mood: flat graphic silhouette only, ominous and uncluttered\nColor palette: ONLY pure #000000 black and pure #FFFFFF white\nConstraints: hard binary edges; black background must dominate; no gray, haze, bloom, glow, fog, gradient, soft lighting, text, letters, labels, border, watermark, logo, fine texture, tiny props, extra figures, banners, architecture, edge crop, or visual noise\nAvoid: white background, gray wash, overexposure, photorealism, overlapping bodies, thin swords, decorative filigree"
+    },
+    {
+      "filename": "calenor-prison.png",
+      "raw_constant": "CALENOR_PRISON_ART",
+      "public_art": "CALENOR_PRISON_ART",
+      "scene": "Calenor prison",
+      "alt_text": "Calenor hangs from one luminous chain above a cracked seal.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a solemn magical-prison portrait of Calenor held within the ancient seal, non-graphic and symbolic.\nScene/backdrop: Empty vault wall and one cracked circular floor seal.\nSubject: One bearded Ranger standing upright inside a single thick luminous magical chain loop, fully clothed and unharmed.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, solemn but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: symbolic fantasy restraint only, no injury or distress; no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: harm, hanging pose, photorealistic texture, crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "calenor-reunion.png",
+      "raw_constant": "CALENOR_REUNION_ART",
+      "public_art": "CALENOR_REUNION_ART",
+      "scene": "Calenor reunion",
+      "alt_text": "Calenor and the traveler reach toward each other across a broken chain.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create an intimate reunion silhouette across a broken chain.\nScene/backdrop: Dark vault with no secondary architecture.\nSubject: One joined two-figure gesture: older Ranger and traveler reaching together.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "third-warden-testimony.png",
+      "raw_constant": "THIRD_WARDEN_TESTIMONY_ART",
+      "public_art": "THIRD_WARDEN_TESTIMONY_ART",
+      "scene": "Third testimony",
+      "alt_text": "A final ghostly Warden offers an eight-pointed seal to the traveler.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a spectral portrait of the final Warden testimony.\nScene/backdrop: Simple prison shrine with empty black recess.\nSubject: Exactly two separated figures: one large ghost Warden extending one oversized eight-pointed seal toward one smaller living traveler who reaches to receive it.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, Warden dominant on the left and traveler clearly visible on the right, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subjects against pure black background, severe readable rim light, solemn but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: the smaller traveler must be visibly present and separate from the Warden; no skull face; no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: photorealistic texture, extra figures, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "last-seal-vault.png",
+      "raw_constant": "LAST_SEAL_VAULT_ART",
+      "public_art": "LAST_SEAL_VAULT_ART",
+      "scene": "Last Seal vault",
+      "alt_text": "Eight radial doorways surround a pedestal in a vast circular vault.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment reference for 72x20 terminal ASCII conversion\nPrimary request: Create a strict architectural panorama of the Last Seal vault with exactly EIGHT doorways.\nScene/backdrop: Vast circular black chamber.\nSubject: Exactly eight large, separate, countable white doorway silhouettes arranged as four on the left and four on the right around one central pedestal; all eight must be visible.\nStyle/medium: ultra-high-contrast pure black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, wide symmetrical semicircle, central pedestal, four doors clearly visible left of center and four clearly visible right of center, no doorway behind pedestal, no edge crop, large black negative space\nLighting/mood: flat graphic silhouette, ominous and uncluttered\nColor palette: ONLY pure black and pure white\nConstraints: EXACTLY 8 doorways, not 6, not 7, not 9; doorway openings separated by wide black gaps; no text, letters, labels, border, watermark, logo, figures, fine texture, fog, gradients, visual noise\nAvoid: hidden or partially cropped doorways, extra arches, photorealistic texture, decorative filigree"
+    },
+    {
+      "filename": "eight-spoked-ritual.png",
+      "raw_constant": "EIGHT_SPOKED_RITUAL_ART",
+      "public_art": "EIGHT_SPOKED_RITUAL_ART",
+      "scene": "Ritual floor",
+      "alt_text": "An eight-spoked ritual floor holds four figures around its center.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment reference for 72x20 terminal ASCII conversion\nPrimary request: Create a strict overhead ritual-floor emblem.\nScene/backdrop: PURE SOLID BLACK empty circular vault floor.\nSubject: One flat WHITE eight-spoked wheel-like seal and exactly four small BLACK-AND-WHITE hooded figure silhouettes at north, east, south, and west.\nStyle/medium: hard-edge two-tone retro dark-fantasy linocut icon, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, centered high-angle view, entire seal fully inside frame, exactly eight broad countable spokes, exactly four widely separated figures, large black negative space\nLighting/mood: flat graphic shapes only, ominous and uncluttered\nColor palette: ONLY pure #000000 black and pure #FFFFFF white\nConstraints: hard binary edges; no gray, shadow, shading, antialiased-looking haze, gradient, glow, perspective distortion, text, letters, labels, border, watermark, logo, fine texture, tiny props, extra figures, visual noise\nAvoid: gray background, 3D render, photorealism, overlapping figures, decorative filigree"
+    },
+    {
+      "filename": "rider-final-entrance.png",
+      "raw_constant": "RIDER_FINAL_ENTRANCE_SPRITE",
+      "public_art": "RIDER_FINAL_ENTRANCE_ART",
+      "scene": "Rider final entrance",
+      "alt_text": "A towering Black Rider crosses a shattered circular vault doorway.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome enemy reference for 72x20 terminal ASCII conversion\nPrimary request: Create the Black Rider's final entrance through a shattered circular vault doorway.\nScene/backdrop: PURE SOLID BLACK void with one broken white circular doorway.\nSubject: One enormous mounted hooded Rider as a solid WHITE outlined silhouette crossing toward the viewer; horse and hooded rider read as one dominant shape.\nStyle/medium: hard-edge two-tone retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, centered frontal silhouette, entire horse and rider fully inside frame, broken doorway behind, huge empty black negative space\nLighting/mood: flat graphic silhouette only, ominous and uncluttered\nColor palette: ONLY pure #000000 black and pure #FFFFFF white\nConstraints: black background dominates; hard binary edges; no gray, haze, bloom, glow, fog, gradient, soft lighting, text, letters, labels, border, watermark, logo, fine texture, tiny debris, extra figures, edge crop, or visual noise\nAvoid: white background, gray wash, overexposure, photorealism, decorative filigree"
+    },
+    {
+      "filename": "final-seal-battle.png",
+      "raw_constant": "FINAL_SEAL_BATTLE_SPRITE",
+      "public_art": "FINAL_SEAL_BATTLE_ART",
+      "scene": "Final seal battle",
+      "alt_text": "A towering Rider presses against three defenders holding a blazing seal circle.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a final defense tableau around the blazing seal.\nScene/backdrop: Empty eight-spoked vault with a bright circular floor boundary.\nSubject: One towering Rider pressing against one compact three-defender circle.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "fornost-map-dim.png",
+      "raw_constant": "FORNOST_MAP_DIM_FRAME",
+      "public_art": "FORNOST_MAP_CLIFFHANGER_ART",
+      "scene": "Fornost map dim",
+      "alt_text": "A branching underground map points to a sealed node beneath ruined Fornost.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create the dormant base frame of a branching underground road map.\nScene/backdrop: Flat black stone map-table with no room detail.\nSubject: One branching road network with one faint northern node.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "fornost-map-lit.png",
+      "raw_constant": "FORNOST_MAP_LIT_FRAME",
+      "public_art": "FORNOST_MAP_CLIFFHANGER_ART",
+      "scene": "Fornost map lit",
+      "alt_text": "A branching underground map points to a sealed node beneath ruined Fornost.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Edit the dormant map so the same northern ruined-city node blazes like an eye.\nScene/backdrop: Preserve the exact map, framing, branches, scale, and camera of row 37.\nSubject: The same single branching road network; change the northern node's light only.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "living-road-ending.png",
+      "raw_constant": "LIVING_ROAD_ENDING_ART",
+      "public_art": "LIVING_ROAD_ENDING_ART",
+      "scene": "Living Road ending",
+      "alt_text": "Calenor and his companions walk toward a bright road beneath eight stars.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game ending reference for 72x20 terminal ASCII conversion\nPrimary request: Create a hopeful ending silhouette for the freely shared Living Road.\nScene/backdrop: PURE SOLID BLACK empty sky above one thick WHITE open road leading to the horizon.\nSubject: EXACTLY FOUR full-body travelers walking away together: one tall older Ranger, one central traveler, one twin-blade woman, and one archer; exactly EIGHT large isolated white eight-pointed stars above them.\nStyle/medium: hard-edge two-tone retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one compact four-person walking group centered on a broad road, all four figures separated and fully inside frame, eight countable stars arranged in one clean arc, huge black negative space\nLighting/mood: flat graphic silhouette only, hopeful and uncluttered\nColor palette: ONLY pure #000000 black and pure #FFFFFF white, fully opaque RGB\nConstraints: EXACTLY 4 people, not 3, not 5; EXACTLY 8 stars, not 7, not 9; hard binary edges; no gray, alpha transparency, haze, bloom, glow, fog, gradient, soft lighting, text, letters, labels, border, watermark, logo, buildings, mountains, extra figures, edge crop, or visual noise\nAvoid: white or gray background, photorealism, crowds, overlapping bodies, tiny stars, decorative filigree"
+    },
+    {
+      "filename": "last-warden-ending.png",
+      "raw_constant": "LAST_WARDEN_ENDING_ART",
+      "public_art": "LAST_WARDEN_ENDING_ART",
+      "scene": "Last Warden ending",
+      "alt_text": "A lone seated Ranger holds a sword before a closed seal as others depart.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a solemn ending portrait of the last guardian.\nScene/backdrop: Closed circular seal with a small departing group at the edge.\nSubject: One lone seated Ranger holding one upright sword.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "road-in-ruin-ending.png",
+      "raw_constant": "ROAD_IN_RUIN_ENDING_ART",
+      "public_art": "ROAD_IN_RUIN_ENDING_ART",
+      "scene": "Road in Ruin ending",
+      "alt_text": "An ancient bridge collapses behind escaping companions while the Rider remains across the gulf.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a collapse ending dominated by the breaking Dead Road.\nScene/backdrop: Black gulf with the Rider isolated on the far side.\nSubject: One ancient bridge breaking behind one compact escaping group.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    },
+    {
+      "filename": "shadows-name-ending.png",
+      "raw_constant": "SHADOWS_NAME_ENDING_ART",
+      "public_art": "SHADOWS_NAME_ENDING_ART",
+      "scene": "Shadow's Name ending",
+      "alt_text": "A traveler raises a blackened star as branching roads ignite beneath a hooded Rider.",
+      "negative": false,
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment or character reference for 72x20 terminal ASCII conversion\nPrimary request: Create a corrupted ending portrait of the road answering the traveler.\nScene/backdrop: Branching roads igniting across a black floor beneath the Rider.\nSubject: One traveler raising one blackened eight-pointed star; the Rider remains secondary.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette, designed for raw ASCII conversion\nComposition/framing: 3:2 landscape, one dominant centered silhouette, thick separated shapes, clear horizon, large open negative space, no edge crop\nLighting/mood: bright subject against pure black background, severe readable rim light, ominous but uncluttered\nColor palette: pure black and bright white only; no gray-dependent meaning\nConstraints: no text, letters, labels, border, watermark, logo, fine texture, tiny props, fog, gradients, visual noise, or color-dependent detail; every major object must remain identifiable when reduced to 72 columns and 20 rows.\nAvoid: photorealistic texture, crowded crowds, delicate fingers, thin weapons, overlapping silhouettes, decorative filigree"
+    }
+  ]
+}

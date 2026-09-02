@@ -9,3 +9,7 @@ dist/
 *.egg-info/
 .venv/
 venv/
+.superpowers/
+docs/superpowers/plans/
+assets/part-two-art-demo.gif
+assets/part-two-art-contact-sheet.png

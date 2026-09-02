@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check ".[test]"
       - name: Verify the release candidate
         run: |
           python -m compileall -q roads_beneath_shadow

@@ -9,21 +9,24 @@
 
 **[Download the latest macOS release](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest)** — no installation and no Python required for the standalone build.
 
+**Release packaging note:** the existing standalone macOS downloads contain Part I. Parts I and II are playable from source now; standalone Part II binaries have not been released yet.
+
 *Roads Beneath the Shadow* is a story-driven terminal RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
-This repository contains the complete playable opening episode: **Part I — The Black Rider's Letter**. A normal playthrough is designed for roughly 45–70 minutes depending on reading speed, exploration, and combat choices.
+The source edition contains two complete playable episodes: **Part I — The Black Rider's Letter** and **Part II — The Dead Road**. Part I is roughly 45–70 minutes; Part II is roughly 110–130 minutes for a normal first playthrough, depending on reading speed, exploration, and combat choices.
 
 ```text
-                         .
-                     .   |   .
-                 .       |       .
-              -----------*-----------
-                 '      /|\      '
-                    .--/ | \--.
-               _..-'   / \   '-.._
-           _.-'      _/   \_      '-._
-        .-'      _.-'       '-._      '-.
-       /____..--'      _._      '--..____\
+                         |
+                     \   |   /
+                      \  |  /
+                  ------ * ------
+                      /  |             \
+             /\          |          /\
+        ____/  \____            ___/  \____
+     __/      /\    \__________/   /\      \__
+ ___/________/__\_________________/__\_________\___
+                        /  \
+_______________________/____\_______________________
 
           R O A D S   B E N E A T H
                T H E   S H A D O W
@@ -31,11 +34,13 @@ This repository contains the complete playable opening episode: **Part I — The
 
 **Play it, shape a different path, and compare your ending.** If you enjoy the journey, starring the repository helps other terminal-game and interactive-fiction players discover it.
 
-![Gameplay preview showing the title, Prancing Pony, tactical choices, combat, discoveries, and Part I cliffhanger](assets/gameplay-demo.gif)
+![Part I gameplay preview showing the title, Prancing Pony, tactical choices, combat, discoveries, and cliffhanger](assets/gameplay-demo.gif)
 
 ## Quick start on macOS
 
 ### Easiest method: standalone download
+
+The current standalone packages contain Part I. To continue through Part II now, use the source edition below.
 
 1. Open the [latest release](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest).
 2. Under **Assets**, download `Roads-Beneath-the-Shadow-macOS-Apple-Silicon.zip` for an M-series Mac or `Roads-Beneath-the-Shadow-macOS-Intel.zip` for an Intel Mac.
@@ -54,7 +59,7 @@ To launch the standalone executable from Terminal instead of double-clicking, en
 
 ### Run the source edition instead
 
-The source edition requires macOS and Python 3.10 or newer, but no third-party packages. Check Python with `python3 --version`. Download it through **Code > Download ZIP** on the repository page, open the ZIP, then enter:
+The source edition includes Parts I and II. It requires macOS and Python 3.10 or newer, but no third-party packages. Check Python with `python3 --version`. Download it through **Code > Download ZIP** on the repository page, open the ZIP, then enter:
 
 ```bash
 cd ~/Downloads/roads-beneath-the-shadow-main
@@ -95,24 +100,25 @@ These command-line options apply to that launch only. Set the same preferences f
 
 ## Current features
 
+- Two complete episodes: Part I at roughly 45–70 minutes and Part II at roughly 110–130 minutes for a normal first playthrough
 - Character name, three distinct backgrounds, and a formative lesson from Calenor
 - Five opening tactics that alter clues, trust, resources, and later options
 - Explorable Bree locations and a multi-room North-kingdom wayhouse
 - Substantive conversations with Mara and watchman Tobin Reed
-- A complete rescue quest whose outcome carries into the finale
-- Three tactical encounters: the Pony defense, Midgewater ambush, and a two-phase battle with Ghorak Ash-Hand
+- Rescue, testimony, and prisoner quests whose outcomes carry into later scenes and endings
+- Eight encounter slots across both episodes: three in Part I, four mandatory in Part II, and an avoidable duel with Teren
 - Telegraphed enemy intentions, target selection, interrupts, status effects, Focus, defense, armor, healing, and encounter objectives
 - A distinct combat ability for each background, plus different tactical commands for Mara and Tobin
 - Inventory, consumable items, and equipment management
 - Story, Ranger, and Shadow combat difficulty modes; Shadow rewards interrupts, defense, and companion tactics instead of damage-racing
 - Three versioned save/load slots with migration, strict validation, and safe atomic writes
-- Persistent hope, corruption, clues, companion trust, quest outcomes, and Part II state
-- Four causally different endings and an explicit recap of the choices that created yours
-- A persistent Traveler's Chronicle with ending records and seven achievements
-- Cinematic retro ASCII scenes, restrained ANSI color, two subtle animations, and original optional sound cues
+- Persistent hope, corruption, clues, companion trust, and quest outcomes across both episodes; completed Part I saves can begin Part II directly from the ending screen
+- Eight causally different endings across Parts I and II, each with an explicit recap of the choices that created it
+- A persistent Traveler's Chronicle with episode-aware ending records and eleven achievements
+- Cinematic retro ASCII scenes, restrained ANSI color, three subtle animations, and original optional sound cues
 - Adjustable narration speed, reduced motion, narrow-terminal handling, and screen-reader scene descriptions
 - Number keys, W/S, and arrow-key menu navigation
-- A full dramatic ending and Black Rider cliffhanger leading into Part II: *The Dead Road*
+- A Part I Black Rider cliffhanger, a complete Part II resolution, and a new road toward Part III: *The Waking City*
 - Platform-neutral story and combat logic for future Windows Terminal support
 
 Save files are stored in:
@@ -151,6 +157,7 @@ python3 -m unittest discover -s tests -v
 The code is split into portable systems:
 
 - `app.py` — story flow and menus
+- `part_two.py` — Part II scenes, consequences, and ending resolution
 - `combat.py` — turn-based encounters
 - `models.py` — character, enemy, and serialized game state
 - `savegame.py` — save slots and atomic file handling
@@ -163,7 +170,7 @@ The code is split into portable systems:
 
 ## Roadmap
 
-1. Part II — The Dead Road
+1. Part III — The Waking City
 2. Additional companion relationship routes and camp scenes
 3. More equipment sets, rare conditions, and enemy archetypes
 4. Native Windows Terminal launcher and full compatibility verification
@@ -171,7 +178,7 @@ The code is split into portable systems:
 
 ## Support the journey
 
-- [Star the repository](https://github.com/makaboi/roads-beneath-the-shadow) if you want Part II to reach more players.
+- [Star the repository](https://github.com/makaboi/roads-beneath-the-shadow) if you want the road to continue into Part III.
 - [Report a bug](https://github.com/makaboi/roads-beneath-the-shadow/issues) if something interrupts your adventure.
 - Share your background, major choices, and ending without spoiling the path for new players.
 

@@ -16,14 +16,7 @@ OUTPUT_DIR = ROOT / "assets"
 FONT_PATH = "/System/Library/Fonts/Menlo.ttc"
 sys.path.insert(0, str(ROOT))
 
-from roads_beneath_shadow.artwork import (  # noqa: E402
-    BLACK_RIDER_CLIFFHANGER_ART,
-    MARSH_WARG_INTRO_ART,
-    ORC_ATTACK_ART,
-    PRANCING_PONY_EXTERIOR_ART,
-    THIRD_STONE_DISCOVERY_ART,
-    TITLE_ART_EXPANDED,
-)
+from roads_beneath_shadow import artwork, part_two_artwork  # noqa: E402
 
 INK = "#d7ded8"
 MUTED = "#819188"
@@ -117,64 +110,24 @@ def art_rows(art: str, color: str) -> list[tuple[str, str]]:
     return [(line, color) for line in textwrap.dedent(art).strip("\n").splitlines()]
 
 
-SCENES: list[tuple[str, list[tuple[str, str]]]] = [
-    (
-        "TITLE SCREEN",
-        art_rows(TITLE_ART_EXPANDED, SILVER)
-        + [
-            ("ROADS BENEATH THE SHADOW", GOLD),
-            ("[1] Begin a new journey", GREEN),
-            ("[2] Load a journey     [3] Chronicle", MUTED),
-        ],
-    ),
-    (
-        "CHAPTER I — BLOOD AT THE PRANCING PONY",
-        art_rows(PRANCING_PONY_EXTERIOR_ART, GOLD)
-        + [
-            ("Rain hammers Bree. Inside, nobody sings.", SILVER),
-            ("\"The star opens the road.\"", GREEN),
-        ],
-    ),
-    (
-        "ORCS AT THE DOOR",
-        art_rows(ORC_ATTACK_ART, RED)
-        + [
-            ("WHAT WILL YOU DO?", SILVER),
-            ("[1] Draw your weapon and fight beside Mara", GREEN),
-            ("[2] Hide the pendant and protect the letter", MUTED),
-        ],
-    ),
-    (
-        "ENCOUNTER — MIDGEWATER AMBUSH",
-        art_rows(MARSH_WARG_INTRO_ART, MUTED)
-        + [
-            ("YOU        HP 24/30   FOCUS 2/3", GREEN),
-            ("MARSH WARG  HP 15/21   INTENT: POUNCE", RED),
-            ("[1] Attack   [2] Power attack   [3] Defend", GOLD),
-            ("Mara: \"Left flank. I will draw its teeth.\"", SILVER),
-        ],
-    ),
-    (
-        "THE THIRD STONE OPENS",
-        art_rows(THIRD_STONE_DISCOVERY_ART, SILVER)
-        + [
-            ("QUEST UPDATED: THE MISSING WATCHMAN", GREEN),
-            ("Hope +1  |  Mara trust +1  |  New clue discovered", MUTED),
-            ("A map beneath the dust shows a road that should not exist.", INK),
-        ],
-    ),
-    (
-        "THE BLACK RIDER",
-        art_rows(BLACK_RIDER_CLIFFHANGER_ART, SILVER)
-        + [
-            ("END OF PART I", GOLD),
-            ("Your choices carry into Part II: THE DEAD ROAD", GREEN),
-        ],
-    ),
+SCENES = [
+    (title, art_rows(str(art), color) + [("RAW 72 x 20 ART", MUTED)])
+    for art, title, color in (
+        (artwork.TITLE_ART_EXPANDED, "THE SILVER STAR", SILVER),
+        (artwork.PRANCING_PONY_EXTERIOR_ART, "ARRIVAL AT THE INN", GOLD),
+        (artwork.ORC_ATTACK_ART, "ORCS AT THE DOOR", RED),
+        (artwork.BLACK_RIDER_CLIFFHANGER_ART, "THE BLACK RIDER", SILVER),
+        (part_two_artwork.FINAL_SEAL_BATTLE_ART, "THE FINAL SEAL BATTLE", RED),
+        (part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, "BENEATH RUINED FORNOST", SILVER),
+    )
 ]
 
 
-def gameplay_frame(scene_index: int, reveal: float, cursor: bool) -> Image.Image:
+def gameplay_frame(
+    scene_index: int,
+    reveal: float,
+    cursor: bool,
+) -> Image.Image:
     width, height = 960, 600
     image = Image.new("RGB", (width, height), "#070a0c")
     draw = ImageDraw.Draw(image, "RGBA")
@@ -203,7 +156,12 @@ def gameplay_frame(scene_index: int, reveal: float, cursor: bool) -> Image.Image
     else:
         draw.text((53, 544), ">", font=face, fill=MUTED)
 
-    draw.text((width - 120, 548), f"{scene_index + 1}/6", font=font(15), fill=MUTED)
+    draw.text(
+        (width - 135, 548),
+        f"{scene_index + 1}/{len(SCENES)}",
+        font=font(15),
+        fill=MUTED,
+    )
     add_scanlines(image, 4)
     return image
 
@@ -219,13 +177,6 @@ def gameplay_gif() -> tuple[list[Image.Image], list[int]]:
     durations[-1] = 2600
     return frames, durations
 
-
-def contact_sheet(frames: list[Image.Image]) -> Image.Image:
-    selected = [frames[index * 3 + 2].convert("RGB").resize((480, 300)) for index in range(6)]
-    sheet = Image.new("RGB", (1440, 600), "#070a0c")
-    for index, frame in enumerate(selected):
-        sheet.paste(frame, ((index % 3) * 480, (index // 3) * 300))
-    return sheet
 
 
 def main() -> None:
@@ -247,12 +198,13 @@ def main() -> None:
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     for filename, scene_index in (
         ("story.png", 1),
-        ("combat.png", 3),
-        ("cliffhanger.png", 5),
+        ("combat.png", 2),
+        ("cliffhanger.png", 3),
     ):
-        gameplay_frame(scene_index, 1.0, False).save(screenshot_dir / filename, optimize=True)
-    contact_sheet(frames).save("/private/tmp/roads-gameplay-contact-sheet.png", optimize=True)
-
+        gameplay_frame(scene_index, 1.0, False).save(
+            screenshot_dir / filename,
+            optimize=True,
+        )
 
 if __name__ == "__main__":
     main()
