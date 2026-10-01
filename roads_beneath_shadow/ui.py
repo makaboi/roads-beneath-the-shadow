@@ -11,19 +11,7 @@ import time
 from collections.abc import Callable, Sequence
 from numbers import Real
 
-
-class Color:
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-    WHITE = "\033[37m"
-    SILVER = "\033[38;5;250m"
+from .lighting import ASCII_RAMP, Color, art_ink
 
 
 TEXT_SPEED_DELAYS: dict[str, float] = {
@@ -180,6 +168,27 @@ class TerminalUI:
         cleaned = textwrap.dedent(text).strip("\n")
         return cleaned.splitlines() if cleaned else []
 
+    def _art_line(self, line: str, color: str) -> str:
+        """Light converter marks after layout, without counting ANSI as width."""
+
+        if not self.color:
+            return line
+        if any(character not in ASCII_RAMP for character in line):
+            return self.style(line, color)
+        rendered: list[str] = []
+        previous_ink = None
+        for character in line:
+            ink = art_ink(character, color)
+            if character != " ":
+                code = f"\033[38;5;{ink}m" if ink is not None else color
+                if code != previous_ink:
+                    rendered.append(code)
+                    previous_ink = code
+            rendered.append(character)
+        if previous_ink is not None:
+            rendered.append(Color.RESET)
+        return "".join(rendered)
+
     def art(
         self,
         text: str,
@@ -211,7 +220,7 @@ class TerminalUI:
         if block_width <= stage_width:
             indent = " " * ((stage_width - block_width) // 2)
             for line in lines:
-                self.write(indent + line.rstrip(), color=color)
+                self.output_fn(self._art_line(indent + line.rstrip(), color))
             return
 
         # Very narrow terminals get a centered viewport rather than terminal
@@ -219,7 +228,7 @@ class TerminalUI:
         left = (block_width - stage_width) // 2
         for line in lines:
             viewport = line.ljust(block_width)[left : left + stage_width].rstrip()
-            self.write(viewport, color=color)
+            self.output_fn(self._art_line(viewport, color))
 
     def animate(
         self,
@@ -352,6 +361,10 @@ class TerminalUI:
         self._render_choice_lines(lines)
         while True:
             key = self._read_raw_key()
+            if key in {"", "\x04"}:
+                raise InputClosed
+            if key == "\x03":
+                raise KeyboardInterrupt
             normalized = key.lower()
             if normalized in {"w", "k", "\x1b[a"}:
                 selected = (selected - 1) % len(options)
@@ -372,7 +385,12 @@ class TerminalUI:
     def choose(self, title: str, options: Sequence[str], *, allow_back: bool = False) -> int | None:
         if not options:
             raise ValueError("choose requires at least one option")
-        if self.keyboard_navigation and self._interactive_terminal and len(options) <= 9:
+        if (
+            self.keyboard_navigation
+            and not self.screen_reader
+            and self._interactive_terminal
+            and len(options) <= 9
+        ):
             self.write()
             return self._choose_with_raw_keys(title, options, allow_back)
 

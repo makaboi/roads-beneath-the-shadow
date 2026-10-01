@@ -123,6 +123,7 @@ class PlayerProfile:
                 "part2_star_read_memory",
                 "part2_star_broke_chain",
                 "part2_star_bargain",
+                "part2_descent_mark_bargain",
             )
             if (
                 state.ending == "living_road"

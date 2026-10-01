@@ -1,0 +1,29 @@
+{
+  "converter": {
+    "executable": "ascii-image-converter",
+    "version": "1.13.1",
+    "arguments": [
+      "--dimensions",
+      "72,20",
+      "--map",
+      " .:-=+*#@"
+    ],
+    "cleanup": [
+      "outer_blank_rows",
+      "trailing_whitespace"
+    ]
+  },
+  "entries": [
+    {
+      "filename": "orc-attack.png",
+      "raw_constant": "ORC_ATTACK_SPRITE",
+      "public_art": "ORC_ATTACK_ART",
+      "scene": "Orcs at the Door",
+      "alt_text": "Three broad-shouldered Orc raiders advance through a doorway, their captain carrying a cleaver.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game encounter reference for exact 72x20 terminal ASCII conversion\nPrimary request: Three Orc raiders burst into an inn. Make the figures immediately identifiable at terminal scale.\nScene/backdrop: Pure black empty night. No scenery, walls, window texture, floor details, rain or fog. One extremely simple thick doorway outline behind the center raider only.\nSubject: Exactly three separated broad-shouldered Orc silhouettes, the largest center Orc advancing toward the viewer with a blunt broad cleaver to its right. Two shorter scouts flank it, each carrying a single short broad spear angled outward. All three have squat bent legs, hunched broad shoulders, big pointed ears, huge blunt noses, two clear short tusks and heavy helmets. Center figure fills 70 percent image height. Each figure separated by at least a tenth of the canvas width of pure-black empty gap, no touching, no overlapping weapons or figures. Show all bodies including feet, no crop.\nStyle/medium: stark black-and-white dark-fantasy linocut icon, simplified thick silhouettes and large cutout face features. Solid white foreground masses on absolute black.\nComposition/framing: 3:2 landscape at 1536x1024, centered compact trio across the middle of the image. Thick chunky forms with large negative-space holes, wide outer black margins. Large centered raider dominates, flanking scouts readable but secondary. Must survive reduction to 72 columns and 20 rows.\nLighting/mood: Ominous advance, strong silhouette, no fine rim-light-only outline. Bodies must have large bright solid areas rather than thin outlines.\nColor palette: pure white and black only.\nConstraints: No text, labels, border, logo, watermark, gray gradients, shading, etching, hatching, woodgrain, noisy texture, tiny detail, thin blade, overlapping characters or extra characters. Do not write ORC or any letters.\nAvoid: realistic skin texture, faces drawn with small detail, long slim humanoid bodies, dense backdrop. Favor three chunky monsters and bold shapes.",
+      "negative": false,
+      "source_sha256": "0457d865d558d9b6a06e0cc7d5485549069918bf733cfcc5a3c318da1f9408b2",
+      "raw_sha256": "2b31e6e00827dd552f8780fb7d7c3498be6f52ba68e43b33c54190ca8a120535"
+    }
+  ]
+}

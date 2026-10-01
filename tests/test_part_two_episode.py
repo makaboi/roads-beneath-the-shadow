@@ -807,7 +807,7 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         cases = (
             (
                 "part2_descent",
-                ("Calenor's lesson", "Trust her"),
+                ("Calenor's lesson", "Trust"),
                 (part_two_art.FALLING_SILVER_STAIR_ART, part_two_art.COMPANIONS_DESCENDING_ART),
                 (
                     part_two_art.PART_TWO_TITLE_ART,
@@ -1146,7 +1146,7 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         self.assertIn(QUEST_NAMES_LOST, state.completed_quests)
         self.assertIn(QUEST_LAST_SEAL, state.completed_quests)
         self.assertIn(QUEST_EIGHTH_NAME, state.quests)
-        self.assertEqual((state.scene, state.play_minutes), ("part2_last_seal", 10))
+        self.assertEqual((state.scene, state.play_minutes), ("part2_vigil", 10))
         transcript = "\n".join(output)
         self.assertIn("love was the one lock", transcript)
         self.assertNotIn("birth-name is", transcript)

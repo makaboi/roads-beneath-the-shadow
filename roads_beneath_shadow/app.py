@@ -73,6 +73,7 @@ from .content import (
     QUEST_WAYHOUSE,
 )
 from .models import Character, GameState
+from .journey_artwork import MIDGEWATER_CAMP_ART
 from .part_two import PartTwoEpisode, begin_part_two, part_two_ending_breakdown
 from .profile import ACHIEVEMENTS, PlayerProfile, ProfileManager
 from .savegame import SaveManager
@@ -363,12 +364,12 @@ class Game:
         self.ui.narrate(
             "The window shatters. A black-feathered arrow takes the messenger through the back. "
             "A horn answers from beyond Bree's gate, and two Orc scouts force through the inn's "
-            "doors beside their captain. He points a curved sword at you."
+            "doors beside their captain. He points a broad cleaver at you."
         )
         self.ui.art(
             ORC_ATTACK_ART,
             Color.RED,
-            alt_text="An arrow shatters the window as three Orc scouts force their way inside.",
+            alt_text="Three broad-shouldered Orc raiders advance through a doorway, their captain carrying a cleaver.",
         )
         self.ui.write('"The silver star. Take its bearer alive."', color=Color.RED, bold=True)
         self.ui.art(
@@ -1185,9 +1186,9 @@ class Game:
         if not self.state.flags.get("midgewater_camp_setup"):
             self.ui.clear()
             self.ui.art(
-                MIDGEWATER_RUINS_ART,
-                Color.GREEN,
-                alt_text="Broken stone rises from the reeds and black water of the Midgewater marshes.",
+                MIDGEWATER_CAMP_ART,
+                Color.YELLOW,
+                alt_text="A leaning standing stone shelters a small ember beside reeds and dark marsh water.",
             )
             self.ui.title("A FIRE WITHOUT FLAME")
             self.ui.narrate(
@@ -1233,6 +1234,11 @@ class Game:
                     "and the quiet terror of realizing he might never return. Mara listens without offering "
                     "an easy promise. When you finish, she gives you half her waybread."
                 )
+                self.ui.narrate(
+                    "'He taught me to leave no footprints,' she says. 'You make it sound as though "
+                    "he taught you to come home.' She turns the bread in her fingers. 'I would "
+                    "have liked to know that man.'"
+                )
                 if "lembas_scrap" not in character.inventory:
                     character.add_item("lembas_scrap")
             else:
@@ -1257,12 +1263,27 @@ class Game:
                 character.mara_trust += 1
                 character.tobin_trust += 1
                 self.state.flags["kept_last_watch"] = True
+                self.ui.narrate(
+                    "You cup the ember until the wind passes. Tobin sleeps with one hand around "
+                    "his whistle; Mara has set her boots toward the road. For a little while, "
+                    "neither has to be useful to anyone. You keep the light for them."
+                )
             elif watch == 2:
                 character.mara_trust += 1
                 self.state.flags["mara_saw_tracker"] = True
+                self.ui.narrate(
+                    "Mara wakes at the touch of your sleeve. She points to a reed bending "
+                    "against the wind. 'Someone else is keeping watch.' She shifts the ember "
+                    "behind the stone, then sits close enough for you both to share its warmth."
+                )
             else:
                 character.tobin_trust += 1
                 self.state.flags["tobin_saw_tracker"] = True
+                self.ui.narrate(
+                    "Tobin counts the lights that ought to be burning along the marsh road. "
+                    "One is missing. 'Ned never lets his go out,' he says. He does not reach "
+                    "for his whistle. Something beyond the reeds might answer first."
+                )
             self.state.flags["midgewater_watch_chosen"] = True
         self.state.scene = "missing_watchman"
         self.state.play_minutes += 6

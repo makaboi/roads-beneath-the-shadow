@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — The Last Lantern
+
+- Added four-tone lighting to converted ASCII scenes without changing their raw characters, no-color output, or screen-reader descriptions.
+- Regenerated the opening Orc encounter with three separated, stronger silhouettes and added generated-reference artwork for the Midgewater camp and Last Lantern refuge.
+- Added an optional pre-finale scene with nine dialogue responses across Mara, Tobin, and Calenor. Earlier shared memories and Ned's fate shape the dialogue; the choices return at the seal and in the ending recap.
+- Deepened the Midgewater camp and Calenor's explanation of the years he kept hidden, leaving room for trust to be rebuilt without forcing forgiveness.
+- Carried the player's chosen childhood lesson into the Part II descent and reunion, instead of treating every traveler as having chosen kindness.
+- Corrected the Part II descent to address Tobin or the lone traveler when Mara is absent, without changing an absent companion's trust.
+- Let the traveler carry anger without corruption; an explicit bargain with the star-mark now carries that cost, and both choices return in Calenor's reunion.
+- Corrected the ruined-road ending to record Calenor's escape when Teren pays the cost, keeping the lantern memory consistent with his actual fate.
+- Kept completed conversations across saves and prevented repeated time, journal, and relationship rewards. Existing version-2 saves remain compatible.
+- Made preview generation portable across macOS, Linux, and Windows fonts; refreshed the eight-scene gameplay GIF, covers, screenshots, and scene and animation contact sheets.
+- Added provenance checks and a pinned-converter verification command for the three refreshed scene references.
+- Made Ctrl-C, Ctrl-D, and closed input exit raw-key menus cleanly, and kept screen-reader menus on numbered line prompts without cursor redraws.
+
 ## 0.2.2 — Identifiable Terminal Art
 
 - Rebuilt the Orc attack, tracker, Marsh Warg, Ghorak, final battle, and Black Rider scenes around sparse, recognizable anatomy and props.

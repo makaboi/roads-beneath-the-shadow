@@ -64,7 +64,7 @@ class PartTwoRouteTests(unittest.TestCase):
         self.assertEqual((state.chapter, state.scene, state.ending), (2, "complete", "living_road"))
         self.assertGreaterEqual(part_two_minutes, 120)
         self.assertLessEqual(part_two_minutes, 140)
-        self.assertEqual(part_two_minutes, 132)
+        self.assertEqual(part_two_minutes, 138)
         self.assertGreaterEqual(story_prompts, 33)
         self.assertEqual(len(combat.encounters), 4)
         self.assertTrue(state.flags["part2_prisoners_rescued"])
@@ -84,7 +84,7 @@ class PartTwoRouteTests(unittest.TestCase):
         self.assertNotIn("AttributeError", transcript)
 
     def test_real_handoff_low_evidence_route_forces_the_fifth_combat(self) -> None:
-        player = LowEvidencePartTwoPlayer()
+        player = LowEvidencePartTwoPlayer(visit_vigil=False)
         game, combat = self._fellowship_game(player, play_minutes=60)
 
         game._begin_part_two()

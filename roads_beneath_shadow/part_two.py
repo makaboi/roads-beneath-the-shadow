@@ -25,6 +25,7 @@ from .content import (
     QUEST_REACH_CALENOR,
 )
 from .models import Enemy, GameState
+from .journey_artwork import LAST_LANTERN_ART
 from .ui import Color, TerminalUI
 
 
@@ -36,6 +37,27 @@ LEGACY_PART_ONE_QUESTS = (
 
 StoryChoice = Callable[[str, Sequence[str]], int | None]
 CombatRunner = Callable[[GameState, list[Enemy], CombatConfig], CombatResult]
+
+CALENOR_LESSONS = (
+    (
+        "lesson_kindness",
+        "kindness can find the darkest road",
+        "You remember him saying that no road was too dark for kindness. Here, with the "
+        "chain's mark on his wrist, that lesson seems harder than it did beside a kitchen fire.",
+    ),
+    (
+        "lesson_tracking",
+        "read the ground first, then read the sky",
+        "Read the ground first, then read the sky. You followed the signs Calenor left, "
+        "including the ones he never meant you to find. Now you wait for his account of them.",
+    ),
+    (
+        "lesson_courage",
+        "fear is a warning, not your master",
+        "Fear is a warning, not your master. Calenor taught you those words before he could "
+        "live by them. You have brought them back to him without pretending you were never afraid.",
+    ),
+)
 
 
 class PartTwoEpisode:
@@ -72,6 +94,8 @@ class PartTwoEpisode:
             return self._calenor_prison(state)
         elif scene == "part2_calenor_reunion":
             return self._calenor_reunion(state)
+        elif scene == "part2_vigil":
+            return self._vigil(state)
         elif scene == "part2_last_seal":
             return self._last_seal(state)
         elif scene == "part2_final_battle":
@@ -126,35 +150,103 @@ class PartTwoEpisode:
                 ),
             )
 
+        lesson = next(
+            (text for flag, text, _memory in CALENOR_LESSONS if state.flags.get(flag)),
+            "keep your own judgment on a dark road",
+        )
         carried = self.story_choice(
             "WHAT DO YOU CARRY DOWN?",
             [
-                "Calenor's lesson: kindness can find the darkest road",
+                f"Calenor's lesson: {lesson}",
                 "Anger at the secrets Calenor kept",
                 "The unnamed truth the Shadow fears",
+                "Let the star-mark turn your anger into power",
             ],
         )
         if carried is None:
             return False
-        mara_response = self.story_choice(
-            "MARA HEARS THE RIDER ABOVE",
-            [
+        mara_present = state.flags.get("part_two_mara_present", False)
+        tobin_present = state.flags.get("part_two_tobin_present", False)
+        if mara_present:
+            rear_heading = "MARA HEARS THE RIDER ABOVE"
+            rear_options = [
                 "Trust her to hold the rear",
                 "Warn her that the Rider wants a willing name",
                 "Demand obedience until the stair is sealed",
-            ],
-        )
-        if mara_response is None:
+            ]
+        elif tobin_present:
+            rear_heading = "TOBIN HEARS THE RIDER ABOVE"
+            rear_options = [
+                "Trust him to hold the rear",
+                "Warn him that the Rider wants a willing name",
+                "Demand obedience until the stair is sealed",
+            ]
+        else:
+            rear_heading = "THE RIDER FOLLOWS YOUR FOOTSTEPS"
+            rear_options = [
+                "Hold Calenor's broken sword steady",
+                "Speak only your road-name into the dark",
+                "Let the star-mark choose your steps",
+            ]
+        rear_response = self.story_choice(rear_heading, rear_options)
+        if rear_response is None:
             return False
 
         if carried == 1:
             state.character.hope += 1
         elif carried == 2:
+            state.flags["part2_descent_anger"] = True
+            state.add_journal("I carried my anger below, determined to hear Calenor's whole truth.")
+            self.ui.narrate(
+                "You are angry. The mark stirs, offering to make that anger useful to it. "
+                "You close your hand over the star. Calenor owes you answers; you will "
+                "hear them in his voice, not drag them out through the Shadow's."
+            )
+        elif carried == 4:
+            state.flags["part2_descent_mark_bargain"] = True
             state.character.corruption += 1
-        if mara_response == 1:
-            state.character.mara_trust += 1
-        elif mara_response == 3:
-            state.character.mara_trust -= 1
+            state.add_journal("I accepted the star-mark's power to force the secrets into the open.")
+            self.ui.narrate(
+                "The star warms against your palm. For one breath, you can imagine every "
+                "locked door yielding, every guarded answer spoken. The thought comes "
+                "easily. So does the mark's price: let it choose which doors to open."
+            )
+        if mara_present or tobin_present:
+            companion = "Mara" if mara_present else "Tobin"
+            if rear_response == 1:
+                if mara_present:
+                    state.character.mara_trust += 1
+                else:
+                    state.character.tobin_trust += 1
+                self.ui.narrate(
+                    f"{companion} waits until you have found the next step before moving. "
+                    "The dark has not made an order of your trust."
+                )
+            elif rear_response == 2:
+                self.ui.narrate(
+                    f"You tell {companion} what the Rider needs. Behind you, its hoofbeat "
+                    "misses a stair, as though it has heard the warning."
+                )
+            else:
+                if mara_present:
+                    state.character.mara_trust -= 1
+                else:
+                    state.character.tobin_trust -= 1
+                self.ui.narrate(
+                    f"{companion} takes the rear without answering. You hear the distance "
+                    "between your footsteps grow."
+                )
+        elif rear_response == 3:
+            state.character.corruption += 1
+            self.ui.narrate(
+                "The mark finds each stair before your boot does. For a moment, surrender "
+                "feels so much like safety that you almost forget to be afraid."
+            )
+        else:
+            self.ui.narrate(
+                "You set your own pace. The Rider may know the road, but these footsteps "
+                "still belong to you."
+            )
 
         state.play_minutes += 5
         state.scene = "part2_pursuit"
@@ -1071,24 +1163,48 @@ class PartTwoEpisode:
         self.ui.narrate(
             "Calenor sits beside the opened spoke. There is no time left for another half-truth."
         )
+        for flag, _lesson, memory in CALENOR_LESSONS:
+            if state.flags.get(flag):
+                self.ui.narrate(memory)
+                break
+        if state.flags.get("part2_descent_anger"):
+            self.ui.narrate(
+                "'You have a right to be angry,' Calenor says. 'I will not ask you to "
+                "put that down before I answer.' For once, he waits for your question."
+            )
+        elif state.flags.get("part2_descent_mark_bargain"):
+            self.ui.narrate(
+                "The mark tightens as Calenor begins to speak. It would take his answers "
+                "if you let it. He holds your gaze. 'Ask me. Let the words be mine.'"
+            )
         questions = [
             (
                 "hidden_name",
                 "Why hide the birth-name?",
-                "I hid your name because love was the one lock the Shadow had not learned to pick.",
+                "'I hid your name because love was the one lock the Shadow had not learned to "
+                "pick.' Calenor rubs the chain's mark on his wrist. 'That is what I told myself. "
+                "It was also easier than telling a child I was afraid.' He looks at you. "
+                "'You grew up. I kept speaking as though you had not. The danger was real. "
+                "The years I took from your choosing were real too.'",
             ),
             (
                 "teren",
                 "What did Teren do to the Eighth House?",
                 "Teren exposed one household to protect the wider Ranger network. I abandoned "
-                "the pursuit and carried you from the fire.",
+                "the pursuit and carried you from the fire. 'He counted the lives he might save. "
+                "Your mother asked him whether he knew the names of those he had spent.' "
+                "Calenor leaves the question where it belongs. 'I could not save the house. "
+                "I could carry one child. For years I mistook being needed for being forgiven.'",
             ),
             (
                 "rider",
                 "Why must the Rider make me speak?",
                 "The silver star was the last seal. Your willing voice matters because the road "
                 "recognizes its lawful bearer; the Eighth Name is its Warden oath-title, not the "
-                "hidden name I kept from the Shadow.",
+                "hidden name I kept from the Shadow. 'It can frighten you into opening a door. "
+                "It cannot make an oath of that fear. So it offers strength, certainty, a road "
+                "with no one left to lose.' Calenor steadies his voice. 'Your birth-name is yours. "
+                "What you promise is yours too. Keep those truths apart, whatever it tells you.'",
             ),
         ]
         remaining = list(questions)
@@ -1142,7 +1258,192 @@ class PartTwoEpisode:
         state.complete_quest(QUEST_LAST_SEAL)
         state.add_quest(QUEST_EIGHTH_NAME)
         state.play_minutes += 10
-        state.scene = "part2_last_seal"
+        state.scene = "part2_vigil"
+        return True
+
+    def _vigil(self, state: GameState) -> bool:
+        """Optional, individually checkpointed conversations before the Last Seal."""
+
+        self.ui.clear()
+        self.ui.art(
+            LAST_LANTERN_ART,
+            Color.YELLOW,
+            alt_text="A single lantern hangs beneath a low stone arch above three steps into darkness.",
+        )
+        self.ui.title("THE LAST LANTERN")
+        self.ui.narrate(
+            "Under the last low arch, an ordinary lantern burns. There is soot on its glass "
+            "and a patch in its handle. No ancient power keeps it alight; someone remembered "
+            "to fill it. Beyond the arch, the vault waits. You have time for a few words."
+        )
+        while True:
+            topics: list[tuple[str, str]] = []
+            if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
+                topics.append(("mara", "Speak with Mara about the road after this one"))
+            if state.flags.get("part_two_tobin_present") and not state.flags.get("part2_vigil_tobin"):
+                topics.append(("tobin", "Help Tobin tend the lantern"))
+            if not state.flags.get("part2_vigil_calenor"):
+                topics.append(("calenor", "Sit beside Calenor for a moment"))
+            topics.append(("leave", "Enter the Last Seal"))
+            choice = self.story_choice("BEFORE THE LAST SEAL", [label for _key, label in topics])
+            if choice is None:
+                return False
+            topic = topics[choice - 1][0]
+            if topic == "leave":
+                state.scene = "part2_last_seal"
+                return True
+            if not getattr(self, f"_vigil_{topic}")(state):
+                return False
+            state.flags[f"part2_vigil_{topic}"] = True
+            state.play_minutes += 2
+
+    def _vigil_mara(self, state: GameState) -> bool:
+        if state.flags.get("shared_past_with_mara"):
+            self.ui.narrate(
+                "Mara sets half a piece of waybread beside you. 'For your impossible standards "
+                "of campkeeping,' she says. You remember a guarded ember in Midgewater, and "
+                "the first time she listened without watching the road behind you."
+            )
+        elif state.flags.get("part2_prisoners_rescued"):
+            self.ui.narrate(
+                "Mara watches the freed captives share water. 'They keep asking who they owe,' "
+                "she says. 'I used to ask that too.' She has laid both blades out of reach."
+            )
+        else:
+            self.ui.narrate(
+                "Mara loosens a blade's worn binding. 'One road,' she says. 'That was the "
+                "promise. Funny how people keep finding another mile inside those words.'"
+            )
+        answer = self.story_choice(
+            "MARA LOOKS BEYOND THE ROAD",
+            [
+                "Ask what she wants when the road is over",
+                "Tell her she owes the road no oath",
+                "Ask for one more battle, without promises",
+            ],
+        )
+        if answer is None:
+            return False
+        if answer == 1:
+            state.flags["part2_mara_future_named"] = True
+            state.character.mara_trust += 1
+            self.ui.narrate(
+                "'A window,' she says at last. 'One that opens from the inside. Maybe a table "
+                "where no one asks which hand holds the knife.' She tests the words as though "
+                "they are a tool she has never been allowed to use. 'You can visit. Knock first.'"
+            )
+            state.add_journal("At the last lantern, Mara named a future of her own: a window that opens from inside.")
+        elif answer == 2:
+            state.flags["part2_mara_oath_free"] = True
+            state.character.mara_trust += 1
+            self.ui.narrate(
+                "'Then ask me,' she says. You do. She winds the binding tight. 'Yes. This "
+                "time the answer is mine.'"
+            )
+            state.add_journal("Mara chose to stand at the Last Seal without owing the road an oath.")
+        else:
+            state.flags["part2_mara_last_battle"] = True
+            self.ui.narrate(
+                "'One battle I understand.' She puts the blade away. 'We can decide what "
+                "comes after if there is an after.' It is an honest answer to an honest request."
+            )
+            state.add_journal("Mara agreed to one more battle, with no promise beyond it.")
+        return True
+
+    def _vigil_tobin(self, state: GameState) -> bool:
+        if state.flags.get("part_two_neds_watch_continues"):
+            self.ui.narrate(
+                "Tobin draws Ned's watch-whistle from inside his coat. The cord has left a "
+                "dark line across his palm. 'When I get back, they'll ask whether he was "
+                "brave. He was frightened. He kept the light anyway. I want to tell it right.'"
+            )
+        elif state.flags.get("part_two_ned_safe"):
+            self.ui.narrate(
+                "Tobin trims the wick with his thumbnail. 'Ned owes me a breakfast,' he says. "
+                "'He'll complain that I've let the tea go cold.' He smiles at the ordinary "
+                "certainty, then checks the lantern's latch again."
+            )
+        else:
+            self.ui.narrate(
+                "Tobin wipes soot from the lantern glass. 'In Bree, my beat ends at the "
+                "north gate. I used to think that meant everything beyond it was somebody "
+                "else's trouble.' He holds the clean pane toward the light."
+            )
+        answer = self.story_choice(
+            "TOBIN TENDS THE LAST LIGHT",
+            [
+                "Promise to bring the watch home",
+                "Ask what Bree looks like after sunrise",
+                "Help him mend the wick in silence",
+            ],
+        )
+        if answer is None:
+            return False
+        if answer == 1:
+            state.flags["part2_tobin_home_promised"] = True
+            state.character.tobin_trust += 1
+            self.ui.narrate(
+                "'The people, not just the whistle,' he says. You promise what you can: "
+                "to remember their names, and to walk beside him while there is a road. "
+                "He gives you the lantern while he fastens the cord."
+            )
+            state.add_journal("I promised Tobin to carry the watch's people and stories home.")
+        elif answer == 2:
+            state.flags["part2_tobin_bree_remembered"] = True
+            self.ui.narrate(
+                "He tells you about shutters banging open, wet bread baskets, and a woman "
+                "who sweeps her doorstep straight into the street he has just swept. By the "
+                "time he finishes, Bree feels like a place you could reach."
+            )
+            state.add_journal("Tobin remembered Bree at sunrise beneath the last lantern.")
+        else:
+            state.flags["part2_tobin_light_shared"] = True
+            self.ui.narrate(
+                "You hold the glass while he feeds the wick through its narrow slot. "
+                "The flame steadies. Neither of you needs to make a speech about it."
+            )
+            state.add_journal("Tobin and I mended the last lantern together without an oath or a speech.")
+        return True
+
+    def _vigil_calenor(self, state: GameState) -> bool:
+        self.ui.narrate(
+            "Calenor tries to tie his torn sleeve with one hand. You hold the knot while "
+            "he pulls. He thanks you without calling you child."
+        )
+        answer = self.story_choice(
+            "WHAT DO YOU ASK OF CALENOR NOW?",
+            [
+                "Ask for a memory that belongs to neither oath nor Shadow",
+                "Tell him trust will have to be rebuilt",
+                "Sit beside him without an answer",
+            ],
+        )
+        if answer is None:
+            return False
+        if answer == 1:
+            state.flags["part2_calenor_memory_shared"] = True
+            state.character.hope += 1
+            self.ui.narrate(
+                "He remembers the winter you burned the porridge and blamed the pan. "
+                "'I ate it,' he says. 'You thought that proved you had fooled me.' For "
+                "one breath you laugh together. The chain's mark is still there. So is that kitchen."
+            )
+            state.add_journal("Calenor and I remembered a winter kitchen beyond the Warden's duty.")
+        elif answer == 2:
+            state.flags["part2_calenor_trust_rebuild"] = True
+            self.ui.narrate(
+                "'I know.' He starts to promise, then stops himself. 'If we leave this "
+                "place, ask me again tomorrow. I will answer tomorrow too.' You let that "
+                "stand. One honest day is a beginning, not an absolution."
+            )
+            state.add_journal("I asked Calenor to earn trust one honest day at a time.")
+        else:
+            state.flags["part2_calenor_silence_shared"] = True
+            self.ui.narrate(
+                "The silence holds no question he can evade. For once, he does not try "
+                "to fill it with a lesson. You listen to the patched lantern burn."
+            )
+            state.add_journal("I sat beside Calenor at the last lantern without giving him an answer.")
         return True
 
     def _last_seal(self, state: GameState) -> bool:
@@ -1154,6 +1455,16 @@ class PartTwoEpisode:
         )
         self.ui.title("THE LAST SEAL")
         self.ui.narrate("The vault does not open. It listens.")
+        if state.flags.get("part2_mara_oath_free"):
+            self.ui.narrate(
+                "Mara takes her place without waiting for an order. You asked beneath the "
+                "lantern. She answered there, before any stone could hear."
+            )
+        if state.flags.get("part2_tobin_home_promised"):
+            self.ui.narrate(
+                "Tobin sets his lantern beyond the spoke-circle, facing the way home. "
+                "Whatever you make of the road, there must still be a way to leave it."
+            )
         ritual_choice = self.story_choice(
             "SET THE RITUAL",
             [
@@ -1379,13 +1690,18 @@ class PartTwoEpisode:
         elif ending == "road_in_ruin":
             if state.flags.get("part2_teren_spared", False) and not state.flags.get(
                 "part2_calenor_condemned", False
+            ) and not state.flags.get(
+                "part2_calenor_rebound", False
             ) and not state.flags.get("part2_teren_took_spoke", False):
                 state.flags["part2_teren_stayed_to_collapse"] = True
+                state.flags["part2_calenor_escaped"] = True
                 self.ui.narrate("Teren stays to break the last support while Calenor leads you out.")
             elif state.flags.get("part2_calenor_rebound", False) or state.flags.get(
                 "part2_teren_took_spoke", False
             ):
                 state.flags["part2_company_collapsed_road"] = True
+                if not state.flags.get("part2_calenor_rebound", False):
+                    state.flags["part2_calenor_escaped"] = True
                 occupied_spoke = (
                     "Calenor's closed chain"
                     if state.flags.get("part2_calenor_rebound", False)
@@ -1422,6 +1738,7 @@ class PartTwoEpisode:
         state.add_journal(
             "An underground map revealed another sealed spoke beneath ruined Fornost."
         )
+        self._vigil_payoff(state, ending)
         state.play_minutes += 5
         state.ending = ending
         state.scene = "complete"
@@ -1433,6 +1750,47 @@ class PartTwoEpisode:
             ),
         )
         return True
+
+    def _vigil_payoff(self, state: GameState, ending: str) -> None:
+        """Let the small promises survive the spectacle, without promising a false fate."""
+
+        flags = state.flags
+        if ending == "shadows_name":
+            if any(flags.get(f"part2_vigil_{name}") for name in ("mara", "tobin", "calenor")):
+                self.ui.narrate(
+                    "The mark offers you a warm kitchen, a window, a town at sunrise. "
+                    "You recognize the voices it has borrowed. Those small hopes were "
+                    "never its to promise."
+                )
+            return
+        if flags.get("part_two_mara_present") and flags.get("part2_mara_future_named"):
+            self.ui.narrate(
+                "Mara touches the cold stone beside the exit. 'A window,' she reminds you. "
+                "Not a reward the road can grant her. Something she will build herself."
+            )
+        if flags.get("part_two_tobin_present") and flags.get("part2_tobin_home_promised"):
+            if flags.get("part_two_neds_watch_continues"):
+                self.ui.narrate(
+                    "Tobin puts Ned's whistle to his lips and plays the end-of-watch call. "
+                    "No one answers. He lowers it gently. 'I'll tell it right.'"
+                )
+            else:
+                self.ui.narrate(
+                    "Tobin lifts the lantern toward the northern road. 'Breakfast can wait,' "
+                    "he says. 'But we had better start walking.'"
+                )
+        if flags.get("part2_calenor_memory_shared"):
+            if flags.get("part2_calenor_escaped"):
+                self.ui.narrate(
+                    "Calenor asks whether you still blame the pan. His voice shakes. "
+                    "You have not recovered the years he hid, but this small laugh belongs "
+                    "to both of you."
+                )
+            else:
+                self.ui.narrate(
+                    "You carry a winter kitchen with you as well as a Warden's last words. "
+                    "The road does not get to decide which memory of Calenor you keep."
+                )
 
 
 def part_two_ending(state: GameState, seal_choice: str) -> str:
@@ -1470,6 +1828,13 @@ def part_two_ending_breakdown(state: GameState) -> list[tuple[str, str]]:
         mara = "Mara reached the Last Seal and carried her own voice into its judgment."
     else:
         mara = "Mara was not present on the Dead Road."
+    if flags.get("part2_vigil_mara"):
+        if flags.get("part2_mara_future_named"):
+            mara += " At the last lantern, she named a future she would build for herself."
+        elif flags.get("part2_mara_oath_free"):
+            mara += " She chose the last battle freely, owing the road no oath."
+        else:
+            mara += " She promised one more battle, rather than a lifetime on the road."
 
     if flags.get("part_two_tobin_present", False):
         if flags.get("part_two_neds_watch_continues", False):
@@ -1480,6 +1845,13 @@ def part_two_ending_breakdown(state: GameState) -> list[tuple[str, str]]:
         watch = "Tobin remained above with Ned; both were beyond the Last Seal's cost."
     else:
         watch = "Tobin did not descend, and Ned's lost watch remained with the road above."
+    if flags.get("part2_vigil_tobin"):
+        if flags.get("part2_tobin_home_promised"):
+            watch += " You promised to carry the watch's people and stories home."
+        elif flags.get("part2_tobin_bree_remembered"):
+            watch += " Before the battle, he remembered Bree at sunrise."
+        else:
+            watch += " You mended the last lantern together in silence."
 
     if flags.get("part2_teren_stayed_to_collapse", False):
         guardians = "Teren stayed to collapse the road; Calenor escaped."
@@ -1507,6 +1879,13 @@ def part_two_ending_breakdown(state: GameState) -> list[tuple[str, str]]:
             guardians += " Teren died at the broken seal-door."
         elif flags.get("part2_teren_confessed", False):
             guardians += " Teren's confession entered the witness record."
+    if flags.get("part2_vigil_calenor"):
+        if flags.get("part2_calenor_memory_shared"):
+            guardians += " You shared an ordinary memory beyond his Warden duty."
+        elif flags.get("part2_calenor_trust_rebuild"):
+            guardians += " You asked him to earn trust one honest day at a time."
+        else:
+            guardians += " You sat beside him without giving an answer."
 
     if state.ending == "shadows_name":
         attempted_choice = next(

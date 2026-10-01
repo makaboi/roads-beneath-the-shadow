@@ -143,10 +143,16 @@ class PartTwoPlayer(EpisodePlayer):
 
     prompt_limit = 300
 
+    def __init__(self, *args, visit_vigil: bool = True, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.visit_vigil = visit_vigil
+
     def _answer(self, prompt: str, context: str) -> str:
         fixed = {
             "WHAT DO YOU CARRY DOWN?": "Calenor's lesson",
             "MARA HEARS THE RIDER ABOVE": "Trust her",
+            "TOBIN HEARS THE RIDER ABOVE": "Trust him",
+            "THE RIDER FOLLOWS YOUR FOOTSTEPS": "Hold Calenor's broken sword",
             "HOW DO YOU BUY FOUR ROUNDS?": "broken sword",
             "THE HALL ASKS FOR A NAME": "road-name",
             "WHO HOLDS THE DARK WITH YOU?": "stand together",
@@ -167,6 +173,9 @@ class PartTwoPlayer(EpisodePlayer):
             "HOW DO YOU BREAK THE SPOKE-CHAIN?": "Warden oath",
             "WHAT ARE YOUR FIRST WORDS TO CALENOR?": "Bring him home",
             "HOW DO YOU JUDGE CALENOR?": "Forgive Calenor",
+            "MARA LOOKS BEYOND THE ROAD": "Ask what she wants",
+            "TOBIN TENDS THE LAST LIGHT": "Promise to bring the watch home",
+            "WHAT DO YOU ASK OF CALENOR NOW?": "Ask for a memory",
             "SET THE RITUAL": "Divide among willing voices",
             "THE STAR WHISPERS BENEATH YOUR SKIN": "Reject the star",
             "WHERE DO YOU STAND FOR SIX ROUNDS?": "Hold the center",
@@ -175,6 +184,16 @@ class PartTwoPlayer(EpisodePlayer):
         for heading, label in fixed.items():
             if heading in context:
                 return self._visible_choice(context, label)
+        if "BEFORE THE LAST SEAL" in context:
+            labels = (
+                "Speak with Mara",
+                "Help Tobin",
+                "Sit beside Calenor",
+                "Enter the Last Seal",
+            ) if self.visit_vigil else ("Enter the Last Seal",)
+            for label in labels:
+                if label in context:
+                    return self._visible_choice(context, label)
         if "EXPLORE THE HALL OF EIGHT" in context:
             for label in (
                 "Cipher Archive",

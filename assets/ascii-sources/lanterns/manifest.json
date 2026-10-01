@@ -1,0 +1,38 @@
+{
+  "converter": {
+    "executable": "ascii-image-converter",
+    "version": "1.13.1",
+    "arguments": [
+      "--dimensions",
+      "72,20",
+      "--map",
+      " .:-=+*#@"
+    ],
+    "cleanup": [
+      "outer_blank_rows",
+      "trailing_whitespace"
+    ]
+  },
+  "entries": [
+    {
+      "filename": "midgewater-camp.png",
+      "raw_constant": "MIDGEWATER_CAMP_ART",
+      "scene": "A Fire Without Flame",
+      "alt_text": "A leaning standing stone shelters a small ember beside reeds and dark marsh water.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment reference for exact 72x20 terminal ASCII conversion\nPrimary request: A sheltered camp in the Midgewater marshes, called A Fire Without Flame.\nScene/backdrop: Pure black night, a low flat line of marsh water and two widely separated clumps of broad pointed reeds at the lower left and right. No clouds, stars, mountains, ruins or textures.\nSubject: One large leaning ancient standing stone occupies the left central half of the composition, its white simple slab leaning over a single small white ember in a shallow stone bowl at its base to the right. The thick stone shelter and ember are the only main objects. The standing stone has a broad flat face, visibly angular silhouette, no carved marks. No people or creatures.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette. Solid white masses against pure black empty space, thick broad shapes.\nComposition/framing: 3:2 landscape at 1536x1024, dominant centered stone and sheltered ember, full objects visible with large margins. The single ember appears as a bright broad oval with one teardrop above it, not a bonfire. Separated shapes must survive 72 columns by 20 rows.\nLighting/mood: Quiet refuge, one small guarded ember against a night marsh.\nColor palette: pure black and white only, no gray-dependent detail.\nConstraints: No text, labels, border, watermark, logo, delicate thin lines, fog, gradients, fine texture, stipple, scratches, hatching, moon, extra props, weapon, tent or human silhouette.\nAvoid: cluttered landscapes, overlapping shapes, decorative filigree or textures on the stone.",
+      "negative": false,
+      "source_sha256": "82fff6f62aa1071b54f01ca51013e5950db56c46d89d2ab086ee17f295ee0b3c",
+      "raw_sha256": "187e4bbac263a87f77cdb139ee4551f3381ef6f9190a91939194a4363f2c7127"
+    },
+    {
+      "filename": "last-lantern.png",
+      "raw_constant": "LAST_LANTERN_ART",
+      "scene": "The Last Lantern",
+      "alt_text": "A single lantern hangs beneath a low stone arch above three steps into darkness.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome game environment reference for exact 72x20 terminal ASCII conversion\nPrimary request: A quiet lantern-lit refuge before a final confrontation, called The Last Lantern.\nScene/backdrop: A pure-black cavern with one simple low stone arch leading into darkness. No landscape texture.\nSubject: One large glowing old lantern hanging inside the low arch. Its thick bright casing forms the dominant centered silhouette. Beneath it, one short broad flight of three stone steps. No people or creatures. Lantern occupies a third of the image height, arch occupies two thirds of image width; simple separated shapes, empty black openings.\nStyle/medium: stark black-and-white retro dark-fantasy linocut silhouette. Large clear white masses and pure black negative space.\nComposition/framing: 3:2 landscape, 1536x1024, entirely visible centered composition with wide black margins. Designed to remain readable after reducing to 72 characters wide and 20 rows tall.\nLighting/mood: warm refuge suggested only through the lantern shape, the white flame a thick teardrop, one quiet light before a deep dark doorway.\nColor palette: black and white only. White stone edges and white lantern silhouette on black.\nConstraints: No text, letters, labels, borders, watermark, logo, fine texture, fog, gradient, gray shading, stippling, or thin detail. No human figures, faces, extra props, or decorative filigree.\nAvoid: scratches, hatching, delicate thin lines, crowded shapes. Keep the lantern frame and flame separately legible.",
+      "negative": false,
+      "source_sha256": "caa3302b124cb6f19e5febf93f2dd01ae9a629ee73f228cc4ee0d8e5545d81dc",
+      "raw_sha256": "5ad057b9f81d6446bb3fb191d75d593fe140d7d25b1687a9578d7cf8f46c681f"
+    }
+  ]
+}

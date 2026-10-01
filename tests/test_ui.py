@@ -1,6 +1,9 @@
 import unittest
 import os
+import re
+from unittest.mock import Mock, PropertyMock, patch
 
+from roads_beneath_shadow.lighting import ART_PALETTES, Color
 from roads_beneath_shadow.ui import InputClosed, TerminalUI
 
 
@@ -13,6 +16,62 @@ class TerminalUITests(unittest.TestCase):
 
         with self.assertRaises(InputClosed):
             ui.choose("Menu", ["One", "Two"])
+
+    def test_raw_menu_handles_closed_input_and_interrupt_keys(self) -> None:
+        for key, exception in (("", InputClosed), ("\x04", InputClosed), ("\x03", KeyboardInterrupt)):
+            with self.subTest(key=repr(key)):
+                ui = TerminalUI(color=False, fast=True, output_fn=lambda _: None)
+                with patch.object(ui, "_read_raw_key", side_effect=[key, "\r"]) as read_key:
+                    with self.assertRaises(exception):
+                        ui._choose_with_raw_keys("Menu", ["One", "Two"], False)
+                read_key.assert_called_once_with()
+
+    def test_raw_input_restores_terminal_after_read_interrupt(self) -> None:
+        stream = Mock()
+        stream.fileno.return_value = 7
+        stream.read.side_effect = KeyboardInterrupt
+        termios = Mock()
+        previous = object()
+        termios.tcgetattr.return_value = previous
+        tty = Mock()
+        with patch.dict("sys.modules", {"termios": termios, "tty": tty}):
+            with patch("roads_beneath_shadow.ui.sys.stdin", stream):
+                with self.assertRaises(KeyboardInterrupt):
+                    TerminalUI._read_raw_key()
+        tty.setraw.assert_called_once_with(7)
+        termios.tcsetattr.assert_called_once_with(7, termios.TCSADRAIN, previous)
+
+    def test_raw_menu_preserves_arrow_and_letter_navigation(self) -> None:
+        for keys, expected in ((["s", "\r"], 2), (["\x1b[B", "d"], 2), (["w", "\r"], 3)):
+            with self.subTest(keys=keys):
+                ui = TerminalUI(color=False, fast=True, output_fn=lambda _: None)
+                with patch.object(ui, "_read_raw_key", side_effect=keys):
+                    with patch.object(ui, "_rewrite_choice_lines"):
+                        self.assertEqual(ui._choose_with_raw_keys("Menu", ["One", "Two", "Three"], False), expected)
+
+    def test_screen_reader_uses_numbered_line_prompts_in_an_interactive_terminal(self) -> None:
+        output: list[str] = []
+        prompts: list[str] = []
+
+        def answer(prompt: str) -> str:
+            prompts.append(prompt)
+            return "2"
+
+        ui = TerminalUI(
+            color=False,
+            fast=True,
+            screen_reader=True,
+            input_fn=answer,
+            output_fn=output.append,
+        )
+        with patch.object(TerminalUI, "_interactive_terminal", new_callable=PropertyMock, return_value=True):
+            with patch.object(ui, "_choose_with_raw_keys") as raw_menu:
+                self.assertEqual(ui.choose("Menu", ["One", "Two"]), 2)
+        raw_menu.assert_not_called()
+        self.assertEqual(prompts, ["Enter your choice: "])
+        self.assertIn("1. One", output)
+        self.assertIn("2. Two", output)
+        self.assertNotIn("\033", "\n".join(output))
 
     def test_wasd_navigation_selects_highlighted_option(self) -> None:
         answers = iter(["s", ""])
@@ -132,6 +191,48 @@ class TerminalUITests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ui.choose("Menu", [])
+
+    def test_art_lighting_preserves_every_character_and_uses_four_inks(self) -> None:
+        plain: list[str] = []
+        lit: list[str] = []
+        art = "  .:-=+*#@\n   +###@+"
+        for enabled, output in ((False, plain), (True, lit)):
+            TerminalUI(color=enabled, fast=True, output_fn=output.append).art(art, Color.YELLOW)
+        self.assertEqual([re.sub(r"\x1b\[[0-9;]*m", "", line) for line in lit], plain)
+        for ink in ART_PALETTES[Color.YELLOW]:
+            self.assertIn(f"\033[38;5;{ink}m", "\n".join(lit))
+        self.assertNotIn("\033", "\n".join(plain))
+
+    def test_colored_narrow_art_has_the_same_viewport_as_plain_art(self) -> None:
+        plain: list[str] = []
+        lit: list[str] = []
+        art = ".:-=+*#@" * 9 + "\n" + "@#*+=-:." * 9
+        for enabled, output in ((False, plain), (True, lit)):
+            TerminalUI(
+                color=enabled,
+                fast=True,
+                output_fn=output.append,
+                terminal_size_fn=lambda _: os.terminal_size((24, 24)),
+            ).art(art, Color.BLUE)
+        visible = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in lit]
+        self.assertEqual(visible, plain)
+        self.assertTrue(all(len(line) <= 24 for line in visible))
+
+    def test_nameplates_keep_uniform_ink_and_lighting_does_not_leak_into_prose(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=True, fast=True, output_fn=output.append)
+        ui.art("[ LAST SEAL ]\n.*#@", Color.RED)
+        ui.write("The vault listens.")
+        self.assertIn(Color.RED, output[0])
+        self.assertNotIn("\033[38;5;", output[0])
+        self.assertTrue(output[1].endswith(Color.RESET))
+        self.assertEqual(output[-1], "The vault listens." + Color.RESET)
+
+    def test_screen_reader_never_receives_shaded_converter_marks(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=False, fast=True, screen_reader=True, output_fn=output.append)
+        ui.art(".*#@", Color.YELLOW, alt_text="A lantern beneath an arch.")
+        self.assertEqual(output, ["[Scene: A lantern beneath an arch.]"])
 
 
 if __name__ == "__main__":

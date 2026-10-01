@@ -167,6 +167,7 @@ class PlayerProfileTests(unittest.TestCase):
             "part2_star_read_memory",
             "part2_star_broke_chain",
             "part2_star_bargain",
+            "part2_descent_mark_bargain",
         )
         for flag in forbidden:
             with self.subTest(flag=flag):

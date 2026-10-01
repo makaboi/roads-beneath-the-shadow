@@ -6,6 +6,7 @@ import math
 import random
 import sys
 import textwrap
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -13,10 +14,17 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "assets"
-FONT_PATH = "/System/Library/Fonts/Menlo.ttc"
+FONT_PATHS = (
+    "/System/Library/Fonts/Menlo.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+    "C:/Windows/Fonts/consola.ttf",
+    "DejaVuSansMono.ttf",
+)
 sys.path.insert(0, str(ROOT))
 
-from roads_beneath_shadow import artwork, part_two_artwork  # noqa: E402
+from roads_beneath_shadow import artwork, journey_artwork, part_two_artwork  # noqa: E402
+from roads_beneath_shadow.lighting import ASCII_RAMP, Color, art_ink, xterm_rgb  # noqa: E402
 
 INK = "#d7ded8"
 MUTED = "#819188"
@@ -28,8 +36,29 @@ TERMINAL = "#0b1013"
 PANEL = "#11191d"
 
 
+@lru_cache(maxsize=12)
 def font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(FONT_PATH, size=size)
+    for path in FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    raise RuntimeError("Preview generation needs Menlo, DejaVu Sans Mono, Liberation Mono, or Consolas.")
+
+
+def draw_art_row(draw, position, text: str, face, color: str) -> None:
+    """Use the game's inks and unchanged glyphs in exported terminal scenes."""
+
+    palette_color = {SILVER: Color.SILVER, GOLD: Color.YELLOW, RED: Color.RED, GREEN: Color.GREEN}.get(color)
+    if palette_color is None or any(character not in ASCII_RAMP for character in text):
+        draw.text(position, text, font=face, fill=color)
+        return
+    x, y = position
+    advance = face.getlength("M")
+    for column, character in enumerate(text):
+        ink = art_ink(character, palette_color)
+        fill = xterm_rgb(ink) if ink is not None else color
+        draw.text((x + column * advance, y), character, font=face, fill=fill)
 
 
 def centered(draw: ImageDraw.ImageDraw, text: str, y: int, face, fill: str, width: int) -> None:
@@ -70,11 +99,11 @@ def social_preview() -> Image.Image:
     draw.line((105, 500, width - 105, 500), fill="#42564b", width=2)
 
     draw.polygon(star_points(640, 156, 42, 14), fill=SILVER, outline="#f0f4f2")
-    centered(draw, "A RETRO TERMINAL RPG FOR macOS", 60, font(23), GREEN, width)
+    centered(draw, "A RETRO TERMINAL RPG", 60, font(23), GREEN, width)
     centered(draw, "ROADS", 220, font(92), INK, width)
     centered(draw, "BENEATH THE SHADOW", 326, font(54), GOLD, width)
     centered(draw, "CHOICES LEAVE MARKS.  THE ROAD REMEMBERS.", 422, font(24), SILVER, width)
-    centered(draw, "PART I  //  45–70 MINUTES  //  PYTHON 3.10+", 538, font(21), MUTED, width)
+    centered(draw, "PARTS I + II  //  THE ROAD REMEMBERS  //  PYTHON 3.10+", 538, font(21), MUTED, width)
 
     add_scanlines(image, 5)
     return image
@@ -101,7 +130,7 @@ def itch_cover() -> Image.Image:
     centered(draw, "BENEATH", 248, font(42), GOLD, width)
     centered(draw, "THE SHADOW", 302, font(42), GOLD, width)
     centered(draw, "THE ROAD REMEMBERS.", 390, font(18), SILVER, width)
-    centered(draw, "PART I  //  macOS", 432, font(16), MUTED, width)
+    centered(draw, "PARTS I + II", 432, font(16), MUTED, width)
     add_scanlines(image, 5)
     return image
 
@@ -111,14 +140,16 @@ def art_rows(art: str, color: str) -> list[tuple[str, str]]:
 
 
 SCENES = [
-    (title, art_rows(str(art), color) + [("RAW 72 x 20 ART", MUTED)])
-    for art, title, color in (
-        (artwork.TITLE_ART_EXPANDED, "THE SILVER STAR", SILVER),
-        (artwork.PRANCING_PONY_EXTERIOR_ART, "ARRIVAL AT THE INN", GOLD),
-        (artwork.ORC_ATTACK_ART, "ORCS AT THE DOOR", RED),
-        (artwork.BLACK_RIDER_CLIFFHANGER_ART, "THE BLACK RIDER", SILVER),
-        (part_two_artwork.FINAL_SEAL_BATTLE_ART, "THE FINAL SEAL BATTLE", RED),
-        (part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, "BENEATH RUINED FORNOST", SILVER),
+    (title, art_rows(str(art), color) + [("", MUTED), (caption, MUTED)])
+    for art, title, color, caption in (
+        (artwork.TITLE_ART_EXPANDED, "THE SILVER STAR", SILVER, "Choices leave marks. The road remembers."),
+        (artwork.PRANCING_PONY_EXTERIOR_ART, "ARRIVAL AT THE INN", GOLD, "Calenor promised seven days. Three weeks have passed."),
+        (artwork.ORC_ATTACK_ART, "ORCS AT THE DOOR", RED, "The silver star. Take its bearer alive."),
+        (journey_artwork.MIDGEWATER_CAMP_ART, "A FIRE WITHOUT FLAME", GOLD, "For a little while, neither has to be useful to anyone."),
+        (artwork.BLACK_RIDER_CLIFFHANGER_ART, "THE BLACK RIDER", SILVER, "There is only one road left: down."),
+        (journey_artwork.LAST_LANTERN_ART, "THE LAST LANTERN", GOLD, "No ancient power keeps it alight; someone remembered to fill it."),
+        (part_two_artwork.FINAL_SEAL_BATTLE_ART, "THE FINAL SEAL BATTLE", RED, "What you promise is yours too."),
+        (part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, "BENEATH RUINED FORNOST", SILVER, "We guarded the road. The Shadow was waking the city."),
     )
 ]
 
@@ -144,11 +175,12 @@ def gameplay_frame(
 
     visible = max(1, math.ceil(len(lines) * reveal))
     y = 132
-    face_size = 15 if len(lines) <= 16 else 13
-    face = font(face_size)
-    line_step = min(29, max(19, 396 // max(1, len(lines))))
+    face = font(16)
+    line_step = min(25, 396 // max(1, len(lines)))
+    block_width = max(len(text) for text, _color in lines)
+    x = (width - face.getlength("M") * block_width) / 2
     for text, color in lines[:visible]:
-        draw.text((53, y), text, font=face, fill=color)
+        draw_art_row(draw, (x, y), text, face, color)
         y += line_step
 
     if cursor:
@@ -178,11 +210,42 @@ def gameplay_gif() -> tuple[list[Image.Image], list[int]]:
     return frames, durations
 
 
+def contact_sheet() -> Image.Image:
+    sheet = Image.new("RGB", (1920, 600 * math.ceil(len(SCENES) / 2)), TERMINAL)
+    for index in range(len(SCENES)):
+        sheet.paste(gameplay_frame(index, 1.0, False), ((index % 2) * 960, (index // 2) * 600))
+    return sheet
+
+
+def animation_contact_sheet() -> Image.Image:
+    """Show every existing animation frame with the new terminal lighting."""
+
+    animations = (
+        ("THE PRANCING PONY", artwork.PRANCING_PONY_EXTERIOR_ART, GOLD),
+        ("THE REFORGED STAR", artwork.STAR_KEY_REFORGED_ART, SILVER),
+        ("THE BLACK RIDER", artwork.BLACK_RIDER_CLIFFHANGER_ART, SILVER),
+        ("THE WALL OF NAMES", part_two_artwork.WALL_NAMES_AWAKENING_ART, SILVER),
+        ("THE FORNOST MAP", part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, GOLD),
+    )
+    sheet = Image.new("RGB", (1920, 500 * len(animations)), TERMINAL)
+    face = font(18)
+    for row, (title, animation, color) in enumerate(animations):
+        for column, frame in enumerate(animation.frames):
+            x = column * 960 + 70
+            y = row * 500
+            draw = ImageDraw.Draw(sheet)
+            draw.text((x, y + 24), f"{title} — FRAME {column + 1}", font=font(21), fill=GOLD)
+            for line_index, (line, ink) in enumerate(art_rows(frame, color)):
+                draw_art_row(draw, (x, y + 68 + line_index * 20), line, face, ink)
+    return sheet
+
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     social_preview().save(OUTPUT_DIR / "social-preview.png", optimize=True)
     itch_cover().save(OUTPUT_DIR / "itch-cover.png", optimize=True)
+    contact_sheet().save(OUTPUT_DIR / "terminal-art-preview.png", optimize=True)
+    animation_contact_sheet().save(OUTPUT_DIR / "animation-frames.png", optimize=True)
 
     frames, durations = gameplay_gif()
     frames[0].save(
@@ -199,7 +262,9 @@ def main() -> None:
     for filename, scene_index in (
         ("story.png", 1),
         ("combat.png", 2),
-        ("cliffhanger.png", 3),
+        ("camp.png", 3),
+        ("cliffhanger.png", 4),
+        ("last-lantern.png", 5),
     ):
         gameplay_frame(scene_index, 1.0, False).save(
             screenshot_dir / filename,

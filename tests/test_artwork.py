@@ -37,7 +37,7 @@ LEGACY_CONVERTER_SOURCES = (
     ("prancing-pony.png", "PRANCING_PONY_EXTERIOR_STILL", True),
     ("prancing-pony-rain.png", "PRANCING_PONY_EXTERIOR_RAIN_ART", False),
     ("prancing-pony-interior.png", "PRANCING_PONY_INTERIOR_ART", False),
-    ("orc-attack.png", "ORC_ATTACK_SPRITE", True),
+    ("orc-attack.png", "ORC_ATTACK_SPRITE", False),
     ("bree-streets.png", "BREE_STREETS_ART", False),
     ("north-gate.png", "NORTH_GATE_ART", False),
     ("third-stone-discovery.png", "THIRD_STONE_DISCOVERY_ART", False),

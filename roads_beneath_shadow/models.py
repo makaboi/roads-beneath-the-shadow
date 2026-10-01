@@ -43,6 +43,7 @@ VALID_SCENE_IDS = frozenset(
         "part2_teren",
         "part2_calenor_prison",
         "part2_calenor_reunion",
+        "part2_vigil",
         "part2_last_seal",
         "part2_final_battle",
         "part2_seal_choice",
