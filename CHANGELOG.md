@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — A Living Pixel World
+
+- Added five walkable locations: the Prancing Pony, Bree, the buried wayhouse, the Warden hall, and the Last Lantern. WASD movement, collision, nearby prompts, and E interactions lead to the same choices offered by the side menu.
+- Placed thirteen optional look spots across the maps, marked by unnumbered diamonds; E reveals local details without spending a turn or resources.
+- Added a shared character atlas with directional walking and idle animation for travelers, companions, and encounter characters, plus restrained environmental motion and reduced-motion support.
+- Presented story scenes as chronological illustrated pages, with adjustable text reveal and reading position preserved when the window changes size.
+- Added animated tactical battle panels showing the party, enemies, health, Focus, intentions, status, selectable targets, and action feedback.
+- Added graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels while keeping item actions and consequences in the shared game engine.
+- Added a separate automatic checkpoint at safe story transitions, Resume checkpoint on the main menu, and F5 saving while exploring. Existing version-2 saves and the three manual slots remain compatible.
+- Added R for the road map, Tab for the story archive, Page Up/Down for archive browsing, and Backspace to revisit the previous illustrated story page.
+- Made Defend protect against every incoming attack in the round and restore 1 Focus, giving outnumbered travelers a reliable way to recover. Companion guard commands now support survival objectives.
+- Added wound recovery after the opening encounter and corrected repeated Bleeding damage when inspecting enemies or changing targets; these free actions no longer advance status effects.
+- Composed five original, seamless ambient scores through deterministic procedural synthesis, with scene crossfades and quiet interaction effects. Sound stays off by default and gracefully handles unavailable audio devices.
+- Added standalone, checksummed downloads for Linux x64, Windows x64, Apple-silicon macOS, and Intel macOS, with frozen-asset and launch checks before all four publish together.
+- Kept both complete episodes, existing story routes, terminal play, screen-reader prompts, and accessibility preferences.
+
 ## 0.3.0 — Pixel-Art Edition
 
 - Made the desktop pixel-art game the default presentation, with illustrated dark fantasy scenes, parchment menus, graphical character meters, and mouse and keyboard controls.

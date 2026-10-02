@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from . import part_two_artwork as artwork
 from .combat import (
     CombatConfig,
+    CombatDifficulty,
     CombatResult,
     ash_archer,
     ash_commander,
@@ -61,10 +62,18 @@ CALENOR_LESSONS = (
 
 
 class PartTwoEpisode:
-    def __init__(self, ui: TerminalUI, story_choice: StoryChoice, combat: CombatRunner) -> None:
+    def __init__(
+        self,
+        ui: TerminalUI,
+        story_choice: StoryChoice,
+        combat: CombatRunner,
+        *,
+        difficulty_provider: Callable[[], CombatDifficulty | str] | None = None,
+    ) -> None:
         self.ui = ui
         self.story_choice = story_choice
         self.combat = combat
+        self.difficulty_provider = difficulty_provider or (lambda: CombatDifficulty.NORMAL)
 
     def run_scene(self, state: GameState) -> bool:
         scene = state.scene
@@ -1276,6 +1285,11 @@ class PartTwoEpisode:
             "and a patch in its handle. No ancient power keeps it alight; someone remembered "
             "to fill it. Beyond the arch, the vault waits. You have time for a few words."
         )
+        if self._can_rest_at_lantern(state):
+            self.ui.narrate(
+                "The low arch shelters you from the road's cold breath. Before you enter the "
+                "vault, you can pause once to bind your wounds and gather your strength."
+            )
         while True:
             topics: list[tuple[str, str]] = []
             if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
@@ -1284,6 +1298,9 @@ class PartTwoEpisode:
                 topics.append(("tobin", "Help Tobin tend the lantern"))
             if not state.flags.get("part2_vigil_calenor"):
                 topics.append(("calenor", "Sit beside Calenor for a moment"))
+            if self._can_rest_at_lantern(state):
+                amount = self._lantern_recovery(state)
+                topics.append(("rest", f"Rest and tend your wounds (recover up to {amount} Health and all Focus)"))
             topics.append(("leave", "Enter the Last Seal"))
             choice = self.story_choice("BEFORE THE LAST SEAL", [label for _key, label in topics])
             if choice is None:
@@ -1295,7 +1312,35 @@ class PartTwoEpisode:
             if not getattr(self, f"_vigil_{topic}")(state):
                 return False
             state.flags[f"part2_vigil_{topic}"] = True
-            state.play_minutes += 2
+            state.play_minutes += 6 if topic == "rest" else 2
+
+    @staticmethod
+    def _can_rest_at_lantern(state: GameState) -> bool:
+        character = state.character
+        return not state.flags.get("part2_vigil_rest") and (
+            character.hp < character.max_hp or character.focus < character.max_focus
+        )
+
+    def _lantern_recovery(self, state: GameState) -> int:
+        difficulty = self.difficulty_provider()
+        value = difficulty.value if isinstance(difficulty, CombatDifficulty) else str(difficulty).lower()
+        if value == CombatDifficulty.STORY.value:
+            return state.character.max_hp
+        if value in {CombatDifficulty.HARD.value, "shadow"}:
+            return 9
+        return (state.character.max_hp + 1) // 2
+
+    def _vigil_rest(self, state: GameState) -> bool:
+        self.ui.narrate(
+            "You rinse the road-dust from your cuts and bind them with clean strips from "
+            "Calenor's torn sleeve. Beneath the low arch, the lantern burns long enough "
+            "for your hands to steady. There is only time for one rest before the seal needs you."
+        )
+        recovered = state.character.heal(self._lantern_recovery(state))
+        state.character.focus = state.character.max_focus
+        self.ui.write(f"You recover {recovered} Health and restore all Focus.", color=Color.GREEN)
+        state.add_journal("I rested beneath the last lantern and tended my wounds before the Last Seal.")
+        return True
 
     def _vigil_mara(self, state: GameState) -> bool:
         if state.flags.get("shared_past_with_mara"):

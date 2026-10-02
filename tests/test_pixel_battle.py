@@ -1,0 +1,227 @@
+"""Real SDL coverage for the battlefield's interactions and motion settings."""
+
+from dataclasses import replace
+import importlib.util
+import os
+from pathlib import Path
+import subprocess
+import sys
+import unittest
+
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+from roads_beneath_shadow.combat_view import (
+    CombatCompanionView, CombatEnemyView, CombatFeedback, CombatPlayerView,
+    CombatSnapshot, CombatStatusView,
+)
+from roads_beneath_shadow.pixel_battle import BattleView, _wrapped
+
+
+def battle_snapshot(count=3):
+    bleeding = CombatStatusView("bleeding", "Bleeding", 2, "Lose 1 Health at the start of each turn.")
+    player = CombatPlayerView("Mira", "North Road Scout", 17, 24, 3, 4, "sword", "Ranger's sword", "leather", "Leather coat", 1, (bleeding,))
+    names = ("Orc Captain", "Ash-Hand Sapper", "Ash-Hand Archer")
+    archetypes = ("commander", "saboteur", "archer")
+    enemies = tuple(
+        CombatEnemyView(f"enemy_{index}", names[index], archetypes[index], 12 - index * 3, 16 - index * 3, 1 if index == 0 else 0, 1,
+                        "heavy", "Heavy Blow", "a crushing attack; Defend or interrupt it", True, 4, 8, "4–8 incoming damage", (), index == 0)
+        for index in range(count)
+    )
+    return CombatSnapshot(2, "active", "Ranger", player, enemies, "enemy_0", (),
+                          (CombatCompanionView("mara", "Mara", 3, True), CombatCompanionView("tobin", "Tobin", 2, True)),
+                          "Protect the prisoners and keep the bridge intact.", None, False)
+
+
+class BattleImportTests(unittest.TestCase):
+    def test_import_is_safe_without_a_graphical_display(self):
+        code = "import sys; import roads_beneath_shadow.pixel_battle; assert 'pygame' not in sys.modules"
+        result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+@unittest.skipUnless(importlib.util.find_spec("pygame"), "pygame-ce is required for battlefield SDL tests")
+class BattleSDLTests(unittest.TestCase):
+    def setUp(self):
+        import pygame
+        self.pg = pygame
+        pygame.init()
+        self.surface = pygame.Surface((1000, 760))
+        self.view = BattleView(pygame)
+        self.snapshot = battle_snapshot()
+        self.view.set_snapshot(self.snapshot)
+        self.canvas = pygame.Rect(24, 100, 620, 480)
+        self.view.draw(self.surface, self.canvas, 400)
+
+    def tearDown(self):
+        self.pg.quit()
+
+    def click(self, pos, button=1):
+        return self.view.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=button, pos=pos))
+
+    def test_selecting_enemy_cards_returns_stable_engine_ids(self):
+        for rect, enemy_id in self.view.enemy_hits:
+            self.assertEqual(self.click(rect.center), (True, enemy_id))
+        self.assertEqual(self.snapshot.target_id, "enemy_0", "the renderer must leave selection to the engine")
+
+    def test_selecting_the_visible_enemy_sprite_returns_the_same_target(self):
+        for rect, enemy_id in self.view.sprite_hits:
+            self.assertEqual(self.click(rect.center), (True, enemy_id))
+
+    def test_fallen_enemy_stays_visible_but_cannot_be_targeted(self):
+        enemies = (replace(self.snapshot.enemies[0], hp=0), *self.snapshot.enemies[1:])
+        self.view.set_snapshot(replace(self.snapshot, enemies=enemies, target_id="enemy_1"))
+        self.view.draw(self.surface, self.canvas)
+        self.assertEqual(len(self.view.enemy_hits), 3)
+        self.assertEqual(self.click(self.view.enemy_hits[0][0].center), (True, None))
+        self.assertEqual(self.click(self.view.enemy_hits[1][0].center), (True, "enemy_1"))
+
+    def test_result_screen_cannot_send_a_new_combat_target(self):
+        self.view.set_snapshot(replace(self.snapshot, phase="victory"))
+        self.view.draw(self.surface, self.canvas)
+        self.assertEqual(self.click(self.view.enemy_hits[0][0].center), (True, None))
+
+    def test_background_and_right_mouse_button_do_not_select_targets(self):
+        self.assertEqual(self.click((3, 3)), (False, None))
+        self.assertEqual(self.click(self.view.enemy_hits[0][0].center, button=3), (False, None))
+
+    def test_hover_has_no_combat_side_effect(self):
+        event = self.pg.event.Event(self.pg.MOUSEMOTION, pos=self.view.enemy_hits[1][0].center, rel=(0, 0), buttons=(0, 0, 0))
+        self.assertEqual(self.view.handle_event(event), (False, None))
+        self.assertEqual(self.view.hovered_id, "enemy_1")
+        self.assertEqual(self.snapshot.target_id, "enemy_0")
+
+    def test_one_to_three_enemy_cards_fit_at_supported_window_sizes(self):
+        for size in ((419, 290), (480, 420), (620, 480), (820, 530)):
+            for count in (1, 2, 3):
+                canvas = self.pg.Rect(10, 15, *size)
+                self.view.set_snapshot(battle_snapshot(count))
+                result = self.view.draw(self.surface, canvas)
+                self.assertEqual(result, canvas)
+                cards = [rect for rect, _ in self.view.enemy_hits]
+                self.assertEqual(len(cards), count)
+                self.assertTrue(all(canvas.contains(rect) for rect in cards))
+                self.assertTrue(all(not first.colliderect(second) for first, second in zip(cards, cards[1:])))
+
+    def test_reduced_motion_is_visually_stable_across_clock_times(self):
+        self.view.update(0, reduced_motion=True)
+        self.view.draw(self.surface, self.canvas, 20)
+        first = self.pg.image.tobytes(self.surface, "RGB")
+        self.view.draw(self.surface, self.canvas, 1700)
+        second = self.pg.image.tobytes(self.surface, "RGB")
+        self.assertEqual(first, second)
+
+    def test_unavailable_companions_do_not_appear_in_the_fighting_party(self):
+        for companions in (
+            (replace(self.snapshot.companions[0], available=True), replace(self.snapshot.companions[1], available=False)),
+            tuple(replace(companion, available=False) for companion in self.snapshot.companions),
+        ):
+            self.view.set_snapshot(replace(self.snapshot, companions=companions))
+            self.view.draw(self.surface, self.canvas)
+            self.assertEqual(set(self.view.actor_positions) & {"mara", "tobin"}, {companion.id for companion in companions if companion.available})
+
+    def test_normal_mode_has_slow_live_actor_and_environment_motion(self):
+        self.view.update(0, reduced_motion=False)
+        self.view.draw(self.surface, self.canvas, 20)
+        first = self.pg.image.tobytes(self.surface, "RGB")
+        self.view.draw(self.surface, self.canvas, 1700)
+        self.assertNotEqual(first, self.pg.image.tobytes(self.surface, "RGB"))
+
+    def test_damage_feedback_draws_then_expires_without_changing_snapshot(self):
+        for canvas in (self.canvas, self.pg.Rect(19, 91, 419, 290)):
+            self.view.update(0, reduced_motion=True)
+            self.view.draw(self.surface, canvas, 200)
+            before = self.pg.image.tobytes(self.surface, "RGB")
+            self.view.queue_feedback(CombatFeedback("damage", "player", "enemy_0", 7, "Mira strikes the captain."))
+            self.view.update(0.1, reduced_motion=True)
+            self.view.draw(self.surface, canvas, 200)
+            self.assertNotEqual(before, self.pg.image.tobytes(self.surface, "RGB"))
+            self.assertEqual(self.snapshot.enemies[0].hp, 12)
+            self.view.update(3, reduced_motion=True)
+            self.view.draw(self.surface, canvas, 200)
+            self.assertEqual(before, self.pg.image.tobytes(self.surface, "RGB"))
+
+    def test_status_and_intent_tooltips_include_the_actual_rules(self):
+        text = "\n".join(text for _, text in self.view.tooltip_hits)
+        self.assertIn("Lose 1 Health at the start of each turn", text)
+        self.assertIn("Defend or interrupt it", text)
+        self.assertIn("Power Attack or Mara", text)
+
+    def test_inspection_and_notice_messages_do_not_animate_a_combat_hit(self):
+        self.view.update(0, reduced_motion=True)
+        self.view.draw(self.surface, self.canvas, 200)
+        before = self.pg.image.tobytes(self.surface, "RGB")
+        for kind in ("inspect", "notice", "info"):
+            self.view.queue_feedback(CombatFeedback(kind, "player", "enemy_0", 0, "Read the enemy's tactics."))
+        self.view.update(0.1, reduced_motion=True)
+        self.view.draw(self.surface, self.canvas, 200)
+        self.assertEqual(before, self.pg.image.tobytes(self.surface, "RGB"))
+
+    def test_protected_damage_forecast_still_says_zero_damage(self):
+        enemy = replace(self.snapshot.enemies[0], damage_min=0, damage_max=0, threat="danger")
+        self.view.set_snapshot(replace(self.snapshot, enemies=(enemy,)))
+        rendered = []
+        original_text = self.view._text
+
+        def record_text(surface, text, pos, color=(239, 225, 188), *, font=None):
+            rendered.append(str(text))
+            original_text(surface, text, pos, color, font=font)
+
+        self.view._text = record_text
+        self.view.draw(self.surface, self.canvas)
+        self.assertIn("0–0 DAMAGE", rendered)
+
+    def test_small_three_enemy_canvas_keeps_long_intents_and_statuses_visible(self):
+        guarded = CombatStatusView("guarded", "Guarded", 2, "+2 Armor until struck.")
+        enemies = tuple(replace(enemy, name=("Ash-Hand Commander", "Ash-Hand Sapper", "Ash-Hand Archer")[index],
+                                intent_label="Ash-Hand Execution", telegraph="a devastating blow; interrupt it now", statuses=(guarded,))
+                        for index, enemy in enumerate(self.snapshot.enemies))
+        self.view.set_snapshot(replace(self.snapshot, enemies=enemies))
+        rendered = []
+        original_text = self.view._text
+
+        def record_text(surface, text, pos, color=(239, 225, 188), *, font=None):
+            if text == "Guarded 2":
+                rendered.append((pos, (font or self.view.font).get_linesize()))
+            original_text(surface, text, pos, color, font=font)
+
+        self.view._text = record_text
+        for size in ((480, 420), (419, 290)):
+            rendered.clear()
+            self.view.draw(self.surface, self.pg.Rect(14, 14, *size))
+            self.assertEqual(len(rendered), 3)
+            for (pos, line_height), (card, _) in zip(rendered, self.view.enemy_hits):
+                self.assertTrue(card.contains(self.pg.Rect(*pos, 50, line_height)))
+
+    def test_original_sprite_styles_distinguish_enemy_roles(self):
+        sprites = [self.view._sprite(kind, True) for kind in ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider")]
+        self.assertEqual(len({self.pg.image.tobytes(sprite, "RGBA") for sprite in sprites}), 8)
+        self.assertTrue(all(sprite.get_flags() & self.pg.SRCALPHA for sprite in sprites))
+
+    def test_draw_restores_the_callers_clip_and_never_paints_outside_canvas(self):
+        sentinel = (222, 6, 203)
+        self.surface.fill(sentinel)
+        original_clip = self.pg.Rect(3, 3, 900, 700)
+        self.surface.set_clip(original_clip)
+        self.view.draw(self.surface, self.canvas)
+        self.assertEqual(self.surface.get_clip(), original_clip)
+        self.assertEqual(tuple(self.surface.get_at((self.canvas.x - 1, self.canvas.y))[:3]), sentinel)
+        self.assertEqual(tuple(self.surface.get_at((self.canvas.right, self.canvas.y))[:3]), sentinel)
+
+    def test_leaving_combat_clears_old_clickable_targets(self):
+        self.view.queue_feedback(CombatFeedback("heal", "player", "player", 5, "A remedy restores Health."))
+        self.view.set_snapshot(None)
+        self.assertEqual(self.click(self.canvas.center), (False, None))
+        self.assertEqual(self.view.enemy_hits, [])
+        self.assertEqual(self.view.actor_positions, {})
+
+    def test_long_enemy_names_are_wrapped_without_losing_words(self):
+        name = "Teren the False Ranger and keeper of the drowned gate"
+        lines = _wrapped(name, self.view.font, 146)
+        self.assertEqual(" ".join(lines), name)
+        self.assertTrue(all(self.view.font.size(line)[0] <= 146 for line in lines))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     presentation.add_argument("--terminal", action="store_true", help="play the original dependency-free terminal edition")
     parser.add_argument("--screenshot", type=Path, help="render the pixel-art main menu to a PNG and exit")
     parser.add_argument("--no-color", action="store_true", help="disable ANSI terminal colors")
-    parser.add_argument("--sound", action="store_true", help="enable the original retro sound cues")
+    parser.add_argument("--sound", action="store_true", help="enable sound cues and pixel-edition ambient music")
     parser.add_argument("--fast", action="store_true", help="remove dramatic pauses (useful for testing)")
     parser.add_argument(
         "--text-speed",
@@ -58,7 +58,15 @@ def main() -> None:
                 "Installation check failed; pixel-art scenes are missing: "
                 + ", ".join(path.name for path in missing_pixel_scenes)
             )
-        print(f"Installation verified: {len(SoundPlayer.CUES)} sound cues and pixel-art scenes are available.")
+        from .pixel_world import missing_world_assets
+        from .soundscapes import AUDIO_DIRECTORY, TRACKS
+
+        missing_exploration = missing_world_assets()
+        missing_ambient = [AUDIO_DIRECTORY / filename for filename in TRACKS.values() if not (AUDIO_DIRECTORY / filename).is_file()]
+        missing_new = missing_exploration + missing_ambient
+        if missing_new:
+            raise SystemExit("Installation check failed; missing exploration or ambient assets: " + ", ".join(path.name for path in missing_new))
+        print(f"Installation verified: {len(SoundPlayer.CUES)} sound cues, pixel-art scenes, exploration maps, and ambient tracks are available.")
         return
     settings_manager = SettingsManager()
     settings = settings_manager.load()
@@ -117,7 +125,9 @@ def main() -> None:
             except RuntimeError as error:
                 raise SystemExit(str(error)) from None
     except (KeyboardInterrupt, InputClosed):
-        message = "\nYour journey has paused. Unsaved progress was not kept."
+        message = "\nYour journey has paused."
+        if not (getattr(ui, "supports_checkpoints", False) and settings.autosave):
+            message += " Unsaved progress was not kept."
         if terminal:
             ui.write(message)
         else:

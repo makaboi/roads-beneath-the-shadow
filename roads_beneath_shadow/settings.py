@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 from dataclasses import asdict, dataclass
@@ -28,6 +29,9 @@ class UserSettings:
     reduced_motion: bool = False
     screen_reader: bool = False
     difficulty: str = "ranger"
+    autosave: bool = True
+    music_volume: float = 0.25
+    sfx_volume: float = 0.6
     version: int = SETTINGS_VERSION
 
     def validate(self) -> "UserSettings":
@@ -43,6 +47,13 @@ class UserSettings:
             self.reduced_motion = False
         if not isinstance(self.screen_reader, bool):
             self.screen_reader = False
+        if not isinstance(self.autosave, bool):
+            self.autosave = True
+        for field_name, default in (("music_volume", 0.25), ("sfx_volume", 0.6)):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1 or not math.isfinite(value):
+                value = default
+            setattr(self, field_name, float(value))
         self.version = SETTINGS_VERSION
         return self
 

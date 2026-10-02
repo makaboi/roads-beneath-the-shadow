@@ -20,6 +20,9 @@ class SettingsManagerTests(unittest.TestCase):
                 reduced_motion=True,
                 screen_reader=True,
                 difficulty="story",
+                autosave=False,
+                music_volume=0.5,
+                sfx_volume=0.75,
             )
 
             manager.save(expected)
@@ -60,6 +63,49 @@ class SettingsManagerTests(unittest.TestCase):
             self.assertEqual(loaded.difficulty, "ranger")
             self.assertFalse(loaded.sound)
             self.assertFalse(loaded.reduced_motion)
+
+    def test_old_preferences_gain_safe_audio_and_checkpoint_defaults(self) -> None:
+        settings = UserSettings.from_dict({"sound": True, "difficulty": "shadow"})
+        self.assertTrue(settings.autosave)
+        self.assertEqual((settings.music_volume, settings.sfx_volume), (0.25, 0.6))
+        self.assertTrue(settings.sound)
+        self.assertEqual(settings.difficulty, "shadow")
+
+    def test_invalid_volume_and_checkpoint_preferences_use_safe_defaults(self) -> None:
+        for invalid in (True, "loud", -0.5, 1.1, float("nan"), float("inf"), 10 ** 1000):
+            with self.subTest(invalid=invalid):
+                settings = UserSettings.from_dict({"music_volume": invalid, "sfx_volume": invalid, "autosave": "yes"})
+                self.assertEqual((settings.music_volume, settings.sfx_volume), (0.25, 0.6))
+                self.assertTrue(settings.autosave)
+        self.assertEqual(UserSettings.from_dict({"music_volume": 0, "sfx_volume": 1}).music_volume, 0.0)
+        self.assertEqual(UserSettings.from_dict({"music_volume": 0, "sfx_volume": 1}).sfx_volume, 1.0)
+
+    def test_graphical_settings_apply_audio_volumes_and_checkpoint_preference(self) -> None:
+        class GraphicalSettingsUI(TerminalUI):
+            supports_checkpoints = True
+
+        with tempfile.TemporaryDirectory() as temporary:
+            manager = SettingsManager(Path(temporary) / "settings.json")
+            choices = iter(["7", "8", "9", "10"])
+            ui = GraphicalSettingsUI(color=False, fast=True, input_fn=lambda _: next(choices), output_fn=lambda _: None)
+            game = Game(ui, settings_manager=manager, user_settings=UserSettings(music_volume=0.25, sfx_volume=0.6))
+            self.assertEqual((ui.music_volume, ui.sfx_volume), (0.25, 0.6))
+            game._settings()
+            loaded = manager.load()
+            self.assertEqual((loaded.music_volume, loaded.sfx_volume), (0.5, 0.75))
+            self.assertEqual((ui.music_volume, ui.sfx_volume), (0.5, 0.75))
+            self.assertFalse(loaded.autosave)
+
+    def test_graphical_volume_controls_can_mute_without_enabling_sound(self) -> None:
+        class GraphicalSettingsUI(TerminalUI):
+            supports_checkpoints = True
+
+        choices = iter(["7", "8", "10"])
+        ui = GraphicalSettingsUI(color=False, fast=True, input_fn=lambda _: next(choices), output_fn=lambda _: None)
+        game = Game(ui, user_settings=UserSettings(music_volume=1.0, sfx_volume=1.0))
+        game._settings()
+        self.assertEqual((ui.music_volume, ui.sfx_volume), (0.0, 0.0))
+        self.assertFalse(ui.sound_enabled)
 
     def test_game_settings_menu_applies_and_persists_player_preferences(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

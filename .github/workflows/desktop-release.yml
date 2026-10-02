@@ -1,0 +1,120 @@
+name: Publish Desktop Downloads
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - .github/workflows/desktop-release.yml
+      - scripts/desktop_release.py
+      - scripts/standalone_entry.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.repository }}-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Check whether this version needs a release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      build: ${{ steps.release.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Inspect the version and existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/desktop_release.py plan
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: Linux-x64
+          - runner: windows-latest
+            platform: Windows-x64
+          - runner: macos-latest
+            platform: macOS-Apple-Silicon
+          - runner: macos-15-intel
+            platform: macOS-Intel
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the game, tests, and packager
+        run: python -m pip install --disable-pip-version-check ".[test]" pyinstaller==6.22.0
+      - name: Verify the release candidate
+        env:
+          RBS_SAVE_DIR: ${{ runner.temp }}/rbs-desktop-tests
+        run: |
+          python -m compileall -q roads_beneath_shadow
+          python -m unittest discover -s tests -v
+          python scripts/check_release_version.py
+      - name: Freeze the desktop game and its assets
+        run: >-
+          python -m PyInstaller
+          --clean
+          --noconfirm
+          --onefile
+          --name Roads-Beneath-the-Shadow
+          --collect-data roads_beneath_shadow
+          scripts/standalone_entry.py
+      - name: Smoke-test and package the standalone download
+        run: >-
+          python scripts/desktop_release.py package
+          --platform "${{ matrix.platform }}"
+          --version "${{ needs.plan.outputs.version }}"
+          --output-dir release-packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: release-packages/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish all verified downloads together
+    needs: [plan, build]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-packages
+      - name: Create the tagged release and attach every download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/desktop_release.py publish
+          --version "${{ needs.plan.outputs.version }}"
+          --output-dir release-packages

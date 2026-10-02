@@ -62,6 +62,7 @@ from .combat import (
     orc_captain,
     orc_scout,
 )
+from .checkpoint import CheckpointManager
 from .content import (
     CHAPTER_ONE_CHOICES,
     ENDING_TEXT,
@@ -100,6 +101,7 @@ class Game:
         ui: TerminalUI,
         *,
         saves: SaveManager | None = None,
+        checkpoints: CheckpointManager | None = None,
         rng: random.Random | None = None,
         settings_manager: SettingsManager | None = None,
         user_settings: UserSettings | None = None,
@@ -108,15 +110,18 @@ class Game:
     ) -> None:
         self.ui = ui
         self.saves = saves or SaveManager()
+        self.checkpoints = checkpoints or CheckpointManager(getattr(self.saves, "root", None))
         self.rng = rng or random.Random()
         self.settings_manager = settings_manager
-        self.user_settings = user_settings or UserSettings(
+        self.user_settings = (user_settings or UserSettings(
             color_mode="on" if ui.color else "off",
             sound=ui.sound_enabled,
             text_speed=ui.text_speed if isinstance(ui.text_speed, str) else "normal",
             reduced_motion=ui.reduced_motion,
             screen_reader=ui.screen_reader,
-        )
+        )).validate()
+        self.ui.music_volume = self.user_settings.music_volume
+        self.ui.sfx_volume = self.user_settings.sfx_volume
         self.profile = profile
         selected_difficulty = difficulty or DIFFICULTY_MODES[self.user_settings.difficulty]
         self.combat = CombatEngine(ui, self.rng, difficulty=selected_difficulty)
@@ -124,6 +129,7 @@ class Game:
             ui,
             self._story_choice,
             lambda state, enemies, config: self.combat.run(state, enemies, config),
+            difficulty_provider=lambda: getattr(self.combat, "default_difficulty", DIFFICULTY_MODES[self.user_settings.difficulty]),
         )
         self.state: GameState | None = None
 
@@ -151,6 +157,14 @@ class Game:
             if self.state is not None and not self.state.ending:
                 options.append(f"Continue {self.state.character.name}'s journey")
                 routes.append("continue")
+            elif getattr(self.ui, "supports_checkpoints", False):
+                checkpoint = self.checkpoints.metadata()
+                if checkpoint and not checkpoint.get("corrupt"):
+                    from .player_view import LOCATIONS
+
+                    location = LOCATIONS.get(checkpoint["scene"], "the road")
+                    options.append(f"Revisit {checkpoint['name']}'s ending" if checkpoint.get("ending") else f"Resume checkpoint — {checkpoint['name']} ({location})")
+                    routes.append("checkpoint")
             options.extend(
                 ["Begin a new journey", "Load a journey", "Chronicle", "How to play", "Settings", "Quit"]
             )
@@ -159,6 +173,9 @@ class Game:
             route = routes[choice - 1]
             if route == "continue":
                 self._run_journey()
+            elif route == "checkpoint":
+                if self._resume_checkpoint():
+                    self._run_journey()
             elif route == "new":
                 if self._new_journey():
                     self._run_journey()
@@ -261,6 +278,7 @@ class Game:
     def _run_journey(self) -> None:
         assert self.state is not None
         while self.state is not None:
+            self._record_checkpoint()
             if self.state.ending:
                 self._show_ending()
                 if self.state.ending:
@@ -319,6 +337,39 @@ class Game:
             else:
                 self.ui.write(f"Unknown scene: {scene}", color=Color.RED)
                 return
+
+    @staticmethod
+    def _checkpoint_stamp(path) -> tuple[int, int, int] | None:
+        try:
+            status = path.stat()
+            return status.st_mtime_ns, status.st_size, status.st_ino
+        except OSError:
+            return None
+
+    def _record_checkpoint(self) -> None:
+        """Record a scene boundary, after all preceding combat has returned."""
+        if self.state is None or not self.user_settings.autosave or not getattr(self.ui, "supports_checkpoints", False):
+            return
+        before = self._checkpoint_stamp(self.checkpoints.path)
+        try:
+            path = self.checkpoints.record(self.state)
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError) as error:
+            self.ui.write(f"Checkpoint could not be saved: {error}", color=Color.YELLOW)
+            return
+        toast = getattr(self.ui, "toast", None)
+        if callable(toast) and self._checkpoint_stamp(path) != before:
+            toast("Checkpoint saved.")
+
+    def _resume_checkpoint(self) -> bool:
+        try:
+            state = self.checkpoints.resume()
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError) as error:
+            self.ui.write(f"Could not resume the checkpoint: {error}", color=Color.RED)
+            self.ui.pause()
+            return False
+        self.state = state
+        self.ui.write(f"Welcome back, {state.character.name}.", color=Color.GREEN)
+        return True
 
     def _chapter_one_intro(self) -> None:
         assert self.state is not None
@@ -2042,6 +2093,12 @@ class Game:
 
     def _show_chronicle(self) -> None:
         profile = self.profile.load() if self.profile is not None else PlayerProfile()
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            from .player_view import chronicle_snapshot
+
+            panel("chronicle", chronicle_snapshot(profile))
+            return
         self.ui.clear()
         self.ui.title("THE TRAVELER'S CHRONICLE")
         if profile.completed_runs == 0:
@@ -2091,6 +2148,8 @@ class Game:
                 self._show_character()
             elif answer in {"j", "journal", "quests"}:
                 self._show_journal()
+            elif answer in {"r", "road map", "map"}:
+                self._show_route_map()
             elif answer in {"s", "save"}:
                 self._save_menu()
             elif answer in {"m", "menu", "q", "quit"}:
@@ -2101,6 +2160,38 @@ class Game:
     def _inventory_menu(self) -> None:
         assert self.state is not None
         character = self.state.character
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            from .player_view import player_snapshot
+
+            while True:
+                action = panel("inventory", player_snapshot(self.state))
+                if not isinstance(action, dict) or action.get("action") == "close":
+                    return
+                item_id = action.get("item_id")
+                if not isinstance(item_id, str):
+                    continue
+                item = ITEMS.get(item_id)
+                if item is None or character.inventory.get(item_id, 0) < 1:
+                    continue
+                notice = None
+                if action.get("action") == "equip" and item.slot:
+                    character.equip(item)
+                    notice = f"Equipped {item.name}."
+                elif action.get("action") == "use" and item.healing > 0:
+                    if character.hp >= character.max_hp:
+                        notice = "You are already at full Health."
+                    else:
+                        character.remove_item(item_id)
+                        origin_bonus = 2 if character.origin == "healers_apprentice" else 0
+                        healed = character.heal(item.healing + origin_bonus)
+                        notice = f"Used {item.name}: recovered {healed} Health."
+                if notice:
+                    toast = getattr(self.ui, "toast", None)
+                    if callable(toast):
+                        toast(notice)
+                    else:
+                        self.ui.write(notice, color=Color.GREEN)
         while True:
             self.ui.title("INVENTORY")
             if not character.inventory:
@@ -2135,6 +2226,12 @@ class Game:
 
     def _show_character(self) -> None:
         assert self.state is not None
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            from .player_view import player_snapshot
+
+            panel("character", player_snapshot(self.state))
+            return
         c = self.state.character
         weapon = ITEMS[c.weapon].name if c.weapon else "Unarmed"
         armor = ITEMS[c.armor].name if c.armor else "None"
@@ -2148,6 +2245,12 @@ class Game:
 
     def _show_journal(self) -> None:
         assert self.state is not None
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            from .player_view import player_snapshot
+
+            panel("journal", player_snapshot(self.state))
+            return
         self.ui.title("JOURNAL")
         self.ui.write("Active quests", color=Color.YELLOW, bold=True)
         for quest in self.state.quests:
@@ -2162,11 +2265,25 @@ class Game:
         for entry in self.state.journal:
             self.ui.write(f"- {entry}")
 
+    def _show_route_map(self) -> None:
+        assert self.state is not None
+        from .player_view import route_snapshot
+
+        snapshot = route_snapshot(self.state)
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            panel("map", snapshot)
+            return
+        self.ui.title("ROADS REMEMBERED")
+        self.ui.write(f"You are here: {snapshot['location']}", color=Color.CYAN)
+        for place in snapshot["route"]:
+            if place["visited"] and not place["current"]:
+                self.ui.write(f"- {place['name']}")
+
     def _save_menu(self) -> bool:
         if self.state is None:
             return False
-        labels = self._slot_labels()
-        selected = self.ui.choose("Choose a save slot", labels, allow_back=True)
+        selected = self._choose_save_slot("save")
         if selected is None:
             return False
         existing = self.saves.slot_metadata(selected)
@@ -2183,8 +2300,7 @@ class Game:
         return True
 
     def _load_menu(self) -> bool:
-        labels = self._slot_labels()
-        selected = self.ui.choose("Load which journey?", labels, allow_back=True)
+        selected = self._choose_save_slot("load")
         if selected is None:
             return False
         metadata = self.saves.slot_metadata(selected)
@@ -2205,6 +2321,41 @@ class Game:
         self.ui.write(f"Welcome back, {self.state.character.name}.", color=Color.GREEN)
         return True
 
+    def _choose_save_slot(self, mode: str) -> int | None:
+        panel = getattr(self.ui, "show_panel", None)
+        if not callable(panel):
+            title = "Choose a save slot" if mode == "save" else "Load which journey?"
+            return self.ui.choose(title, self._slot_labels(), allow_back=True)
+        from .player_view import LOCATIONS, player_snapshot
+
+        slots = []
+        for slot, metadata in enumerate(self.saves.all_slots(), 1):
+            if metadata is None:
+                slots.append({"slot": slot, "empty": True, "corrupt": False})
+                continue
+            if metadata.get("corrupt"):
+                slots.append({"slot": slot, "empty": False, "corrupt": True, "name": "Damaged memory"})
+                continue
+            try:
+                saved = self.saves.load(slot)
+            except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+                slots.append({"slot": slot, "empty": False, "corrupt": True, "name": "Damaged memory"})
+                continue
+            slots.append({
+                **metadata, "slot": slot, "empty": False, "corrupt": False,
+                "play_minutes": saved.play_minutes,
+                "hp": saved.character.hp, "max_hp": saved.character.max_hp,
+                "location": LOCATIONS.get(saved.scene, "The road"),
+            })
+        snapshot = player_snapshot(self.state) or {}
+        result = panel("saves", {**snapshot, "mode": mode, "slots": slots})
+        if not isinstance(result, dict) or result.get("action") != "select_slot":
+            return None
+        selected = result.get("slot")
+        if isinstance(selected, bool) or not isinstance(selected, int) or not 1 <= selected <= len(slots):
+            return None
+        return selected
+
     def _slot_labels(self) -> list[str]:
         labels = []
         for slot, metadata in enumerate(self.saves.all_slots(), 1):
@@ -2218,6 +2369,37 @@ class Game:
         return labels
 
     def _how_to_play(self) -> None:
+        panel = getattr(self.ui, "show_panel", None)
+        if callable(panel):
+            panel("information", {
+                "title": "HOW TO PLAY",
+                "subtitle": "Your first steps beneath the shadow",
+                "sections": [
+                    {"heading": "Explore", "text":
+                "In Bree and the other exploration rooms, use WASD or the arrow keys to walk. "
+                "Press E beside a person, object, or exit to interact. You can also click a "
+                "marked place to walk to it. The numbered choices provide another way to act."},
+                    {"heading": "Read the story", "text":
+                "Read each story page with Space or Enter, then choose an answer. Tab opens "
+                "the transcript so you can read earlier passages. During combat, click an "
+                "enemy to target it and choose an action from the battle menu."},
+                    {"heading": "Your pack, journal, and road map", "text":
+                "At story choices, I opens your pack, C shows your character, J opens the "
+                "journal, and R shows the road map. F5 saves your journey. Escape closes "
+                "a panel; M returns to the main menu. Automatic scene checkpoints can be "
+                "resumed from the main menu and turned off in Settings."},
+                    {"heading": "Combat", "text":
+                "Enemies announce their next intent before you act. Attack costs no Focus. "
+                "Power attacks spend Focus, interrupt dangerous moves, and leave you Exposed. "
+                "Defend halves every incoming attack for one round and restores Focus. Each "
+                "background has one special ability per battle. Companion commands help you "
+                "disrupt, weaken, or defend. Inspect explains an enemy without spending your turn."},
+                    {"heading": "Choices and consequences", "text":
+                "Hope, corruption, trust, clues, and surviving companions change available "
+                "routes. The road remembers your choices."},
+                ],
+            })
+            return
         self.ui.clear()
         self.ui.title("HOW TO PLAY")
         self.ui.narrate(
@@ -2248,18 +2430,23 @@ class Game:
             motion = "Reduced" if self.ui.reduced_motion else "Full"
             reader = "On" if self.ui.screen_reader else "Off"
             difficulty = DIFFICULTY_DESCRIPTIONS[self.user_settings.difficulty]
-            choice = self.ui.choose(
-                "SETTINGS",
-                [
-                    f"Original sound cues: {sound}",
-                    f"Color mode: {color}",
-                    f"Narration speed: {speed}",
-                    f"Motion: {motion}",
-                    f"Screen-reader mode: {reader}",
-                    f"Difficulty: {difficulty}",
-                    "Back",
-                ],
-            )
+            graphical = bool(getattr(self.ui, "supports_checkpoints", False))
+            options = [
+                f"Sound: {sound}" if graphical else f"Original sound cues: {sound}",
+                f"Color mode: {color}",
+                f"Narration speed: {speed}",
+                f"Motion: {motion}",
+                f"Screen-reader mode: {reader}",
+                f"Difficulty: {difficulty}",
+            ]
+            if graphical:
+                options.extend([
+                    f"Music volume: {self.user_settings.music_volume:.0%}",
+                    f"Sound-effect volume: {self.user_settings.sfx_volume:.0%}",
+                    f"Automatic checkpoints: {'On' if self.user_settings.autosave else 'Off'}",
+                ])
+            options.append("Back")
+            choice = self.ui.choose("SETTINGS", options)
             if choice == 1:
                 self.ui.sound_enabled = not self.ui.sound_enabled
                 self.user_settings.sound = self.ui.sound_enabled
@@ -2289,6 +2476,15 @@ class Game:
                 current = difficulties.index(self.user_settings.difficulty)
                 self.user_settings.difficulty = difficulties[(current + 1) % len(difficulties)]
                 self.combat.set_difficulty(DIFFICULTY_MODES[self.user_settings.difficulty])
+            elif graphical and choice in {7, 8}:
+                field = "music_volume" if choice == 7 else "sfx_volume"
+                current = getattr(self.user_settings, field)
+                steps = (0.0, 0.25, 0.5, 0.75, 1.0)
+                volume = next((step for step in steps if step > current + 0.001), 0.0)
+                setattr(self.user_settings, field, volume)
+                setattr(self.ui, field, volume)
+            elif graphical and choice == 9:
+                self.user_settings.autosave = not self.user_settings.autosave
             else:
                 return
             self._persist_settings()
