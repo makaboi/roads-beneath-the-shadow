@@ -111,7 +111,8 @@ class BattleSDLTests(unittest.TestCase):
                 for count in (0, 1, 2):
                     for name in ("Zoë Native", "Éowen — 夜道の旅人星明かり", "É" + "W" * 23):
                         with self.subTest(canvas=canvas, preference=preference, companions=count, name=name):
-                            baseline = replace(self.snapshot, companions=self.snapshot.companions[:count])
+                            baseline = replace(self.snapshot, companions=self.snapshot.companions[:count],
+                                               objective="Read their intent. Choose your target. Survive the road.")
                             self.view.set_snapshot(baseline)
                             self.view.draw(self.surface, canvas, text_size=preference)
                             anchors = dict(self.view.actor_positions)
@@ -141,7 +142,8 @@ class BattleSDLTests(unittest.TestCase):
 
     def test_compact_names_elide_only_the_canvas_and_leave_short_companion_names_readable(self):
         name = "Éowen of the Northern Stars"
-        snapshot = replace(self.snapshot, player=replace(self.snapshot.player, name=name))
+        snapshot = replace(self.snapshot, player=replace(self.snapshot.player, name=name),
+                           objective="Read their intent. Choose your target. Survive the road.")
         self.view.set_snapshot(snapshot)
         with patch.object(self.view, "_text", wraps=self.view._text) as draw:
             self.view.draw(self.surface, (24, 100, 418, 322), text_size="larger")
