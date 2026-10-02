@@ -5,6 +5,7 @@ import builtins
 import hashlib
 import json
 import io
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -70,6 +71,62 @@ class ReleaseServer:
 
 
 class DesktopReleaseTests(unittest.TestCase):
+    def test_windows_frozen_environment_removes_build_paths_without_changing_parent(self):
+        original = {"SYSTEMROOT": r"C:\Windows", "Path": r"C:\Java\bin;C:\Python", "PATH": r"C:\build\helpers",
+                    "PythonPath": r"C:\checkout", "PYTHONHOME": r"C:\Python", "KEEP_ME": "present"}
+        with patch.dict(desktop_release.os.environ, original, clear=True), patch.object(desktop_release.sys, "platform", "win32"):
+            before = dict(desktop_release.os.environ)
+            environment = desktop_release.frozen_smoke_environment(Path("isolated data"))
+            self.assertEqual(dict(desktop_release.os.environ), before)
+        self.assertEqual(environment["PATH"], r"C:\Windows\System32;C:\Windows")
+        self.assertEqual(environment["KEEP_ME"], "present")
+        self.assertEqual([key for key in environment if key.upper() == "PATH"], ["PATH"])
+        self.assertFalse(any(key.upper() in {"PYTHONHOME", "PYTHONPATH"} for key in environment))
+
+    def test_nonwindows_frozen_environment_preserves_existing_runtime_environment(self):
+        original = {"PATH": "/build/java:/build/python", "PYTHONPATH": "/build/helpers", "PYTHONHOME": "/build/python"}
+        with patch.dict(desktop_release.os.environ, original, clear=True), patch.object(desktop_release.sys, "platform", "linux"):
+            environment = desktop_release.frozen_smoke_environment(Path("isolated data"))
+        for key, value in original.items():
+            self.assertEqual(environment[key], value)
+
+    def test_every_direct_and_extracted_windows_smoke_uses_only_system_dependency_paths(self):
+        from PIL import Image
+
+        original = {"SystemRoot": r"C:\Windows", "PATH": r"C:\Java\bin;C:\Python", "PYTHONPATH": r"C:\checkout",
+                    "PYTHONHOME": r"C:\Python", "COMSPEC": r"C:\Windows\System32\cmd.exe"}
+        decoded = {"images": 36, "world_maps": 13, "metadata": 1, "fonts": 2, "audio": 10, "audio_driver": "dummy"}
+        calls = []
+        def run(arguments, **kwargs):
+            environment = kwargs["env"]
+            self.assertEqual(environment["PATH"], r"C:\Windows\System32;C:\Windows")
+            self.assertFalse(any(key.upper() in {"PYTHONHOME", "PYTHONPATH"} for key in environment))
+            calls.append(arguments)
+            if "--version" in arguments:
+                output = "Roads Beneath the Shadow 0.5.0\n"
+            elif "--check-runtime-assets" in arguments:
+                output = json.dumps(decoded)
+            else:
+                output = "May a star shine upon your road."
+                if "--screenshot" in arguments:
+                    if isinstance(arguments, str):
+                        match = re.search(r'--screenshot\s+(?:"([^"\n]+)"|([^\s"]+))', arguments)
+                        screenshot = Path(match.group(1) or match.group(2))
+                    else:
+                        screenshot = Path(arguments[arguments.index("--screenshot") + 1])
+                    Image.new("RGB", (12, 9)).save(screenshot)
+            return subprocess.CompletedProcess(arguments, 0, output, "")
+
+        with patch.dict(desktop_release.os.environ, original, clear=True), patch.object(desktop_release.sys, "platform", "win32"), patch.object(desktop_release.subprocess, "run", side_effect=run):
+            for launcher in (None, self.output / "spaced player folder" / "Play Roads Beneath the Shadow.cmd"):
+                with self.subTest(through_launcher=launcher is not None):
+                    report = desktop_release.smoke_test(self.output / "Roads-Beneath-the-Shadow.exe", launcher=launcher,
+                                                       platform="Windows-x64" if launcher else None, expected_version="0.5.0")
+                    self.assertEqual(report["windows_dependency_path"], r"C:\Windows\System32;C:\Windows")
+                    self.assertTrue(report["build_python_environment_cleared"])
+                    self.assertEqual(report["decoded_assets"], decoded)
+        self.assertEqual(len(calls), 10)
+
     def test_windows_download_guide_states_the_os_managed_runtime_baseline(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

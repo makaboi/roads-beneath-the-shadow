@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import ntpath
 import os
 from pathlib import Path, PurePosixPath
 import platform as host_platform
@@ -200,6 +201,27 @@ def launcher_command(launcher: Path, platform: str, arguments: list[str]) -> lis
     return [shell, str(launcher), *arguments]
 
 
+def frozen_smoke_environment(work: Path) -> dict[str, str]:
+    """Keep Windows player checks independent of the build's Java/Python PATH."""
+    environment = {
+        **os.environ,
+        "SDL_VIDEODRIVER": "dummy",
+        "SDL_AUDIODRIVER": "dummy",
+        "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+        "RBS_SAVE_DIR": str(work / "saves"),
+    }
+    if sys.platform == "win32":
+        folded = {key.upper(): value for key, value in environment.items()}
+        system_root = folded.get("SYSTEMROOT") or folded.get("WINDIR")
+        if not system_root:
+            raise ValueError("Windows frozen checks require the actual SystemRoot directory")
+        for key in tuple(environment):
+            if key.upper() in {"PATH", "PYTHONPATH", "PYTHONHOME"}:
+                del environment[key]
+        environment["PATH"] = ntpath.join(system_root, "System32") + ";" + system_root
+    return environment
+
+
 def smoke_test(
     executable: Path, *, launcher: Path | None = None, platform: str | None = None,
     expected_version: str | None = None,
@@ -213,13 +235,7 @@ def smoke_test(
     timings = {}
     with tempfile.TemporaryDirectory(prefix="rbs-frozen-smoke-") as temporary:
         work = Path(temporary)
-        environment = {
-            **os.environ,
-            "SDL_VIDEODRIVER": "dummy",
-            "SDL_AUDIODRIVER": "dummy",
-            "PYGAME_HIDE_SUPPORT_PROMPT": "1",
-            "RBS_SAVE_DIR": str(work / "saves"),
-        }
+        environment = frozen_smoke_environment(work)
         def command(arguments: list[str]) -> list[str] | str:
             return launcher_command(launcher, platform, arguments) if launcher else [str(executable), *arguments]
 
@@ -282,10 +298,14 @@ def smoke_test(
             raise ValueError("The frozen terminal game did not reach its Quit action")
         timings["terminal_quit"] = round(perf_counter() - start, 3)
         print("Verified frozen assets, pixel rendering, and terminal input.")
-    return {
+    report = {
         "version": version, "decoded_assets": decoded_assets, "screenshot_size": list(image_size),
         "seconds": timings, "through_launcher": launcher is not None,
     }
+    if sys.platform == "win32":
+        report["windows_dependency_path"] = environment["PATH"]
+        report["build_python_environment_cleared"] = True
+    return report
 
 
 def local_readme_images(readme: Path) -> list[Path]:
