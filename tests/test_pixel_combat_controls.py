@@ -4,6 +4,7 @@ from dataclasses import replace
 import importlib.util
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -85,6 +86,35 @@ class CombatControlsTests(unittest.TestCase):
         self.assertEqual(self.window.selected, 1)
         self.assertFalse(self.window.panels.active)
         self.assertTrue(self.ui.responses.empty())
+
+    def test_header_health_waits_for_the_visible_incoming_impact(self):
+        updated = replace(self.snapshot, player=replace(self.snapshot.player, hp=14))
+        hud = {"name": "Mira", "chapter": 1, "hp": 14, "max_hp": 24,
+               "focus": 3, "max_focus": 4, "hope": 0, "corruption": 0}
+        self.ui.events.put(UIEvent("combat_feedback", {"feedback":
+            CombatFeedback("damage", "enemy_1", "player", 3, "The archer hits.")}))
+        self.ui.events.put(UIEvent("combat_snapshot", {"snapshot": updated}))
+        self.ui.events.put(UIEvent("request", {"request": replace(self.request, identifier=2), "hud": hud}))
+        self.window.drain()
+        visible = []
+        draw = self.window._text
+
+        def record(text, position, *args):
+            if position[1] == 40:
+                visible.append(text)
+            draw(text, position, *args)
+
+        self.window._text = record
+        tick = self.pg.time.get_ticks()
+        self.window._frame_tick = tick
+        with patch.object(self.pg.time, "get_ticks", return_value=tick):
+            self.window.render()
+            self.assertIn("HP 17/24   FOCUS 3/4", visible)
+            self.window.battle.update(0.19)
+            self.window.render()
+            self.assertEqual(visible[-1], "HP 14/24   FOCUS 3/4")
+        self.assertEqual(updated.player.hp, 14)
+        self.assertEqual(hud["hp"], 14)
 
     def test_compact_log_keeps_paid_mara_impact_and_incoming_damage_visible(self):
         snapshot = replace(self.snapshot, actions=(*self.snapshot.actions,

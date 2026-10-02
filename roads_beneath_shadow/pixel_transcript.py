@@ -158,6 +158,36 @@ class TranscriptView:
         self._selecting_query = False
         self.pg.key.stop_text_input()
 
+    def reset(self) -> None:
+        """Discard the previous journey's archive, retaining loaded fonts.
+
+        Opening and closing utilities preserve the reader's place. The window
+        calls this separate boundary operation only after accepting a new or
+        loaded journey, before its first story output reaches the archive.
+        """
+        self.close()
+        self.entries = ()
+        self.query = ""
+        self.scroll = self.maximum_scroll = 0
+        self.rows = 1
+        self.matches.clear()
+        self.match_index = 0
+        self._match_positions.clear()
+        self._match_pinned = False
+        self._search_sources.clear()
+        self._search_texts = ()
+        self._search_version = -1
+        self._lines.clear()
+        self._line_spans.clear()
+        self._entry_starts.clear()
+        self._version += 1
+        self._layout_key = self._viewport_key = None
+        self._pending_anchor = self._pending_scroll = None
+        self._query_view_start = self._query_text_x = 0
+        self._hits.clear()
+        for rect in (self._content, self._search_field, self._scrollbar, self._thumb):
+            rect.update(0, 0, 0, 0)
+
     def _start_search(self, *, select: bool = True) -> None:
         self.searching = True
         self._query_selected = bool(self.query) and select

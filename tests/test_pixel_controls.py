@@ -236,6 +236,27 @@ class JourneyControlsTests(unittest.TestCase):
         self.worker.join(1)
         self.assertEqual(self.results, [2])
 
+    def test_hovering_the_already_selected_menu_option_takes_focus_from_a_look(self):
+        self.start()
+        look = next(look for look in WORLD_MAPS["bree"].looks if look.key == "pony_sign")
+        rect = self.window.world._rect
+        position = (rect.left + round(look.position[0] * rect.width / 320), rect.top + round(look.position[1] * rect.height / 240))
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=position))
+        for _ in range(150):
+            self.window.world.update(0.05)
+        self.key(self.pg.K_e, "e")
+        self.assertTrue(self.window.world.inspection_open)
+        self.key(self.pg.K_e, "e")
+        self.window.render()
+        self.assertEqual(self.window.selected, 0)
+        self.assertFalse(self.window._menu_focused)
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION,
+            pos=self.window.choice_hits[0][0].center, rel=(0, 0), buttons=(0, 0, 0)))
+        self.key(self.pg.K_RETURN)
+        self.worker.join(1)
+        self.assertEqual(self.results, [1])
+        self.assertFalse(self.window.world.inspection_open)
+
     def test_resizing_completed_story_keeps_exploration_and_previous_pages_read(self):
         self.ui.set_text_speed("normal")
         self.ui.narrate(" ".join(f"memory{index}" for index in range(170)))
@@ -288,6 +309,10 @@ class JourneyControlsTests(unittest.TestCase):
         self.assertFalse(self.game.state.flags.get("later_progress", False))
         self.assertIn("EARLY source", " ".join(beat.text for beat in self.window.narrative.beats))
         self.assertNotIn("LATE source", " ".join(beat.text for beat in self.window.narrative.beats))
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.assertTrue(any("EARLY source" in text for text, _, _ in self.window.archive.entries))
+        self.assertFalse(any("LATE source" in text for text, _, _ in self.window.archive.entries))
 
     def test_name_composition_return_waits_for_committed_text(self):
         request = self.start_name_prompt()
@@ -346,6 +371,8 @@ class JourneyControlsTests(unittest.TestCase):
     def test_canceling_name_entry_restores_previous_traveler_on_the_main_menu(self):
         previous = self.game.state
         before = previous.to_dict()
+        self.ui.narrate("Mira's earlier discovery stays in her archive.")
+        self.window.drain()
 
         def run():
             try:
@@ -372,13 +399,18 @@ class JourneyControlsTests(unittest.TestCase):
         self.assertIs(self.game.state, previous)
         self.assertEqual(self.game.state.to_dict(), before)
         self.assertEqual(self.window.hud["name"], "Mira")
+        self.assertTrue(any("earlier discovery" in text for text, _, _ in self.window.history))
 
     def test_confirmed_new_traveler_has_their_own_hud_for_lesson_and_opening(self):
         previous = self.game.state
+        self.ui.narrate("Mira's private earlier discovery.")
+        self.window.drain()
+        self.window.archive.query = "private"
 
         def run():
             try:
                 self.results.append(self.game._new_journey())
+                self.ui.narrate("Aerin's own road begins here.")
                 self.ui.pause("The opening begins")
             except InputClosed:
                 pass
@@ -403,11 +435,14 @@ class JourneyControlsTests(unittest.TestCase):
         self.await_request(lambda request: request.label.startswith("What lesson"))
         self.assertIsNot(self.game.state, previous)
         self.assertEqual(self.window.hud["name"], "Aerin")
+        self.assertFalse(any("private earlier discovery" in text for text, _, _ in self.window.history))
+        self.assertEqual(self.window.archive.query, "")
         self.assertEqual(self.window.hud["hp"], self.game.state.character.hp)
         self.key(self.pg.K_1, "1")
         self.await_request(lambda request: request.kind == "pause")
         self.assertEqual(self.results, [True])
         self.assertEqual(self.window.hud["name"], "Aerin")
+        self.assertTrue(any("Aerin's own road" in text for text, _, _ in self.window.history))
 
     def test_discovery_is_archived_once_and_survives_read_only_overlays(self):
         self.start()

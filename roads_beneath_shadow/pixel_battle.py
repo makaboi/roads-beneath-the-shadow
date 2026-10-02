@@ -26,6 +26,10 @@ MUTED = (164, 167, 153)
 RED = (229, 136, 111)
 SHADOW = (9, 13, 17)
 ASSET_DIR = Path(__file__).resolve().parent / "pixel_assets"
+FONT_SIZES = (("font", 13, False), ("bold_font", 13, True), ("compact_bold_font", 12, True),
+              ("mini_bold_font", 10, True), ("mini_font", 10, False), ("mini_prose_font", 10, False),
+              ("small_font", 11, False), ("party_font", 9, False), ("banner_font", 16, True),
+              ("number_font", 19, True), ("compact_number_font", 15, True))
 
 
 @dataclass
@@ -115,6 +119,9 @@ class BattleView:
         self.banner_font = load_font(pg, 16, bold=True)
         self.number_font = load_font(pg, 19, bold=True)
         self.compact_number_font = load_font(pg, 15, bold=True)
+        self._layout_scale = 1.0
+        self._font_layout_key = (1.0, "standard")
+        self._font_sets = {self._font_layout_key: {name: getattr(self, name) for name, _, _ in FONT_SIZES}}
         self.enemy_hits: list[tuple[Any, str]] = []
         self.sprite_hits: list[tuple[Any, str]] = []
         self.actor_positions: dict[str, tuple[int, int]] = {}
@@ -134,12 +141,14 @@ class BattleView:
         self._sprites: dict[tuple[Any, ...], Any] = {}
         self._fitted_fonts: dict[tuple[int, float], Any] = {}
         self._typography_cache: dict[tuple[Any, ...], tuple[bool, Any, Any, Any]] = {}
+        self._single_card_heights: dict[tuple[Any, ...], int] = {}
         self._tooltip_layout_cache: dict[tuple[Any, ...], tuple[Any, list[str], int, int]] = {}
         self._character_atlas: Any = None
         self._motion_atlas: Any = None
         self._atlas_checked = False
         self._backdrops: dict[str, Any] = {}
         self._scaled_backdrop: tuple[Any, tuple[int, int], Any] | None = None
+        self._backdrop_veil: Any = None
         self._scene_override: str | Any | None = None
         self._rect = pg.Rect(0, 0, 0, 0)
         self._arena_rect = pg.Rect(0, 0, 0, 0)
@@ -148,10 +157,12 @@ class BattleView:
         self._health_trails: dict[str, float] = {}
         self._health_targets: dict[str, int] = {}
         self._health_ages: dict[str, float] = {}
+        self._player_health_base: int | None = None
 
     def set_snapshot(self, snapshot: CombatSnapshot | None) -> None:
         """Replace presentation data without retaining mutable engine objects."""
         self._typography_cache.clear()
+        self._single_card_heights.clear()
         if snapshot is not None:
             entities = [("player", snapshot.player.hp), *((enemy.id, enemy.hp) for enemy in snapshot.enemies)]
             new_encounter = self.snapshot is None or snapshot.phase == "active" and snapshot.round_number == 1 and self.snapshot.phase != "active"
@@ -159,6 +170,7 @@ class BattleView:
                 self._health_trails.clear()
                 self._health_targets.clear()
                 self._health_ages.clear()
+                self._player_health_base = snapshot.player.hp
             for actor_id, hp in entities:
                 previous_hp = self._health_targets.get(actor_id, hp)
                 if hp != previous_hp:
@@ -185,6 +197,7 @@ class BattleView:
             self._health_trails.clear()
             self._health_targets.clear()
             self._health_ages.clear()
+            self._player_health_base = None
         self.snapshot = snapshot
 
     def set_scene(self, scene: str | Any | None) -> None:
@@ -202,6 +215,8 @@ class BattleView:
             # lingering labels could add last round's damage into this round.
             self._effects.clear()
             self._cues.clear()
+        if not self._effects:
+            self._player_health_base = self.snapshot.player.hp if self.snapshot else None
         # A whole resolved turn arrives in one queue drain. Stagger its visual
         # hits so each attacker and damage amount can be read independently.
         spacing, maximum = (0.05, 0.16) if self._reduced_motion else (0.18, 0.80)
@@ -227,6 +242,36 @@ class BattleView:
     @property
     def busy(self) -> bool:
         return self.has_pending_feedback
+
+    @property
+    def displayed_player_health(self) -> tuple[int, int] | None:
+        """Health at the visible impact, without changing the engine snapshot.
+
+        Replay landed outcomes from the preceding Health value. Starting with
+        that value preserves exact pre-hit Health even when a killing blow's
+        reported damage exceeds the Health remaining. Healing and successive
+        attackers each reveal their own change when their effect lands.
+        """
+        if self.snapshot is None:
+            return None
+        maximum = self.snapshot.player.max_hp
+        if not self._effects or self._player_health_base is None:
+            return self.snapshot.player.hp, maximum
+        hp = self._player_health_base
+        for effect in self._effects:
+            impact = 0 if self._reduced_motion else effect.impact_time
+            if effect.age >= impact:
+                hp = self._apply_player_health(hp, effect.feedback, maximum)
+        return hp, maximum
+
+    @staticmethod
+    def _apply_player_health(hp: int, feedback: CombatFeedback, maximum: int) -> int:
+        if feedback.target_id == "player":
+            if feedback.kind == "damage":
+                return max(0, hp - max(0, feedback.amount))
+            if feedback.kind == "heal":
+                return min(maximum, hp + max(0, feedback.amount))
+        return hp
 
     def drain_cues(self) -> tuple[str, ...]:
         """Consume audio cues once, when their visible effects actually land.
@@ -258,6 +303,12 @@ class BattleView:
                     self._cues.append(cue)
                     self._cues[:] = self._cues[-16:]
                 effect.cue_emitted = True
+        # Preserve earlier landed changes when their popups expire ahead of
+        # later outcomes in the same exchange.
+        if self.snapshot is not None and self._player_health_base is not None:
+            for effect in self._effects:
+                if effect.age >= effect.duration:
+                    self._player_health_base = self._apply_player_health(self._player_health_base, effect.feedback, self.snapshot.player.max_hp)
         self._effects[:] = [effect for effect in self._effects if effect.age < effect.duration]
         for actor_id, hp in self._health_targets.items():
             self._health_ages[actor_id] = self._health_ages.get(actor_id, 0.0) + dt
@@ -307,6 +358,28 @@ class BattleView:
             y += font.get_linesize()
         return y
 
+    def _configure_layout(self, rect: Any, text_size: str) -> None:
+        scale = 2.0 if rect.w >= 1900 and rect.h >= 1000 else 1.5 if rect.w >= 1100 and rect.h >= 650 else 1.0
+        preference = text_size if text_size in {"standard", "large", "larger"} else "standard"
+        key = scale, preference
+        if key == self._font_layout_key:
+            return
+        if key not in self._font_sets:
+            factor = scale * {"standard": 1.0, "large": 1.15, "larger": 1.3}[preference]
+            # Keep the current font set and a few recent resolutions, rather
+            # than retaining fonts for every heterogeneous resize/preference.
+            if len(self._font_sets) >= 4:
+                self._font_sets.pop(next(iter(self._font_sets)))
+            self._font_sets[key] = {name: load_font(self.pg, round(size * factor), bold=bold) for name, size, bold in FONT_SIZES}
+        for name, font in self._font_sets[key].items():
+            setattr(self, name, font)
+        self._font_layout_key = key
+        self._layout_scale = scale
+        self._fitted_fonts.clear()
+        self._typography_cache.clear()
+        self._single_card_heights.clear()
+        self._tooltip_layout_cache.clear()
+
     def _backdrop(self) -> Any:
         scene = self._scene_override
         if scene is not None and not isinstance(scene, str):
@@ -336,14 +409,16 @@ class BattleView:
                 self._scaled_backdrop = (image, rect.size, scaled)
             scaled = self._scaled_backdrop[2]
             surface.blit(scaled, rect, pg.Rect((scaled.get_width() - rect.w) // 2, max(0, (scaled.get_height() - rect.h) // 3), rect.w, rect.h))
-        veil = pg.Surface(rect.size, pg.SRCALPHA)
-        veil.fill((*INK, 88))
-        for y in range(0, rect.h, 4):
-            # Mist catches the distant architecture; the foreground becomes
-            # a quiet dark stage rather than hiding sprites in the illustration.
-            alpha = min(218, 35 + int(185 * (y / max(1, rect.h)) ** 1.7))
-            pg.draw.rect(veil, (*INK, alpha), (0, y, rect.w, 4))
-        surface.blit(veil, rect)
+        if self._backdrop_veil is None or self._backdrop_veil.get_size() != rect.size:
+            veil = pg.Surface(rect.size, pg.SRCALPHA)
+            veil.fill((*INK, 88))
+            for y in range(0, rect.h, 4):
+                # Mist is static; retain one viewport instead of allocating a
+                # multi-megabyte translucent surface on every 4K frame.
+                alpha = min(218, 35 + int(185 * (y / max(1, rect.h)) ** 1.7))
+                pg.draw.rect(veil, (*INK, alpha), (0, y, rect.w, 4))
+            self._backdrop_veil = veil
+        surface.blit(self._backdrop_veil, rect)
         pg.draw.line(surface, EDGE, (rect.x, rect.bottom - 1), (rect.right, rect.bottom - 1))
 
     @staticmethod
@@ -633,9 +708,10 @@ class BattleView:
                 self.tooltip_hits.append((self.sprite_hits[-1][0], help_text))
             if targeted and alive:
                 marker_x = sprite_rect.centerx
-                marker_y = max(self._arena_rect.y + 1, sprite_rect.y - 9)
-                self.target_marker_rect = pg.Rect(marker_x - 5, marker_y, 11, 7)
-                pg.draw.polygon(surface, AMBER, [(marker_x - 5, marker_y), (marker_x + 5, marker_y), (marker_x, marker_y + 6)])
+                half = round(5 * self._layout_scale)
+                marker_y = max(self._arena_rect.y + 1, sprite_rect.y - round(9 * self._layout_scale))
+                self.target_marker_rect = pg.Rect(marker_x - half, marker_y, half * 2 + 1, round(7 * self._layout_scale))
+                pg.draw.polygon(surface, AMBER, [(marker_x - half, marker_y), (marker_x + half, marker_y), (marker_x, self.target_marker_rect.bottom - 1)])
 
     def _health(self, surface: Any, rect: Any, hp: int, maximum: int, *, color: tuple[int, int, int] = RED, actor_id: str | None = None) -> None:
         pg = self.pg
@@ -696,7 +772,8 @@ class BattleView:
             return ""
         if actor_id == "player":
             player = self.snapshot.player
-            lines = [player.name, f"Health {player.hp}/{player.max_hp} · Focus {player.focus}/{player.max_focus}",
+            hp, maximum = self.displayed_player_health or (player.hp, player.max_hp)
+            lines = [player.name, f"Health {hp}/{maximum} · Focus {player.focus}/{player.max_focus}",
                      f"{player.weapon_name} · Armor {player.armor}"]
             lines.extend(f"{status.label}: {status.description}" for status in player.statuses)
             return "\n".join(lines)
@@ -773,30 +850,31 @@ class BattleView:
     def _card_content_height(self, rect: Any, enemy: Any, wide: bool, compact: bool, fonts: tuple[Any, Any, Any]) -> int:
         """Measure every visible field using the same spacing as drawing."""
         title_font, body_font, prose_font = fonts
-        pad = 7 if compact else 12
+        scale = self._layout_scale
+        pad = round((7 if compact else 12) * scale)
         width = rect.w - pad * 2
         title_width = round(width * 0.44) if wide else width
-        details_width = width - title_width - 22 if wide else width
-        top = 6 if compact else 10
+        details_width = width - title_width - round(22 * scale) if wide else width
+        top = round((6 if compact else 10) * scale)
 
         def paragraph_height(text: str, font: Any, available: int) -> int:
             return len(_wrapped(text, font, available)) * font.get_linesize() if text else 0
 
-        y = top + paragraph_height(enemy.name, title_font, title_width) + (1 if compact else 4)
-        y += paragraph_height(self._health_label(enemy), body_font, title_width) + (1 if compact else 4)
-        y += 6 if compact else 11  # Health bar and its lower gap.
-        y += paragraph_height(self._armor_label(enemy), body_font, title_width) + (2 if compact else 6)
+        y = top + paragraph_height(enemy.name, title_font, title_width) + round((1 if compact else 4) * scale)
+        y += paragraph_height(self._health_label(enemy), body_font, title_width) + round((1 if compact else 4) * scale)
+        y += round((6 if compact else 11) * scale)  # Health bar and its lower gap.
+        y += paragraph_height(self._armor_label(enemy), body_font, title_width) + round((2 if compact else 6) * scale)
         left_height = y
         statuses = self._status_text(enemy.statuses)
         if wide:
             left_height += paragraph_height(statuses, body_font, title_width)
             y = top
         if enemy.hp <= 0:
-            return max(left_height, y + 3 + title_font.get_linesize()) + top
-        y += paragraph_height(enemy.intent_label.upper(), title_font, details_width) + (1 if compact else 3)
-        y += paragraph_height(self._damage_label(enemy), body_font, details_width) + (2 if compact else 5)
-        y += paragraph_height(enemy.telegraph, prose_font, details_width) + (3 if compact else 6)
-        y += paragraph_height(self._interrupt_label(enemy), body_font, details_width) + (2 if compact else 6)
+            return max(left_height, y + round(3 * scale) + title_font.get_linesize()) + top
+        y += paragraph_height(enemy.intent_label.upper(), title_font, details_width) + round((1 if compact else 3) * scale)
+        y += paragraph_height(self._damage_label(enemy), body_font, details_width) + round((2 if compact else 5) * scale)
+        y += paragraph_height(enemy.telegraph, prose_font, details_width) + round((3 if compact else 6) * scale)
+        y += paragraph_height(self._interrupt_label(enemy), body_font, details_width) + round((2 if compact else 6) * scale)
         if not wide:
             y += paragraph_height(statuses, body_font, details_width)
         return max(left_height, y) + top
@@ -817,8 +895,8 @@ class BattleView:
             self._typography_cache[key] = style
             return style
 
-        compact = rect.h < 180
-        fonts = (self.mini_bold_font if compact else self.compact_bold_font if rect.w < 180 else self.bold_font,
+        compact = rect.h < 180 * self._layout_scale
+        fonts = (self.mini_bold_font if compact else self.compact_bold_font if rect.w < 180 * self._layout_scale else self.bold_font,
                  self.mini_font if compact else self.small_font,
                  self.mini_prose_font if compact else self.small_font)
         if self._card_content_height(rect, enemy, wide, compact, fonts) <= rect.h:
@@ -852,6 +930,18 @@ class BattleView:
                 upper = candidate
         return remember((compact, *fitted))
 
+    def _single_card_height(self, width: int, maximum: int, enemy: Any, *, compact: bool = True) -> int:
+        """Return unused space to a compact single-enemy arena."""
+        fonts = (self.mini_bold_font, self.mini_font, self.mini_prose_font) if compact else (self.bold_font, self.small_font, self.small_font)
+        key = (enemy, width, maximum, compact, *(id(font) for font in fonts))
+        if key not in self._single_card_heights:
+            measured = self._card_content_height(self.pg.Rect(0, 0, width, maximum), enemy, True, compact, fonts)
+            if len(self._single_card_heights) >= 32:
+                self._single_card_heights.clear()
+            minimum = round((104 if compact else 180) * self._layout_scale)
+            self._single_card_heights[key] = min(maximum, max(minimum, measured + round(8 * self._layout_scale)))
+        return self._single_card_heights[key]
+
     def _draw_card(self, surface: Any, rect: Any, enemy: Any, *, wide: bool = False) -> None:
         pg = self.pg
         alive = enemy.hp > 0
@@ -863,44 +953,45 @@ class BattleView:
             pg.draw.rect(surface, AMBER, (rect.x, rect.y, 4, rect.h))
         self.enemy_hits.append((rect.copy(), enemy.id))
         compact, title_font, body_font, prose_font = self._card_typography(rect, enemy, wide)
-        pad = 7 if compact else 12
-        x, y = rect.x + pad, rect.y + (6 if compact else 10)
+        scale = self._layout_scale
+        pad = round((7 if compact else 12) * scale)
+        x, y = rect.x + pad, rect.y + round((6 if compact else 10) * scale)
         width = rect.w - pad * 2
         details_x = x
         details_width = width
         title_width = round(width * 0.44) if wide else width
         y = self._paragraph(surface, enemy.name, (x, y), title_width, BONE if alive else MUTED, font=title_font)
-        y += 1 if compact else 4
+        y += round((1 if compact else 4) * scale)
         y = self._paragraph(surface, self._health_label(enemy), (x, y), title_width, AMBER if enemy.invulnerable else RED if alive else MUTED, font=body_font)
-        y += 1 if compact else 4
-        meter = pg.Rect(x, y, title_width, 3 if compact else 5)
+        y += round((1 if compact else 4) * scale)
+        meter = pg.Rect(x, y, title_width, round((3 if compact else 5) * scale))
         if enemy.invulnerable:
             self._protected_meter(surface, meter)
         else:
             self._health(surface, meter, enemy.hp, enemy.max_hp, actor_id=enemy.id)
-        y += 6 if compact else 11
+        y += round((6 if compact else 11) * scale)
         y = self._paragraph(surface, self._armor_label(enemy), (x, y), title_width, MUTED, font=body_font)
-        y += 2 if compact else 6
+        y += round((2 if compact else 6) * scale)
         if wide:
             self._status_line(surface, enemy.statuses, x, y, title_width, font=body_font)
-            details_x = x + title_width + 22
-            details_width = width - title_width - 22
-            y = rect.y + (6 if compact else 10)
-            pg.draw.line(surface, EDGE, (details_x - 11, rect.y + 12), (details_x - 11, rect.bottom - 12))
+            details_x = x + title_width + round(22 * scale)
+            details_width = width - title_width - round(22 * scale)
+            y = rect.y + round((6 if compact else 10) * scale)
+            pg.draw.line(surface, EDGE, (details_x - round(11 * scale), rect.y + pad), (details_x - round(11 * scale), rect.bottom - pad))
         if not alive:
-            self._text(surface, "FALLEN", (details_x, y + 3), MUTED, font=title_font)
+            self._text(surface, "FALLEN", (details_x, y + round(3 * scale)), MUTED, font=title_font)
             return
         intent_y = y
         y = self._paragraph(surface, enemy.intent_label.upper(), (details_x, y), details_width, AMBER, font=title_font)
-        y += 1 if compact else 3
+        y += round((1 if compact else 3) * scale)
         damage = self._damage_label(enemy)
         y = self._paragraph(surface, damage, (details_x, y), details_width, RED if enemy.damage_max else MUTED, font=body_font)
-        y += 2 if compact else 5
+        y += round((2 if compact else 5) * scale)
         y = self._paragraph(surface, enemy.telegraph, (details_x, y), details_width, MUTED, font=prose_font)
-        y += 3 if compact else 6
+        y += round((3 if compact else 6) * scale)
         interrupt_color = AMBER if self.snapshot and self.snapshot.defensive_objective else TEAL if enemy.interruptible else MUTED
         y = self._paragraph(surface, self._interrupt_label(enemy), (details_x, y), details_width, interrupt_color, font=body_font)
-        y += 2 if compact else 6
+        y += round((2 if compact else 6) * scale)
         self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), self._intent_help(enemy)))
         if not wide:
             self._status_line(surface, enemy.statuses, details_x, y, details_width, font=body_font)
@@ -958,7 +1049,8 @@ class BattleView:
             actor_id = effect.feedback.target_id if effect.feedback.target_id in self.actor_positions else effect.feedback.actor_id
             if actor_id in self.actor_positions:
                 grouped.setdefault(actor_id, []).append(effect)
-        compact = self._arena_rect.h < 120
+        compact = self._arena_rect.h < 120 * self._layout_scale
+        scale = self._layout_scale
         number_font = self.compact_number_font if compact else self.number_font
         word_font = self.mini_font if compact else self.small_font
         for actor_id, effects in grouped.items():
@@ -987,21 +1079,21 @@ class BattleView:
                     suffix = f" ×{len(healing)}" if len(healing) > 1 else ""
                     entries[0] = ((f"+{sum(healing)}{suffix}", TEAL), len(healing) == 1)
             glyphs = [(number_font if numeric else word_font).render(text, True, color) for (text, color), numeric in entries]
-            total_height = sum(glyph.get_height() + 6 for glyph in glyphs) + 3 * (len(glyphs) - 1)
+            total_height = sum(glyph.get_height() + round(6 * scale) for glyph in glyphs) + round(3 * scale) * (len(glyphs) - 1)
             actor_rect = self.actor_rects.get(actor_id)
-            ideal = self._arena_rect.y + 4 if compact or actor_rect is None else actor_rect.y - total_height - 9
+            ideal = self._arena_rect.y + 4 if compact or actor_rect is None else actor_rect.y - total_height - round(9 * scale)
             top = max(self._arena_rect.y + 3, min(ideal, self._arena_rect.bottom - total_height - 3))
             center_x = self.actor_positions[actor_id][0]
             for glyph, ((text, _), _) in zip(glyphs, entries):
-                label = self.pg.Rect(0, top, glyph.get_width() + 12, glyph.get_height() + 6)
+                label = self.pg.Rect(0, top, glyph.get_width() + round(12 * scale), glyph.get_height() + round(6 * scale))
                 label.centerx = center_x
                 label.x = max(self._arena_rect.x + 2, min(label.x, self._arena_rect.right - label.w - 2))
                 self.pg.draw.rect(surface, INK, label)
                 self.pg.draw.rect(surface, EDGE, label, 1)
-                surface.blit(glyph, (label.x + 6, label.y + 3))
+                surface.blit(glyph, (label.x + round(6 * scale), label.y + round(3 * scale)))
                 self.feedback_rects.append(label)
                 self.feedback_labels.append((actor_id, text, label))
-                top = label.bottom + 3
+                top = label.bottom + round(3 * scale)
 
     def _draw_tooltip(self, surface: Any) -> None:
         if self._mouse is None:
@@ -1010,18 +1102,19 @@ class BattleView:
         if not text:
             return
         key = (text, self._rect.w, self._rect.h, id(self.small_font), id(self.mini_font))
+        scale = self._layout_scale
         if key not in self._tooltip_layout_cache:
-            width = min(320, max(170, self._rect.w - 32))
-            maximum = max(1, self._rect.h - 12)
+            width = min(round(320 * scale), max(round(170 * scale), self._rect.w - round(32 * scale)))
+            maximum = max(1, self._rect.h - round(12 * scale))
             font = self.small_font
 
             def layout(selected_font: Any) -> tuple[list[str], int]:
-                lines = [line for paragraph in text.splitlines() for line in _wrapped(paragraph, selected_font, width - 20)]
-                return lines, len(lines) * selected_font.get_linesize() + 16
+                lines = [line for paragraph in text.splitlines() for line in _wrapped(paragraph, selected_font, width - round(20 * scale))]
+                return lines, len(lines) * selected_font.get_linesize() + round(16 * scale)
 
             lines, height = layout(font)
             if height > maximum:
-                width = max(40, self._rect.w - 16)
+                width = max(40, self._rect.w - round(16 * scale))
                 lines, height = layout(font)
             if height > maximum:
                 font = self.mini_font
@@ -1029,35 +1122,37 @@ class BattleView:
             if height > maximum:
                 lower, upper = 0.35, 1.0
                 for _ in range(9):
-                    scale = round((lower + upper) / 2, 4)
-                    fitted_key = (id(self.mini_font), scale)
+                    candidate_scale = round((lower + upper) / 2, 4)
+                    fitted_key = (id(self.mini_font), candidate_scale)
                     if fitted_key not in self._fitted_fonts:
-                        self._fitted_fonts[fitted_key] = _ScaledFont(self.pg, self.mini_font, scale)
+                        self._fitted_fonts[fitted_key] = _ScaledFont(self.pg, self.mini_font, candidate_scale)
                     candidate = self._fitted_fonts[fitted_key]
                     candidate_lines, candidate_height = layout(candidate)
                     if candidate_height <= maximum:
-                        lower = scale
+                        lower = candidate_scale
                         font, lines, height = candidate, candidate_lines, candidate_height
                     else:
-                        upper = scale
+                        upper = candidate_scale
             if len(self._tooltip_layout_cache) >= 32:
                 self._tooltip_layout_cache.clear()
             self._tooltip_layout_cache[key] = font, lines, width, height
         font, lines, width, height = self._tooltip_layout_cache[key]
-        x = max(self._rect.x + 8, min(self._mouse[0] + 12, self._rect.right - width - 8))
-        y = max(self._rect.y + 4, min(self._mouse[1] - height - 10, self._rect.bottom - height - 4))
+        x = max(self._rect.x + round(8 * scale), min(self._mouse[0] + round(12 * scale), self._rect.right - width - round(8 * scale)))
+        y = max(self._rect.y + round(4 * scale), min(self._mouse[1] - height - round(10 * scale), self._rect.bottom - height - round(4 * scale)))
         rect = self.pg.Rect(x, y, width, height)
         self.tooltip_rect = rect.copy()
         self.pg.draw.rect(surface, INK, rect)
         self.pg.draw.rect(surface, AMBER, rect, 1)
         for line in lines:
-            self._text(surface, line, (x + 10, y + 8), BONE, font=font)
+            self._text(surface, line, (x + round(10 * scale), y + round(8 * scale)), BONE, font=font)
             y += font.get_linesize()
 
-    def draw(self, surface: Any, rect: Any, now_ms: int = 0) -> Any:
+    def draw(self, surface: Any, rect: Any, now_ms: int = 0, *, text_size: str = "standard") -> Any:
         """Draw the arena and full intent cards inside ``rect`` and return it."""
         pg = self.pg
         rect = pg.Rect(rect)
+        self._configure_layout(rect, text_size)
+        scale = self._layout_scale
         self._rect = rect.copy()
         self.enemy_hits.clear()
         self.sprite_hits.clear()
@@ -1082,24 +1177,29 @@ class BattleView:
         if snapshot.phase == "active" and self.resolving:
             label = "TURN RESULTS"
         round_label = f"ROUND {snapshot.round_number}" + (f" / {snapshot.max_rounds}" if snapshot.max_rounds else "")
-        self._text(surface, round_label, (rect.x + 12, rect.y + 9), AMBER, font=self.banner_font)
+        pad = round(12 * scale)
+        self._text(surface, round_label, (rect.x + pad, rect.y + round(9 * scale)), AMBER, font=self.banner_font)
         phase_width = self.small_font.size(label)[0]
-        phase_left = rect.right - phase_width - 12
-        self._text(surface, label, (phase_left, rect.y + 13), TEAL if snapshot.phase == "victory" else MUTED, font=self.small_font)
-        condition_left = rect.x + 24 + self.banner_font.size(round_label)[0]
-        condition_bottom = self._header_conditions(surface, pg.Rect(condition_left, rect.y + 5, max(40, phase_left - condition_left - 10), 30))
-        header_bottom = max(rect.y + 34, condition_bottom + 6)
+        phase_left = rect.right - phase_width - pad
+        self._text(surface, label, (phase_left, rect.y + round(13 * scale)), TEAL if snapshot.phase == "victory" else MUTED, font=self.small_font)
+        condition_left = rect.x + pad * 2 + self.banner_font.size(round_label)[0]
+        condition_bottom = self._header_conditions(surface, pg.Rect(condition_left, rect.y + round(5 * scale), max(40, phase_left - condition_left - round(10 * scale)), round(30 * scale)))
+        header_bottom = max(rect.y + round(34 * scale), condition_bottom + round(6 * scale))
         objective = snapshot.objective or ("Read their intent. Choose your target. Survive the road." if snapshot.phase == "active" else "")
         if objective:
-            header_bottom = self._paragraph(surface, objective, (rect.x + 12, header_bottom), rect.w - 24, BONE, font=self.small_font) + 7
-        compact = rect.h < 390
+            header_bottom = self._paragraph(surface, objective, (rect.x + pad, header_bottom), rect.w - pad * 2, BONE, font=self.small_font) + round(7 * scale)
+        compact = rect.h < 390 * scale
         if compact:
-            card_height = min(172, max(104, rect.bottom - header_bottom - 72))
+            card_height = min(round(172 * scale), max(round(104 * scale), rect.bottom - header_bottom - round(72 * scale)))
+            if len(snapshot.enemies) == 1 and rect.w >= 390 * scale:
+                card_height = self._single_card_height(rect.w, card_height, snapshot.enemies[0])
             cards_y = rect.bottom - card_height
         else:
-            card_height = min(218, max(180, round(rect.h * 0.45)))
-            cards_y = max(header_bottom + 110, rect.bottom - card_height)
-        arena = pg.Rect(rect.x + 1, header_bottom, rect.w - 2, max(1, cards_y - header_bottom - 8))
+            card_height = min(round(218 * scale), max(round(180 * scale), round(rect.h * 0.45)))
+            if scale > 1 and len(snapshot.enemies) == 1:
+                card_height = self._single_card_height(rect.w, card_height, snapshot.enemies[0], compact=False)
+            cards_y = max(header_bottom + round(110 * scale), rect.bottom - card_height)
+        arena = pg.Rect(rect.x + 1, header_bottom, rect.w - 2, max(1, cards_y - header_bottom - round(8 * scale)))
         self._arena_rect = arena.copy()
         self._draw_backdrop(surface, arena)
         surface.set_clip(arena.clip(previous_clip))
@@ -1110,58 +1210,65 @@ class BattleView:
                 px = arena.x + int((index * 71 + now_ms * (0.007 + index % 3 * 0.002)) % max(1, arena.w))
                 py = arena.y + int((index * 29 - now_ms * 0.009) % max(1, arena.h - 20))
                 pg.draw.rect(surface, (96, 84, 59) if index % 3 else (133, 108, 65), (px, py, 2, 2))
-        ground = arena.bottom - (16 if compact else 25)
-        available_scale = (arena.h - (16 if compact else 25) - 11) / 48
-        actor_scale = 2 if available_scale >= 2 and arena.w >= 400 else 1 if available_scale >= 1 else 0.75 if available_scale >= 0.75 else 0.5
+        ground = arena.bottom - round((16 if compact else 25) * scale)
+        available_scale = (arena.h - round((16 if compact else 25) * scale) - round(11 * scale)) / 48
+        actor_scale = 2 * scale if available_scale >= 2 * scale and arena.w >= 400 * scale else scale if available_scale >= scale else 0.75 if available_scale >= 0.75 else 0.5
         player_x = arena.x + max(65, round(arena.w * 0.19))
         companions = tuple(companion for companion in snapshot.companions if companion.available)[:2]
-        party_scale = 0.5 if actor_scale < 1 else 0.75 if actor_scale == 1 else 1.5
+        # These atlas bodies share the same native adult proportions. Keep
+        # their pixel zoom equal; placement behind the traveler gives focus
+        # without shrinking companions into child-sized silhouettes.
+        party_scale = actor_scale
         ally_edge = arena.x + max(18, round(20 * party_scale))
-        ally_anchors = [(max(ally_edge, player_x - (36 if actor_scale <= 1 else 62) - index * (29 if actor_scale <= 1 else 40)), ground - 4 - index * 3) for index in range(len(companions))]
+        party_gap = round(37 * actor_scale)
+        ally_gap = round(32 * actor_scale)
+        if companions:
+            player_x = max(player_x, ally_edge + party_gap + (len(companions) - 1) * ally_gap)
+        ally_anchors = [(max(ally_edge, player_x - party_gap - index * ally_gap), ground - round((4 + index * 3) * scale)) for index in range(len(companions))]
         enemies = snapshot.enemies
         enemy_left = arena.x + round(arena.w * 0.50)
-        enemy_span = max(1, arena.right - 35 - enemy_left)
+        enemy_span = max(1, arena.right - round(35 * scale) - enemy_left)
         enemy_anchors = [(enemy_left + round(enemy_span * ((index + 0.5) / max(1, len(enemies)))), ground) for index in range(len(enemies))]
         # Resolve every destination before drawing the first actor. Otherwise
         # player attacks cannot travel toward enemies rendered later in order.
         self.actor_positions.update({"player": (player_x, ground), **{ally.id: anchor for ally, anchor in zip(companions, ally_anchors)}, **{enemy.id: anchor for enemy, anchor in zip(enemies, enemy_anchors)}})
         self._draw_actor(surface, "player", "player", (player_x, ground), actor_scale, facing_left=False, alive=snapshot.player.hp > 0, now_ms=now_ms)
         player_label = snapshot.player.name
-        label_width = min(140, round(arena.w * 0.30))
+        label_width = min(round(140 * scale), round(arena.w * 0.30))
         while len(player_label) > 1 and self.small_font.size(player_label)[0] > label_width:
             player_label = player_label[:-2].rstrip() + "…"
         if "player" in self.actor_rects and snapshot.phase != "escaped":
-            self._text(surface, player_label, (player_x - self.small_font.size(player_label)[0] // 2, ground + 3), BONE, font=self.small_font)
+            self._text(surface, player_label, (player_x - self.small_font.size(player_label)[0] // 2, ground + round(3 * scale)), BONE, font=self.small_font)
         # Companions stand a step behind the traveler rather than becoming
         # abstract ability names in a menu.
         for index, companion in enumerate(companions):
             ally_x, ally_ground = ally_anchors[index]
             self._draw_actor(surface, companion.id, self._kind(companion.id + companion.name), (ally_x, ally_ground), party_scale, facing_left=False, now_ms=now_ms)
             if companion.id in self.actor_rects and snapshot.phase != "escaped":
-                self._text(surface, companion.name, (ally_x - self.party_font.size(companion.name)[0] // 2, ally_ground + 3), TEAL, font=self.party_font)
+                self._text(surface, companion.name, (ally_x - self.party_font.size(companion.name)[0] // 2, ally_ground + round(3 * scale)), TEAL, font=self.party_font)
         for index, enemy in enumerate(enemies):
             enemy_x, _ = enemy_anchors[index]
             self._draw_actor(surface, enemy.id, self._kind(enemy.archetype + " " + enemy.name), (enemy_x, ground), actor_scale, facing_left=True, alive=enemy.hp > 0, targeted=enemy.id == snapshot.target_id, now_ms=now_ms)
             if enemy.hp > 0:
-                meter = pg.Rect(enemy_x - 23, ground + 5, 46, 3)
+                meter = pg.Rect(enemy_x - round(23 * scale), ground + round(5 * scale), round(46 * scale), round(3 * scale))
                 if enemy.invulnerable:
                     self._protected_meter(surface, meter)
                 else:
                     self._health(surface, meter, enemy.hp, enemy.max_hp, actor_id=enemy.id)
                 number = str(index + 1)
-                number_pos = (enemy_x - 34, ground + 1) if compact else (enemy_x - 3, ground + 10)
+                number_pos = (enemy_x - round(34 * scale), ground + 1) if compact else (enemy_x - round(3 * scale), ground + round(10 * scale))
                 self._text(surface, number, number_pos, AMBER if enemy.id == snapshot.target_id else MUTED, font=self.mini_font if compact else self.small_font)
         self._draw_attack_effects(surface)
         self._draw_feedback(surface)
         surface.set_clip(rect.clip(previous_clip))
-        gap = 8
+        gap = round(8 * scale)
         count = max(1, len(enemies))
         usable_width = rect.w - gap * (count - 1)
         for index, enemy in enumerate(enemies):
             left = rect.x + round(usable_width * index / count) + gap * index
             right = rect.x + round(usable_width * (index + 1) / count) + gap * index
             card = pg.Rect(left, cards_y, right - left, rect.bottom - cards_y)
-            self._draw_card(surface, card, enemy, wide=count == 1 and card.w >= 390)
+            self._draw_card(surface, card, enemy, wide=count == 1 and card.w >= 390 * scale)
         self._draw_tooltip(surface)
         surface.set_clip(previous_clip)
         return rect

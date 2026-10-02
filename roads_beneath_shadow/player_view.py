@@ -175,6 +175,54 @@ def quest_details(state: GameState) -> list[dict[str, Any]]:
     return details
 
 
+def _companion_snapshot(state: GameState) -> list[dict[str, Any]]:
+    """Restate witnessed departures and fates without guessing missing facts."""
+    flags = state.flags
+    if state.chapter == 2:
+        mara = bool(flags.get("part_two_mara_present", False))
+        tobin = bool(flags.get("part_two_tobin_present", False))
+    else:
+        opening = state.scene == "chapter1_intro"
+        mara = not opening
+        tobin = not opening and state.scene != "chapter1_decision" and not state.scene.startswith("branch_")
+
+    mara_status = "Traveling with you" if mara else "Not traveling with you"
+    if flags.get("part2_mara_left"):
+        mara = False
+        mara_status = "Left at the burned refuge to seek the prisoners"
+
+    if flags.get("tobin_returns_with_ned"):
+        tobin = False
+        tobin_status = "Remained above with Ned"
+    elif flags.get("tobin_stays_at_threshold"):
+        tobin = False
+        tobin_status = "Remained at the threshold with Ned's lantern"
+    elif not tobin and state.chapter == 2 and flags.get("part_two_ned_safe"):
+        # Earlier saves may retain the hand-off facts without its choice flag.
+        tobin_status = "Remained above with Ned"
+    else:
+        tobin_status = "Traveling with you" if tobin else "Not traveling with you"
+
+    companions = [
+        {"name": "Mara", "trust": state.character.mara_trust, "present": mara, "status": mara_status},
+        {"name": "Tobin", "trust": state.character.tobin_trust, "present": tobin, "status": tobin_status},
+    ]
+    if state.chapter == 2 and QUEST_REACH_CALENOR in state.completed_quests:
+        # Keep the same fate precedence as the episode's ending account.
+        if flags.get("part2_calenor_collapsed_road"):
+            present, status = False, "Stayed to collapse the road behind the company"
+        elif flags.get("part2_calenor_rebound"):
+            present, status = False, "Bound again at the Last Seal"
+        elif flags.get("part2_calenor_remained"):
+            present, status = False, "Remained within the renewed seal"
+        elif flags.get("part2_calenor_escaped"):
+            present, status = True, "Escaped the Last Seal with you"
+        else:
+            present, status = True, "Traveling with you"
+        companions.append({"name": "Calenor", "present": present, "status": status})
+    return companions
+
+
 def player_snapshot(state: GameState | None, *, decision: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     if state is None:
         return None
@@ -210,22 +258,7 @@ def player_snapshot(state: GameState | None, *, decision: Mapping[str, Any] | No
             "attack_delta": item.attack - (weapon.attack if weapon else 0) if item.slot == "weapon" else 0,
             "defense_delta": item.defense - (armor.defense if armor else 0) if item.slot == "armor" else 0,
         })
-    if state.chapter == 2:
-        mara = state.flags.get("part_two_mara_present", False)
-        tobin = state.flags.get("part_two_tobin_present", False)
-    else:
-        opening = state.scene == "chapter1_intro"
-        mara = not opening
-        tobin = not opening and state.scene != "chapter1_decision" and not state.scene.startswith("branch_")
-        if state.flags.get("tobin_returns_with_ned") or state.flags.get("tobin_stays_at_threshold"):
-            tobin = False
-    companions = [
-        {"name": "Mara", "trust": c.mara_trust, "present": mara},
-        {"name": "Tobin", "trust": c.tobin_trust, "present": tobin},
-    ]
-    if state.chapter == 2 and QUEST_REACH_CALENOR in state.completed_quests:
-        separated = state.flags.get("part2_calenor_remained") or state.flags.get("part2_calenor_collapsed_road")
-        companions.append({"name": "Calenor", "present": not separated, "status": "Remained at the seal" if separated else "Traveling with you"})
+    companions = _companion_snapshot(state)
     # Flat HUD keys remain available to the small header renderer.
     return {
         **character, "character": character, "items": items, "companions": companions,

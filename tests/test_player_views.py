@@ -183,6 +183,68 @@ class PlayerViewTests(unittest.TestCase):
         calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
         self.assertFalse(calenor["present"])
 
+    def test_companion_departures_follow_earned_hand_off_and_refuge_facts_without_guessing_fates(self):
+        for flag, survived, status in (
+            ("tobin_returns_with_ned", True, "Remained above with Ned"),
+            ("tobin_stays_at_threshold", False, "Remained at the threshold with Ned's lantern"),
+        ):
+            with self.subTest(flag=flag):
+                game = Game(ReadOnlyPanelUI())
+                game.state = self.state("cliffhanger")
+                game.state.flags.update({flag: True, "ned_survived": survived})
+                game._prepare_part_two_consequences()
+                for scene, chapter in (("complete", 1), ("part2_vigil", 2)):
+                    game.state.scene, game.state.chapter = scene, chapter
+                    before = game.state.to_dict()
+                    snapshot = player_snapshot(game.state)
+                    tobin = next(person for person in snapshot["companions"] if person["name"] == "Tobin")
+                    self.assertFalse(tobin["present"])
+                    self.assertEqual(tobin["status"], status)
+                    tobin["status"] = "Changed by renderer"
+                    self.assertEqual(game.state.to_dict(), before)
+
+        state = self.state("part2_vigil")
+        state.flags.update({"part2_mara_left": True, "part_two_mara_present": False, "part2_drowned_branch_collapsed": True})
+        mara = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Mara")
+        self.assertFalse(mara["present"])
+        self.assertEqual(mara["status"], "Left at the burned refuge to seek the prisoners")
+        self.assertNotIn("rescued", mara["status"])
+        self.assertNotIn("died", mara["status"])
+
+    def test_legacy_absent_companions_keep_only_recorded_whereabouts(self):
+        state = self.state()
+        companions = player_snapshot(state)["companions"]
+        self.assertTrue(all(person["status"] == "Not traveling with you" for person in companions))
+        state.flags["part_two_ned_safe"] = True
+        tobin = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Tobin")
+        self.assertEqual(tobin["status"], "Remained above with Ned")
+        state.flags["part_two_tobin_present"] = True
+        tobin = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Tobin")
+        self.assertTrue(tobin["present"])
+        self.assertEqual(tobin["status"], "Traveling with you")
+
+    def test_calenor_presence_distinguishes_final_binding_collapse_and_escape(self):
+        state = self.state("part2_seal_choice")
+        state.completed_quests.append(QUEST_REACH_CALENOR)
+        state.flags["part2_calenor_condemned"] = True
+        calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
+        self.assertTrue(calenor["present"], "A judgment alone has not yet bound him to the final seal")
+        for flags, present, status in (
+            ({"part2_calenor_rebound": True}, False, "Bound again at the Last Seal"),
+            ({"part2_calenor_rebound": True, "part2_company_collapsed_road": True}, False, "Bound again at the Last Seal"),
+            ({"part2_calenor_remained": True}, False, "Remained within the renewed seal"),
+            ({"part2_calenor_collapsed_road": True}, False, "Stayed to collapse the road behind the company"),
+            ({"part2_teren_took_spoke": True, "part2_calenor_escaped": True}, True, "Escaped the Last Seal with you"),
+            ({"part2_teren_stayed_to_collapse": True, "part2_calenor_escaped": True}, True, "Escaped the Last Seal with you"),
+        ):
+            with self.subTest(flags=flags):
+                state.flags = flags
+                before = state.to_dict()
+                calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
+                self.assertEqual(calenor["present"], present)
+                self.assertEqual(calenor["status"], status)
+                self.assertEqual(state.to_dict(), before)
+
     def test_chronicle_counts_episode_completions_separately(self):
         snapshot = chronicle_snapshot(PlayerProfile(completed_runs=4, endings={"fellowship": 2, "living_road": 1, "road_in_ruin": 1}))
         self.assertEqual(snapshot["part_one_completions"], 2)

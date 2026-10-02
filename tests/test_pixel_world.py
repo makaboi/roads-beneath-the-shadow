@@ -303,7 +303,8 @@ class WorldSDLTests(unittest.TestCase):
 
     def test_menu_arrows_and_clicks_outside_the_world_remain_unhandled(self):
         self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_DOWN)), (False, None))
-        self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_RETURN)), (False, None))
+        for key in (self.pg.K_RETURN, self.pg.K_KP_ENTER, self.pg.K_SPACE, self.pg.K_RIGHT):
+            self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=key)), (False, None))
         self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e)), (True, None))
         self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=(800, 300))), (False, None))
 
@@ -377,6 +378,60 @@ class WorldSDLTests(unittest.TestCase):
         self.assertIsNone(self.world._inspected_look)
         self.assertNotEqual(self.world.player_position, before)
 
+    def test_inspection_body_blocks_hidden_choices_and_mouse_close_stays_read_only(self):
+        captain = self.world.points[-1]
+        self.assertTrue(self.world.walk_to(captain.point.tile, point=captain.point))
+        self.step(100)
+        self.world._clicked_point = captain.point.key
+        self.assertEqual(self.world.focused_option, captain.answer)
+        look = WORLD_MAPS["pony"].looks[-1]
+        position = self.world.player_position
+
+        for preference in ("standard", "large", "larger"):
+            for rectangle in (self.pg.Rect(0, 0, 640, 480), self.pg.Rect(10, 0, 360, 270)):
+                with self.subTest(preference=preference, size=rectangle.size):
+                    self.world._inspected_look = look
+                    fitted = self.world.draw(self.surface, rectangle, text_size=preference)
+
+                    def screen_point(point):
+                        return fitted.left + round(point[0] * fitted.width / 320), fitted.top + round(point[1] * fitted.height / 240)
+
+                    self.assertTrue(self.world._inspection_rect.collidepoint(captain.point.position))
+                    body = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=screen_point(captain.point.position))
+                    self.assertEqual(self.world.handle_event(body), (True, None))
+                    self.assertEqual(self.world.inspection_title, look.name)
+                    self.assertFalse(self.world._path)
+                    close = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=screen_point(self.world._inspection_close_rect.center))
+                    self.assertEqual(self.world.handle_event(close), (True, None))
+                    self.assertFalse(self.world.inspection_open)
+                    self.assertEqual(self.world.player_position, position)
+
+    def test_every_discovery_remains_readable_and_clickable_at_all_text_preferences(self):
+        from roads_beneath_shadow.pixel_theme import wrap_text
+
+        for key, spec in WORLD_MAPS.items():
+            self.world.set_request(request_for(key, identifier=key))
+            for look in spec.looks:
+                for preference, font_size in (("standard", 12), ("large", 14), ("larger", 16)):
+                    with self.subTest(map=key, discovery=look.key, preference=preference):
+                        self.world._inspected_look = look
+                        self.world.draw(self.surface, self.pg.Rect(10, 0, 360, 270), text_size=preference)
+                        bubble = self.world._inspection_rect
+                        close = self.world._inspection_close_rect
+                        self.assertGreaterEqual(bubble.top, 26, "discovery overlaps the map title")
+                        self.assertLessEqual(bubble.bottom, 233)
+                        self.assertTrue(bubble.contains(close))
+                        body, title = self.world._inspection_fonts[font_size]
+                        footer = self.world._inspection_footer_fonts[font_size - 2]
+                        self.assertTrue(all(body.size(line)[0] <= 266 for line in wrap_text(look.text, body, 266)))
+                        self.assertTrue(all(title.size(line)[0] <= 250 for line in wrap_text(look.name.upper(), title, 250)))
+                        self.assertLessEqual(footer.size("Click X / E / ENTER / ESC  Close")[0], 266)
+
+                        fitted = self.world._rect
+                        click = (fitted.left + round(close.centerx * fitted.width / 320), fitted.top + round(close.centery * fitted.height / 240))
+                        self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=click)), (True, None))
+                        self.assertFalse(self.world.inspection_open)
+
     def test_read_only_suspensions_restore_only_the_same_world_inspection(self):
         request = request_for("hall", identifier=2)
         request.context = {"journey_id": "same-journey", "presentation_id": 1}
@@ -404,6 +459,18 @@ class WorldSDLTests(unittest.TestCase):
         self.world.set_request(request)
         self.assertEqual(self.world.inspection_title, look.name)
 
+        pause = SimpleNamespace(identifier=10, kind="choice", label="JOURNEY PAUSED", options=("Return to the road",), story=False, context=request.context)
+        self.world.set_request(pause, preserve_inspection=True)
+        self.assertFalse(self.world.active)
+        pause.identifier = 11
+        pause.label = "SETTINGS"
+        self.world.set_request(pause, preserve_inspection=True)
+        self.world.set_request(None, preserve_inspection=True)
+        request.identifier = 12
+        self.world.set_request(request)
+        self.assertEqual(self.world.inspection_title, look.name)
+        self.assertEqual(self.world.player_position, position)
+
         self.world.set_request(None, preserve_inspection=True)
         request.context["presentation_id"] = 2  # Earlier save, same journey.
         self.world.set_request(request)
@@ -425,6 +492,49 @@ class WorldSDLTests(unittest.TestCase):
         inspect()
         self.world.set_request(None, preserve_inspection=True)
         self.world.set_request(request_for("bree", identifier=5))
+        self.assertFalse(self.world.inspection_open)
+
+    def test_inspection_survives_refreshed_options_or_continued_decision_but_rejects_a_new_story(self):
+        spec = WORLD_MAPS["lantern"]
+        rest = "Rest and tend your wounds (recover up to 9 Health and all Focus)"
+        request = request_for("lantern", (rest, spec.points[-1].option), identifier=2)
+        request.context = {"journey_id": "same-journey", "presentation_id": 1, "decision_id": "vigil-before-settings"}
+        self.world.set_request(request)
+        look = spec.looks[0]
+        self.assertTrue(self.world.walk_to(look.tile, point=look))
+        self.step(100)
+        self.world._clicked_point = "look:" + look.key
+        self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e))
+        self.assertEqual(self.world.inspection_title, look.name)
+        standing = self.world.player_position
+
+        self.world.set_request(None, preserve_inspection=True)
+        refreshed = "Rest and tend your wounds (recover up to 28 Health and all Focus)"
+        request.options = (refreshed, spec.points[-1].option)
+        request.identifier = 3
+        self.world.set_request(request)
+        self.assertEqual(self.world.inspection_title, look.name)
+        self.assertEqual(self.world.points[0].option, refreshed)
+        self.assertEqual(self.world.player_position, standing)
+
+        self.world.set_request(None, preserve_inspection=True)
+        request.options = (spec.points[-1].option,)  # Inventory restored everything.
+        request.identifier = 4
+        self.world.set_request(request)
+        self.assertEqual(self.world.inspection_title, look.name)
+        self.assertEqual(self.world.points[0].point.key, "leave")
+
+        self.world.set_request(None, preserve_inspection=True)
+        request.context["decision_id"] = "vigil-after-main-menu"
+        request.identifier = 5
+        self.world.set_request(request)  # Continue: new token, same exact options.
+        self.assertEqual(self.world.inspection_title, look.name)
+
+        self.world.set_request(None, preserve_inspection=True)
+        request.context["decision_id"] = "a-new-story-choice"
+        request.options = (refreshed, spec.points[-1].option)
+        request.identifier = 6
+        self.world.set_request(request)
         self.assertFalse(self.world.inspection_open)
 
     def test_reduced_motion_freezes_ambient_art_but_still_allows_walking(self):
@@ -510,28 +620,50 @@ class WorldSDLTests(unittest.TestCase):
 
     def test_loading_an_earlier_save_resets_positions_but_continue_preserves_them(self):
         import threading
-        from roads_beneath_shadow.pixel_ui import PixelUI
+        import time
+        from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
+        from roads_beneath_shadow.ui import InputClosed
 
         state = GameState(Character.from_origin("Mira", ORIGINS[0]), scene="road_from_bree")
         current = [state]
         ui = PixelUI(fast=True, sound=False)
         ui.state_provider = lambda: current[0]
+        window = PixelWindow(ui, size=(640, 480))
+        self.world = window.world
         spec = WORLD_MAPS["road-fork"]
         template = request_for(spec.key)
 
         def live_request(kind="choice"):
-            worker = threading.Thread(target=lambda: ui._request(
-                kind, template.label if kind == "choice" else "Continue",
-                template.options if kind == "choice" else (), story=kind == "choice",
-            ))
+            identifier = ui._request_number + 1
+
+            def ask():
+                try:
+                    ui._request(kind, template.label if kind == "choice" else "Continue", template.options if kind == "choice" else (), story=kind == "choice")
+                except InputClosed:
+                    pass
+
+            worker = threading.Thread(target=ask)
             worker.start()
-            event = ui.events.get(timeout=2)
-            self.assertEqual(event.kind, "request")
-            request = event.data["request"]
-            ui.submit(request, None)
-            worker.join(2)
-            self.assertFalse(worker.is_alive())
-            return request
+            request = None
+            try:
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    # New/loaded states post a genuine journey boundary
+                    # before the request. Process both through the renderer.
+                    window.drain()
+                    if window.request is not None and window.request.identifier == identifier:
+                        request = window.request
+                        break
+                    time.sleep(0.001)
+                self.assertIsNotNone(request, "A live request did not reach the window")
+                return request
+            finally:
+                if request is None:
+                    ui.close()
+                else:
+                    ui.submit(request, None)
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
 
         try:
             with tempfile.TemporaryDirectory() as directory:
@@ -688,8 +820,118 @@ class WorldSDLTests(unittest.TestCase):
         self.assertTrue(self.world.walk_to(target.tile, point=target))
         self.assertIn(target.name, self.world.hint_text)
         self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e)), (True, None))
+        path = tuple(self.world._path)
+        for key in (self.pg.K_RETURN, self.pg.K_KP_ENTER, self.pg.K_SPACE, self.pg.K_RIGHT):
+            self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=key)), (True, None))
+            self.assertEqual(tuple(self.world._path), path)
         self.step(120)
         self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e)), (True, 2))
+
+    def test_live_story_confirm_keys_keep_walking_and_close_discoveries_without_answering(self):
+        import threading
+        import time
+        from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
+        from roads_beneath_shadow.profile import ProfileManager
+        from roads_beneath_shadow.settings import SettingsManager
+        from roads_beneath_shadow.ui import InputClosed
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            ui = PixelUI(fast=False, text_speed="instant", sound=False)
+            window = PixelWindow(ui, size=(1200, 900))
+            game = Game(ui, saves=SaveManager(directory / "saves"), profile=ProfileManager(directory / "profile.json"), settings_manager=SettingsManager(directory / "settings.json"))
+            game.state = GameState(Character.from_origin("Mira", ORIGINS[0]), scene="bree_exploration")
+            ui.state_provider = lambda: game.state
+            errors = []
+
+            def story_worker():
+                try:
+                    game._bree_exploration()
+                except InputClosed:
+                    pass
+                except Exception as error:
+                    errors.append(error)
+
+            worker = threading.Thread(target=story_worker)
+            worker.start()
+
+            def key(code):
+                window.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=code, unicode="", mod=0))
+
+            def click(point):
+                rectangle = window.world._rect
+                position = (rectangle.left + round(point[0] * rectangle.width / 320), rectangle.top + round(point[1] * rectangle.height / 240))
+                window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=position))
+
+            try:
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    window.drain()
+                    window.render()
+                    if window.world.active and not window.reading:
+                        break
+                    if window.reading:
+                        key(self.pg.K_RETURN)
+                    time.sleep(0.001)
+                self.assertTrue(window.world.active)
+                request = window.request
+                before = game.state.to_dict()
+                world = window.world
+                target = next(bound for bound in world.points if bound.point.key == "north_gate")
+                self.assertEqual(target.answer, 5)
+                click(target.point.position)
+                self.assertTrue(world._path)
+                self.assertFalse(window._menu_focused)
+                path = tuple(world._path)
+                position = world.player_position
+                for code in (self.pg.K_RETURN, self.pg.K_KP_ENTER, self.pg.K_SPACE, self.pg.K_RIGHT):
+                    key(code)
+                    self.assertIs(window.request, request)
+                    self.assertTrue(worker.is_alive())
+                    self.assertEqual(tuple(world._path), path)
+                    self.assertEqual(world.player_position, position)
+                    self.assertTrue(ui.responses.empty())
+                    self.assertEqual(game.state.to_dict(), before)
+
+                look = next(look for look in world.spec.looks if look.key == "pony_sign")
+                click((look.position[0], look.position[1] - 10))
+                for _ in range(180):
+                    world.update(0.05)
+                self.assertFalse(world._path)
+                for code in (self.pg.K_RETURN, self.pg.K_KP_ENTER, self.pg.K_SPACE, self.pg.K_RIGHT):
+                    key(self.pg.K_e)
+                    self.assertEqual(world.inspection_title, look.name)
+                    key(code)
+                    self.assertFalse(world.inspection_open)
+                    self.assertIs(window.request, request)
+                    self.assertTrue(worker.is_alive())
+                    self.assertTrue(ui.responses.empty())
+                    self.assertEqual(game.state.to_dict(), before)
+
+                # Explicit arrow selection restores the side menu's
+                # authority even while a different world walk is active.
+                click(target.point.position)
+                self.assertTrue(world._path)
+                key(self.pg.K_DOWN)
+                self.assertEqual(window.selected, 1)
+                self.assertTrue(window._menu_focused)
+                key(self.pg.K_RIGHT)
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    window.drain()
+                    window.render()
+                    if window.request and window.request.label == "TOBIN LOOKS TO YOU":
+                        break
+                    if window.reading:
+                        key(self.pg.K_RETURN)
+                    time.sleep(0.001)
+                self.assertEqual(window.request.label, "TOBIN LOOKS TO YOU")
+                self.assertEqual(game.state.to_dict(), before)
+            finally:
+                ui.close()
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(errors, [])
 
     def test_a_blocked_click_cancels_the_old_path_and_explains_the_collision(self):
         target = WORLD_MAPS["pony"].points[0]

@@ -40,6 +40,8 @@ class PlayerArchiveTests(unittest.TestCase):
         self.assertIn(self.platform, guide)
         self.assertTrue(executable.with_name("README.md").is_file())
         self.assertTrue(executable.with_name("CHANGELOG.md").is_file())
+        for image in desktop_release.local_readme_images(desktop_release.ROOT / "README.md"):
+            self.assertEqual((executable.parent / image).read_bytes(), (desktop_release.ROOT / image).read_bytes())
         if (desktop_release.ROOT / "roads_beneath_shadow/font_assets/LICENSE.txt").is_file():
             self.assertEqual(
                 executable.with_name("FONT-LICENSE.txt").read_bytes(),
@@ -48,6 +50,49 @@ class PlayerArchiveTests(unittest.TestCase):
         if os.name != "nt":
             self.assertTrue(executable.stat().st_mode & 0o111)
             self.assertTrue(launcher.stat().st_mode & 0o111)
+
+    def test_offline_guide_keeps_spaced_images_animation_and_skips_remote_badges(self):
+        source = self.work / "offline guide source"
+        (source / "assets").mkdir(parents=True)
+        (source / "README.md").write_text(
+            '[![Badge](https://example.test/badge.svg)](https://example.test/)\n'
+            '![Menu](<assets/menu preview.png>)\n'
+            '![Walk](assets/walk.gif "A walk along the road")\n', encoding="utf-8"
+        )
+        (source / "CHANGELOG.md").write_text("A portable player guide.\n", encoding="utf-8")
+        (source / "Play Standalone.command").write_bytes((desktop_release.ROOT / "Play Standalone.command").read_bytes())
+        (source / "assets/menu preview.png").write_bytes(b"native screenshot fixture")
+        (source / "assets/walk.gif").write_bytes(b"animated demonstration fixture")
+        with patch.object(desktop_release, "ROOT", source):
+            archive = desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "offline downloads")
+            executable, _launcher = desktop_release.extract_player_archive(archive, self.platform, self.work / "offline extraction")
+        self.assertEqual((executable.parent / "assets/menu preview.png").read_bytes(), b"native screenshot fixture")
+        self.assertEqual((executable.parent / "assets/walk.gif").read_bytes(), b"animated demonstration fixture")
+        self.assertEqual(sorted(path.name for path in (executable.parent / "assets").iterdir()), ["menu preview.png", "walk.gif"])
+
+    def test_missing_readme_image_rejects_an_otherwise_complete_archive(self):
+        missing = self.work / "missing-guide-image.zip"
+        with zipfile.ZipFile(missing, "w") as archive:
+            files = {
+                "Roads-Beneath-the-Shadow.exe": b"executable fixture",
+                "Play Roads Beneath the Shadow.cmd": b"launcher fixture",
+                "START-HERE.txt": b"Start the game",
+                "README.md": b"![Gameplay](assets/missing.gif)\n",
+                "CHANGELOG.md": b"Changes",
+                "FONT-LICENSE.txt": b"Font license fixture",
+            }
+            for name, data in files.items():
+                archive.writestr(f"{desktop_release.GAME_NAME}/{name}", data)
+        with self.assertRaisesRegex(ValueError, "README image is missing"):
+            desktop_release.extract_player_archive(missing, "Windows-x64", self.work / "missing image extraction")
+
+    def test_guide_image_cannot_read_a_file_outside_its_source_folder(self):
+        source = self.work / "guide folder"
+        source.mkdir()
+        (self.work / "outside.png").write_bytes(b"outside the guide")
+        (source / "README.md").write_text("![Preview](../outside.png)\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "must stay inside the player folder"):
+            desktop_release.local_readme_images(source / "README.md")
 
     def test_incomplete_archive_does_not_pass_installation_qa(self):
         incomplete = self.work / "missing-binary.zip"

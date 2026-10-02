@@ -10,7 +10,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform as host_platform
 import re
 import shutil
@@ -21,6 +21,7 @@ import tarfile
 import tempfile
 from time import monotonic, perf_counter, sleep
 import zipfile
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -287,6 +288,28 @@ def smoke_test(
     }
 
 
+def local_readme_images(readme: Path) -> list[Path]:
+    """Find portable embedded media so the extracted guide also works offline."""
+    images = []
+    root = readme.parent.resolve()
+    pattern = r"!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+[^)]*)?\)"
+    for angled, plain in re.findall(pattern, readme.read_text(encoding="utf-8")):
+        url = urlsplit(angled or plain)
+        if url.scheme or url.netloc or not url.path:
+            continue
+        relative = PurePosixPath(unquote(url.path))
+        if relative.is_absolute() or ".." in relative.parts or "\\" in str(relative):
+            raise ValueError(f"README image path must stay inside the player folder: {relative}")
+        image = Path(*relative.parts)
+        if not (root / image).resolve().is_relative_to(root):
+            raise ValueError(f"README image path leaves the player folder: {image}")
+        if not (root / image).is_file():
+            raise ValueError(f"README image is missing: {image}")
+        if image not in images:
+            images.append(image)
+    return images
+
+
 def assemble_archive(executable: Path, platform: str, version: str, output: Path) -> Path:
     output.mkdir(parents=True, exist_ok=True)
     archive = output / archive_name(platform)
@@ -299,6 +322,9 @@ def assemble_archive(executable: Path, platform: str, version: str, output: Path
             bundled_executable.chmod(0o755)
         for document in ("README.md", "CHANGELOG.md"):
             shutil.copy2(ROOT / document, package / document)
+        for image in local_readme_images(ROOT / "README.md"):
+            (package / image).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / image, package / image)
         font_license = ROOT / "roads_beneath_shadow" / "font_assets" / "LICENSE.txt"
         if font_license.is_file():
             shutil.copy2(font_license, package / "FONT-LICENSE.txt")
@@ -404,6 +430,7 @@ def extract_player_archive(archive: Path, platform: str, destination: Path) -> t
     missing = [path.name for path in required if not path.is_file()]
     if missing:
         raise ValueError("The player archive is incomplete: " + ", ".join(missing))
+    local_readme_images(package / "README.md")
     if platform != "Windows-x64":
         for path in (executable, launcher):
             if not path.stat().st_mode & 0o111:

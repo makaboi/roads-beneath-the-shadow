@@ -126,6 +126,120 @@ class BattleSDLTests(unittest.TestCase):
                 self.assertTrue(all(canvas.contains(rect) for rect in cards))
                 self.assertTrue(all(not first.colliderect(second) for first, second in zip(cards, cards[1:])))
 
+    def test_high_resolution_cards_targets_and_reduced_motion_remain_readable(self):
+        surface = self.pg.Surface((3840, 2160))
+        guarded = CombatStatusView("guarded", "Guarded", 2, "+2 Armor until struck.")
+        for size, hero_height in (((1488, 842), 144), ((2256, 1310), 192)):
+            canvas = self.pg.Rect(22, 87, *size)
+            for preference in ("standard", "large", "larger"):
+                snapshot = battle_snapshot(3)
+                snapshot = replace(snapshot, enemies=tuple(replace(enemy, statuses=(guarded,)) for enemy in snapshot.enemies))
+                self.view.set_snapshot(snapshot)
+                self.view.update(0, reduced_motion=True)
+                self.view.draw(surface, canvas, 0, text_size=preference)
+                self.assertGreaterEqual(self.view.actor_rects["player"].height, hero_height)
+                self.assertGreaterEqual(self.view.small_font.get_height(), 16)
+                self.assertTrue(self.view._arena_rect.contains(self.view.target_marker_rect))
+                self.assertTrue(all(self.view._arena_rect.contains(rect) for rect, _ in self.view.party_hits))
+                for card, enemy_id in self.view.enemy_hits:
+                    self.assertTrue(canvas.contains(card))
+                    self.assertEqual(self.click(card.center), (True, enemy_id))
+                for sprite, enemy_id in self.view.sprite_hits:
+                    self.assertTrue(self.view._arena_rect.contains(sprite))
+                    self.assertEqual(self.click(sprite.center), (True, enemy_id))
+                first = self.pg.image.tobytes(surface, "RGB")
+                self.view.draw(surface, canvas, 1700, text_size=preference)
+                self.assertEqual(first, self.pg.image.tobytes(surface, "RGB"))
+                rect, enemy_id = self.view.enemy_hits[0]
+                self.view.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=rect.center, rel=(0, 0), buttons=(0, 0, 0)))
+                self.view.draw(surface, canvas, 1700, text_size=preference)
+                self.assertEqual(self.view.hovered_id, enemy_id)
+                self.assertTrue(canvas.contains(self.view.tooltip_rect))
+                self.view.handle_event(self.pg.event.Event(self.pg.WINDOWLEAVE))
+
+    def test_high_resolution_font_fallback_preserves_actual_card_glyph_bounds(self):
+        with patch("roads_beneath_shadow.pixel_theme.FONT_DIRECTORY", Path("/tmp/rbs-missing-battle-fonts")):
+            view = BattleView(self.pg)
+            view.set_snapshot(battle_snapshot(3))
+            surface = self.pg.Surface((3840, 2160))
+            canvas = self.pg.Rect(22, 87, 2256, 1310)
+            original_text, original_card = view._text, view._draw_card
+            active_card = None
+            rendered = []
+
+            def record_text(surface, text, pos, color=(239, 225, 188), *, font=None):
+                if active_card is not None:
+                    selected = font or view.font
+                    glyph = selected.render(str(text), True, color)
+                    bounds = self.pg.Rect(*pos, glyph.get_width(), max(glyph.get_height(), selected.get_linesize()))
+                    self.assertTrue(active_card.contains(bounds), (text, active_card, bounds))
+                    rendered.append(str(text))
+                original_text(surface, text, pos, color, font=font)
+
+            def record_card(surface, rect, enemy, *, wide=False):
+                nonlocal active_card
+                active_card = rect
+                original_card(surface, rect, enemy, wide=wide)
+                active_card = None
+
+            view._text, view._draw_card = record_text, record_card
+            view.draw(surface, canvas, text_size="larger")
+            text = " ".join(rendered)
+            for enemy in view.snapshot.enemies:
+                self.assertIn(enemy.name, text)
+            for field in ("HEALTH", "ARMOR", "HEAVY BLOW", "DAMAGE", "CAN INTERRUPT"):
+                self.assertIn(field, text)
+            self.assertTrue(canvas.contains(view._arena_rect))
+
+    def test_repeated_heterogeneous_resizes_bound_actual_battle_surface_bytes(self):
+        surface = self.pg.Surface((3840, 2160))
+        self.view.update(0, reduced_motion=True)
+        sizes = ((419, 324), (677, 495), (1488, 842), (2256, 1310), (1990, 842), (1100, 650))
+        sprite_bytes = None
+        for index in range(48):
+            canvas = self.pg.Rect(22, 87, *sizes[index % len(sizes)])
+            self.view.draw(surface, canvas, text_size=("standard", "large", "larger")[index % 3])
+            native = sum(sprite.get_pitch() * sprite.get_height() for sprite in self.view._sprites.values())
+            if sprite_bytes is None:
+                sprite_bytes = native
+            self.assertEqual(native, sprite_bytes, "resizing must not add a native sprite for each size")
+            image = self.view._scaled_backdrop[2]
+            veil = self.view._backdrop_veil
+            retained = native + image.get_pitch() * image.get_height() + veil.get_pitch() * veil.get_height()
+            self.assertLessEqual(retained, 32 * 1024 * 1024)
+            self.assertEqual(veil.get_size(), self.view._arena_rect.size)
+            self.assertLessEqual(len(self.view._font_sets), 4)
+            cached_veil = veil
+            self.view.draw(surface, canvas, text_size=("standard", "large", "larger")[index % 3])
+            self.assertIs(self.view._backdrop_veil, cached_veil)
+
+    def test_fitted_large_display_tooltip_keeps_cached_glyphs_inside_its_frame(self):
+        surface = self.pg.Surface((3840, 2160))
+        canvas = self.pg.Rect(22, 87, 2256, 1000)
+        self.view.draw(surface, canvas, text_size="larger")
+        text = "\n".join(f"Condition {index}: Inspect the intent before striking." for index in range(40))
+        self.view.tooltip_hits[:] = [(canvas, text)]
+        self.view._mouse = canvas.center
+        original = self.view._text
+        glyphs = []
+
+        def record(surface, text, pos, color=(239, 225, 188), *, font=None):
+            selected = font or self.view.font
+            glyph = selected.render(str(text), True, color)
+            glyphs.append(self.pg.Rect(*pos, glyph.get_width(), max(glyph.get_height(), selected.get_linesize())))
+            original(surface, text, pos, color, font=font)
+
+        self.view._text = record
+        frames = []
+        for _ in range(2):
+            glyphs.clear()
+            self.view._draw_tooltip(surface)
+            self.assertTrue(canvas.contains(self.view.tooltip_rect))
+            self.assertEqual(len(glyphs), 40)
+            self.assertTrue(all(self.view.tooltip_rect.contains(glyph) for glyph in glyphs))
+            frames.append(self.view.tooltip_rect.copy())
+        self.assertEqual(frames[0], frames[1])
+
     def test_reduced_motion_is_visually_stable_across_clock_times(self):
         self.view.update(0, reduced_motion=True)
         self.view.draw(self.surface, self.canvas, 20)
@@ -150,6 +264,93 @@ class BattleSDLTests(unittest.TestCase):
             ally = self.view.actor_rects[actor_id]
             self.assertGreaterEqual(ally.height, hero.height * 0.70)
             self.assertTrue(self.view._arena_rect.contains(ally))
+
+    def test_adult_party_uses_equal_native_zoom_without_visible_alpha_overlap(self):
+        surface = self.pg.Surface((3840, 2160))
+        self.view.update(0, reduced_motion=True)
+        for size in ((419, 290), (419, 324), (677, 495), (2256, 1310)):
+            for count in (1, 3):
+                for origin in ("bree_wayfarer", "north_road_scout", "healers_apprentice"):
+                    snapshot = battle_snapshot(count)
+                    self.view.set_snapshot(replace(snapshot, player=replace(snapshot.player, origin=origin)))
+                    self.view.draw(surface, self.pg.Rect(22, 87, *size))
+                    hero = self.view.actor_rects["player"]
+                    visible = []
+                    for actor_id in ("player", "mara", "tobin"):
+                        rect = self.view.actor_rects[actor_id]
+                        self.assertEqual(rect.height, hero.height, (size, origin, actor_id))
+                        self.assertTrue(self.view._arena_rect.contains(rect))
+                        native = self.view._sprite(actor_id, False)
+                        alpha = self.pg.transform.scale(native, rect.size).get_bounding_rect()
+                        bounds = alpha.move(rect.topleft)
+                        visible.append(bounds)
+                    # Native19px companion bodies versus the Scout's22px hood
+                    # differ by at most one extra raster row at fractional zoom.
+                    self.assertGreaterEqual(visible[1].height + 1, visible[0].height * 0.85)
+                    self.assertGreaterEqual(visible[2].height + 1, visible[0].height * 0.85)
+                    self.assertTrue(all(not first.colliderect(second) for first, second in zip(visible, visible[1:])),
+                                    (size, origin, visible))
+
+    def test_compact_single_enemy_uses_spare_card_space_for_the_party(self):
+        self.view.set_snapshot(battle_snapshot(1))
+        canvas = self.pg.Rect(14, 14, 419, 324)
+        self.view.draw(self.surface, canvas)
+        self.assertGreaterEqual(self.view._arena_rect.height, 130)
+        self.assertLess(self.view.enemy_hits[0][0].height, 150)
+        self.assertEqual(len({self.view.actor_positions[actor_id][0] for actor_id in ("player", "mara", "tobin")}), 3)
+        hero = self.view.actor_rects["player"]
+        for actor_id in ("mara", "tobin"):
+            ally = self.view.actor_rects[actor_id]
+            self.assertGreaterEqual(ally.height, hero.height * 0.70)
+            self.assertTrue(self.view._arena_rect.contains(ally))
+
+    def test_compact_single_card_allocation_reuses_measurements_during_animation(self):
+        self.view.set_snapshot(battle_snapshot(1))
+        canvas = self.pg.Rect(14, 14, 419, 324)
+        with patch.object(self.view, "_card_content_height", wraps=self.view._card_content_height) as measure:
+            self.view.draw(self.surface, canvas, 100)
+            first_calls = measure.call_count
+            self.assertGreater(first_calls, 0)
+            self.view.draw(self.surface, canvas, 300)
+            self.assertEqual(measure.call_count, first_calls)
+        for width in range(419, 459):
+            self.view.draw(self.surface, self.pg.Rect(14, 14, width, 324))
+        self.assertLessEqual(len(self.view._single_card_heights), 32)
+
+    def test_compact_single_enemy_retains_all_card_fields_with_larger_fonts(self):
+        self.view.mini_bold_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 18, bold=True)
+        self.view.mini_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 17)
+        self.view.mini_prose_font = self.pg.font.SysFont("dejavusans,arial,sans", 17)
+        guarded = CombatStatusView("guarded", "Guarded", 2, "+2 Armor until struck.")
+        weakened = CombatStatusView("weakened", "Weakened", 1, "Reduce incoming attacks by 2.")
+        enemy = replace(self.snapshot.enemies[0], name="Ghorak Ash-Hand", phase=2,
+                        intent_label="Ash-Hand Execution", telegraph="a devastating blow; interrupt it now",
+                        statuses=(guarded, weakened))
+        self.view.set_snapshot(replace(self.snapshot, enemies=(enemy,)))
+        glyphs = []
+        original_text, original_card = self.view._text, self.view._draw_card
+        active_card = None
+
+        def record_text(surface, text, pos, color=(239, 225, 188), *, font=None):
+            if active_card is not None:
+                selected = font or self.view.font
+                glyph = selected.render(str(text), True, color)
+                bounds = self.pg.Rect(*pos, glyph.get_width(), max(glyph.get_height(), selected.get_linesize()))
+                glyphs.append((str(text), bounds))
+                self.assertTrue(active_card.contains(bounds), (text, active_card, bounds))
+            original_text(surface, text, pos, color, font=font)
+
+        def record_card(surface, rect, enemy, *, wide=False):
+            nonlocal active_card
+            active_card = rect
+            original_card(surface, rect, enemy, wide=wide)
+            active_card = None
+
+        self.view._text, self.view._draw_card = record_text, record_card
+        self.view.draw(self.surface, self.pg.Rect(14, 14, 419, 324))
+        text = " ".join(label for label, _ in glyphs)
+        for field in (enemy.name, "HEALTH", "ARMOR", "PHASE", enemy.intent_label.upper(), "DAMAGE", enemy.telegraph, "CAN INTERRUPT", "Guarded 2", "Weakened 1"):
+            self.assertIn(field, text)
 
     def test_normal_mode_has_slow_live_actor_and_environment_motion(self):
         self.view.update(0, reduced_motion=False)
@@ -317,6 +518,69 @@ class BattleSDLTests(unittest.TestCase):
         self.assertLess(self.view._health_trails["enemy_0"], 12)
         self.view.update(0, reduced_motion=True)
         self.assertEqual(self.view._health_trails["enemy_0"], 6)
+
+    def test_displayed_player_health_changes_at_each_visible_incoming_impact(self):
+        self.view.queue_feedback(CombatFeedback("damage", "player", "enemy_0", 4, "Attack"))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 3, "Strike"))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_1", "player", 2, "Strike"))
+        final = replace(self.snapshot, player=replace(self.snapshot.player, hp=12), round_number=3)
+        self.view.set_snapshot(final)
+        self.assertEqual(self.view.displayed_player_health, (17, 24))
+        self.assertIn("Health 17/24", self.view._party_help("player"))
+        self.view.update(0.35)
+        self.assertEqual(self.view.displayed_player_health, (17, 24))
+        self.view.update(0.02)
+        self.assertEqual(self.view.displayed_player_health, (14, 24))
+        self.assertIn("Health 14/24", self.view._party_help("player"))
+        self.view.set_snapshot(final)  # Free inspection must preserve the animation.
+        self.assertEqual(self.view.displayed_player_health, (14, 24))
+        self.view.update(0.18)
+        self.assertEqual(self.view.displayed_player_health, (12, 24))
+        self.view.update(1)
+        self.assertEqual(self.view.displayed_player_health, (12, 24))
+        self.assertEqual(self.view.snapshot, final)
+
+    def test_displayed_player_health_preserves_exact_pre_hit_value_on_overkill(self):
+        initial = replace(self.snapshot, player=replace(self.snapshot.player, hp=2))
+        self.view.set_snapshot(initial)
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 9, "Final blow"))
+        self.view.queue_feedback(CombatFeedback("fallen", "enemy_0", "player", 0, "Fallen"))
+        self.view.set_snapshot(replace(initial, phase="defeat", player=replace(initial.player, hp=0)))
+        self.view.update(0.17)
+        self.assertEqual(self.view.displayed_player_health, (2, 24))
+        self.view.update(0.02)
+        self.assertEqual(self.view.displayed_player_health, (0, 24))
+
+    def test_displayed_player_health_shows_remedy_then_retaliation_and_bleeding(self):
+        self.view.queue_feedback(CombatFeedback("heal", "player", "player", 7, "Remedy"))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 4, "Strike"))
+        self.view.queue_feedback(CombatFeedback("damage", "player", "player", 1, "Bleeding"))
+        final = replace(self.snapshot, player=replace(self.snapshot.player, hp=19))
+        self.view.set_snapshot(final)
+        self.assertEqual(self.view.displayed_player_health, (24, 24))
+        self.view.update(0.37)
+        self.assertEqual(self.view.displayed_player_health, (19, 24))
+        self.view.update(0.91)  # The remedy popup expires before later damage.
+        self.assertEqual(self.view.displayed_player_health, (19, 24))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 2, "Next turn"))
+        self.view.set_snapshot(replace(final, player=replace(final.player, hp=17)))
+        self.assertEqual(self.view.displayed_player_health, (19, 24))
+        self.view.update(0.2)
+        self.assertEqual(self.view.displayed_player_health, (17, 24))
+
+    def test_reduced_motion_health_follows_quick_impacts_and_reset(self):
+        self.view.update(0, reduced_motion=True)
+        self.view.queue_feedback(CombatFeedback("defend", "player", "player", 1, "Defend"))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 2, "Strike"))
+        final = replace(self.snapshot, player=replace(self.snapshot.player, hp=15))
+        self.view.set_snapshot(final)
+        self.view.update(0.04, reduced_motion=True)
+        self.assertEqual(self.view.displayed_player_health, (17, 24))
+        self.view.update(0.02, reduced_motion=True)
+        self.assertEqual(self.view.displayed_player_health, (15, 24))
+        self.assertEqual(self.view.snapshot, final)
+        self.view.set_snapshot(None)
+        self.assertIsNone(self.view.displayed_player_health)
 
     def test_defensive_objective_does_not_advertise_unavailable_attacks(self):
         actions = tuple(action for action in self.snapshot.actions if action.id == "defend")

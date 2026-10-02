@@ -946,7 +946,7 @@ class PanelView:
                 companion = {"name": str(companion)}
             trust = _number(companion.get("trust"))
             present = companion.get("present", True)
-            status = str(companion.get("status", "Traveling with you" if present else "Elsewhere on the road"))
+            status = str(companion.get("status") or "").strip() or ("Traveling with you" if present else "Not traveling with you")
             trust_label = "Trusted" if trust >= 2 else "Steady" if trust >= 0 else "Wary"
             status_line = f"{status}  /  {trust_label} ({trust:+d})" if "trust" in companion else status
             top = y

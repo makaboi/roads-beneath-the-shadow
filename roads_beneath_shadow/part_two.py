@@ -27,6 +27,7 @@ from .content import (
 )
 from .models import VALID_SCENE_IDS, Enemy, GameState
 from .journey_artwork import LAST_LANTERN_ART
+from .story_choices import RefreshingOptions
 from .ui import Color, TerminalUI
 
 
@@ -930,7 +931,7 @@ class PartTwoEpisode:
             state.flags["part2_mara_left"] = True
             self.ui.narrate(
                 "At the refuge arch, Mara stops. 'I will not follow another keeper who leaves "
-                "chains unnamed.' Her steps turn back toward the prisoners' road."
+                "chains unnamed.' She turns away, intent on finding the prisoners."
             )
 
         state.play_minutes += 6
@@ -1340,17 +1341,13 @@ class PartTwoEpisode:
             )
         while True:
             topics: list[tuple[str, str]] = []
-            if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
-                topics.append(("mara", "Speak with Mara about the road after this one"))
-            if state.flags.get("part_two_tobin_present") and not state.flags.get("part2_vigil_tobin"):
-                topics.append(("tobin", "Help Tobin tend the lantern"))
-            if not state.flags.get("part2_vigil_calenor"):
-                topics.append(("calenor", "Sit beside Calenor for a moment"))
-            if self._can_rest_at_lantern(state):
-                amount = self._lantern_recovery(state)
-                topics.append(("rest", f"Rest and tend your wounds (recover up to {amount} Health and all Focus)"))
-            topics.append(("leave", "Enter the Last Seal"))
-            choice = self.story_choice("BEFORE THE LAST SEAL", [label for _key, label in topics])
+
+            def options() -> tuple[str, ...]:
+                nonlocal topics
+                topics = self._vigil_topics(state)
+                return tuple(label for _key, label in topics)
+
+            choice = self.story_choice("BEFORE THE LAST SEAL", RefreshingOptions(options))
             if choice is None:
                 return False
             topic = topics[choice - 1][0]
@@ -1361,6 +1358,20 @@ class PartTwoEpisode:
                 return False
             state.flags[f"part2_vigil_{topic}"] = True
             state.play_minutes += 6 if topic == "rest" else 2
+
+    def _vigil_topics(self, state: GameState) -> list[tuple[str, str]]:
+        topics: list[tuple[str, str]] = []
+        if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
+            topics.append(("mara", "Speak with Mara about the road after this one"))
+        if state.flags.get("part_two_tobin_present") and not state.flags.get("part2_vigil_tobin"):
+            topics.append(("tobin", "Help Tobin tend the lantern"))
+        if not state.flags.get("part2_vigil_calenor"):
+            topics.append(("calenor", "Sit beside Calenor for a moment"))
+        if self._can_rest_at_lantern(state):
+            amount = self._lantern_recovery(state)
+            topics.append(("rest", f"Rest and tend your wounds (recover up to {amount} Health and all Focus)"))
+        topics.append(("leave", "Enter the Last Seal"))
+        return topics
 
     @staticmethod
     def _can_rest_at_lantern(state: GameState) -> bool:

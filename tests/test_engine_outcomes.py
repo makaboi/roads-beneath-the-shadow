@@ -16,6 +16,77 @@ from tests.test_combat_turns import CombatViewUI
 
 
 class EngineOutcomeTests(unittest.TestCase):
+    def test_shadow_marked_ending_does_not_claim_a_fully_healed_traveler_is_wounded(self):
+        game = Game(TerminalUI(color=False, fast=True, output_fn=lambda _: None))
+        character = Character.from_origin("Arin", ORIGINS[0])
+        character.corruption = 3
+        game.state = GameState(character, scene="cliffhanger")
+
+        game._cliffhanger()
+
+        self.assertEqual(game.state.ending, "shadow_claim")
+        self.assertEqual(character.hp, character.max_hp)
+        title, prose = game._ending_copy()
+        self.assertEqual(title, "SHADOW-MARKED")
+        self.assertIn("You descend as the Black Rider", prose)
+        self.assertNotIn("wounded", prose)
+
+    def test_using_the_last_herb_in_inventory_refreshes_neds_rescue_routes_and_costs(self):
+        for origin in (0, 1):
+            for confirm_rescue in (False, True):
+                with self.subTest(origin=origin, confirm_rescue=confirm_rescue):
+                    menus = []
+                    inventory = []
+
+                    class RescueUtilityUI(TerminalUI):
+                        def __init__(self):
+                            super().__init__(color=False, fast=True, output_fn=lambda _: None)
+                            self.actions = iter(({"action": "use", "item_id": "healing_herb"}, {"action": "close"}))
+
+                        def choose_story(self, heading, options):
+                            if heading == "HOW DO YOU REACH NED?":
+                                # The actual rush costs two Health, creating a
+                                # legitimate opportunity to consume the herb.
+                                return 4
+                            self.assert_heading(heading)
+                            menus.append(tuple(options))
+                            return "i" if len(menus) == 1 else 1 if confirm_rescue else None
+
+                        @staticmethod
+                        def assert_heading(heading):
+                            if heading != "NED IS FADING":
+                                raise AssertionError(f"Unexpected story decision: {heading}")
+
+                        def show_panel(self, kind, data):
+                            if kind != "inventory":
+                                raise AssertionError(f"Unexpected panel: {kind}")
+                            inventory.append(data)
+                            return next(self.actions)
+
+                    game = Game(RescueUtilityUI())
+                    game.state = GameState(Character.from_origin("Arin", ORIGINS[origin]), scene="missing_watchman")
+                    rng_before = game.combat.rng.getstate()
+
+                    self.assertEqual(game._missing_watchman(), confirm_rescue)
+
+                    self.assertTrue(any("Healing Herb" in option for option in menus[0]))
+                    self.assertFalse(any("Healing Herb" in option for option in menus[1]))
+                    self.assertTrue(menus[1][0].startswith("Free him now"))
+                    self.assertTrue(any(item["id"] == "healing_herb" and item["count"] == 1 for item in inventory[0]["items"]))
+                    self.assertFalse(any(item["id"] == "healing_herb" for item in inventory[1]["items"]))
+                    character = game.state.character
+                    self.assertNotIn("healing_herb", character.inventory)
+                    self.assertEqual(character.hp, character.max_hp)
+                    self.assertTrue(game.state.flags["rushed_causeway"])
+                    self.assertTrue(game.state.flags["missing_watchman_approach_chosen"])
+                    self.assertFalse(game.state.flags.get("ned_stabilized", False))
+                    self.assertEqual(game.state.flags.get("ned_freed_before_combat", False), confirm_rescue)
+                    self.assertEqual(character.tobin_trust, 1 if confirm_rescue else 0)
+                    self.assertEqual((character.hope, character.corruption), (0, 0))
+                    self.assertEqual(game.state.play_minutes, 6 if confirm_rescue else 0)
+                    self.assertEqual(game.state.scene, "marsh_ambush" if confirm_rescue else "missing_watchman")
+                    self.assertEqual(game.combat.rng.getstate(), rng_before)
+
     def test_fellowship_copy_does_not_claim_tobin_descends_when_he_returns_with_ned(self):
         output = []
         game = Game(TerminalUI(color=False, fast=True, output_fn=output.append))

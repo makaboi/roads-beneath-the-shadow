@@ -591,6 +591,8 @@ class WorldView:
         self._inspection_resume: tuple[tuple[Any, ...], str] | None = None
         self._blocked_until = 0.0
         self._rect = pygame.Rect(0, 0, 0, 0)
+        self._inspection_rect = pygame.Rect(0, 0, 0, 0)
+        self._inspection_close_rect = pygame.Rect(0, 0, 0, 0)
         self._backgrounds: dict[str, Any] = {}
         self._atlas: Any = None
         self._motion_atlas: Any = None
@@ -600,6 +602,7 @@ class WorldView:
         self._font = load_font(pygame, 9)
         self._small_font = load_font(pygame, 8)
         self._inspection_fonts: dict[int, tuple[Any, Any]] = {}
+        self._inspection_footer_fonts: dict[int, Any] = {}
 
     def stop_moving(self) -> None:
         """Cancel held and planned movement when focus or a modal interrupts."""
@@ -643,8 +646,8 @@ class WorldView:
         """Suspend an inspection only for an explicitly read-only interruption.
 
         Returning utilities may create a new request identifier. The same
-        presentation, map and complete option list must still match before
-        the opened look is restored. A normal answer clears the suspension.
+        presentation, map and heading must match, together with the same
+        options or decision token. A normal answer clears the suspension.
         """
         if preserve_inspection and self._inspected_look and self._world_fingerprint:
             self._inspection_resume = (self._world_fingerprint, self._inspected_look.key)
@@ -700,7 +703,7 @@ class WorldView:
                 navigation_grid[y][x] = "N"
             self._navigation_spec = replace(spec, grid=_freeze(navigation_grid))
         identifier = getattr(request, "identifier", None)
-        fingerprint = (self._session_identifier, spec.key, tuple(request.options)) if spec else None
+        fingerprint = (self._session_identifier, spec.key, request.label.strip().upper(), tuple(request.options), context.get("decision_id")) if spec else None
         if identifier != self._request_identifier or (spec and fingerprint != self._world_fingerprint):
             self._path.clear()
             self._held.clear()
@@ -719,7 +722,7 @@ class WorldView:
         else:
             if self._inspection_resume:
                 saved_fingerprint, look_key = self._inspection_resume
-                if saved_fingerprint == fingerprint:
+                if self._same_inspection_request(saved_fingerprint, fingerprint):
                     self._inspected_look = next((look for look in spec.looks if look.key == look_key), None)
                 self._inspection_resume = None
             self._world_fingerprint = fingerprint
@@ -754,6 +757,14 @@ class WorldView:
                 taken.add(self._tile(position))
                 self._followers.append(_Follower(name, position))
         return self.active
+
+    @staticmethod
+    def _same_inspection_request(saved: tuple[Any, ...], current: tuple[Any, ...] | None) -> bool:
+        """Utilities can refresh live labels; Continue can renew the token."""
+        return current is not None and saved[:3] == current[:3] and (
+            saved[3] == current[3]
+            or (saved[4] is not None and current[4] is not None and saved[4] == current[4])
+        )
 
     def _reserved_tiles(self) -> set[tuple[int, int]]:
         if not self._navigation_spec:
@@ -901,10 +912,10 @@ class WorldView:
             target = next((bound.point.name for bound in self.points if bound.point.key == self._clicked_point), None)
             if not target and self.spec:
                 target = next((look.name for look in self.spec.looks if "look:" + look.key == self._clicked_point), None)
-            return f"Walking to {target or 'your destination'}. WASD takes control."
+            return f"Walking to {target or 'your destination'}."
         focus = self._focus()
         if isinstance(focus, BoundPoint):
-            return f"[E / ENTER] {focus.option}"
+            return f"[E / ENTER] {focus.point.name}"
         if isinstance(focus, WorldLook):
             return f"[E / ENTER] Look at {focus.name}"
         if self._hovered:
@@ -1059,6 +1070,15 @@ class WorldView:
             if event.key in movement:
                 self._held.add(event.key)
                 return True, None
+            if event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE, pg.K_RIGHT):
+                if self._inspected_look:
+                    self._inspected_look = None
+                    return True, None
+                if self._path:
+                    # Generic confirmation belongs to the active walk,
+                    # rather than a previously selected side-menu choice.
+                    # Explicit menu focus is handled before world input.
+                    return True, None
             if event.key in (pg.K_e, pg.K_RETURN, pg.K_KP_ENTER):
                 if self._inspected_look:
                     self._inspected_look = None
@@ -1083,6 +1103,12 @@ class WorldView:
             local = self._local_position(event.pos)
             if local is None:
                 return False, None
+            if self._inspected_look and self._inspection_rect.collidepoint(local):
+                # The visible popup owns its hit area; its prose must never
+                # click through to an obscured map choice or destination.
+                if self._inspection_close_rect.collidepoint(local):
+                    self._inspected_look = None
+                return True, None
             self._inspected_look = None
             bound = self._point_at(local)
             if bound:
@@ -1324,6 +1350,8 @@ class WorldView:
             caption = f"LOOK  {bound.name}"
         else:
             caption = ""
+        self._inspection_rect = pg.Rect(0, 0, 0, 0)
+        self._inspection_close_rect = pg.Rect(0, 0, 0, 0)
         if self._inspected_look:
             caption = ""
         if caption:
@@ -1332,22 +1360,34 @@ class WorldView:
             pg.draw.rect(self._native, (13, 18, 22), strip)
             self._native.blit(label, label.get_rect(center=strip.center))
         if self._inspected_look:
-            font_size = {"large": 11, "larger": 12}.get(text_size, 10)
+            font_size = {"large": 14, "larger": 16}.get(text_size, 12)
             if font_size not in self._inspection_fonts:
                 self._inspection_fonts[font_size] = (load_font(pg, font_size), load_font(pg, font_size, bold=True))
             body_font, title_font = self._inspection_fonts[font_size]
+            footer_size = font_size - 2
+            if footer_size not in self._inspection_footer_fonts:
+                self._inspection_footer_fonts[footer_size] = load_font(pg, footer_size)
+            footer_font = self._inspection_footer_fonts[footer_size]
             lines = wrap_text(self._inspected_look.text, body_font, 266)
+            title_lines = wrap_text(self._inspected_look.name.upper(), title_font, 250)
             line_height = body_font.get_linesize() + 1
-            body_top = title_font.get_linesize() + 12
-            footer_height = self._small_font.get_linesize() + 10
+            body_top = len(title_lines) * title_font.get_linesize() + 12
+            footer_height = footer_font.get_linesize() + 10
             height = body_top + len(lines) * line_height + footer_height
             bubble = pg.Rect(20, 211 - height, 280, height)
+            self._inspection_rect = bubble.copy()
+            self._inspection_close_rect = pg.Rect(bubble.right - 18, bubble.top + 4, 13, 13)
             pg.draw.rect(self._native, (13, 19, 24), bubble)
             pg.draw.rect(self._native, (115, 145, 125), bubble, 1)
-            self._native.blit(title_font.render(self._inspected_look.name.upper(), False, (222, 185, 111)), (bubble.left + 7, bubble.top + 6))
+            pg.draw.rect(self._native, (115, 145, 125), self._inspection_close_rect, 1)
+            close = self._inspection_close_rect
+            pg.draw.line(self._native, (222, 185, 111), (close.left + 4, close.top + 4), (close.right - 5, close.bottom - 5))
+            pg.draw.line(self._native, (222, 185, 111), (close.right - 5, close.top + 4), (close.left + 4, close.bottom - 5))
+            for index, title in enumerate(title_lines):
+                self._native.blit(title_font.render(title, False, (222, 185, 111)), (bubble.left + 7, bubble.top + 6 + index * title_font.get_linesize()))
             for index, text in enumerate(lines):
                 self._native.blit(body_font.render(text, False, (220, 214, 186)), (bubble.left + 7, bubble.top + body_top + index * line_height))
-            self._native.blit(self._small_font.render("E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - self._small_font.get_linesize() - 6))
+            self._native.blit(footer_font.render("Click X / E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - footer_font.get_linesize() - 6))
         target_rect = pg.Rect(rect)
         scale = min(target_rect.width / WORLD_SIZE[0], target_rect.height / WORLD_SIZE[1])
         if scale >= 2:

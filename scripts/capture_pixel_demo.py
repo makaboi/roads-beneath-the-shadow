@@ -203,6 +203,7 @@ def capture_montage(output: Path, *, fps: int = 12, maps: tuple[str, ...] | None
 
                 worker = threading.Thread(target=story_worker, name="roads-montage-story", daemon=True)
                 worker.start()
+                setup_choices = []
 
                 def tick() -> None:
                     for event in pg.event.get():
@@ -222,6 +223,17 @@ def capture_montage(output: Path, *, fps: int = 12, maps: tuple[str, ...] | None
                         window.handle_event(pg.event.Event(pg.KEYDOWN, key=pg.K_RETURN, unicode="\r", mod=0))
                     elif window.world.active and window.world.map_key == map_key:
                         break
+                    elif (
+                        map_key == "refuge" and not setup_choices
+                        and window.request and window.request.story
+                        and window.request.label == "MARA TOUCHES THE COLD SHACKLE"
+                        and window.request.options == ("Share the forge truth with Mara", "Keep moving")
+                    ):
+                        # This known prelude keeps its truth choice local
+                        # until the later route is answered. Use the normal
+                        # input handler; no route or reward is submitted.
+                        setup_choices.append({"heading": window.request.label, "answer": 1, "option": window.request.options[0]})
+                        window.handle_event(pg.event.Event(pg.KEYDOWN, key=pg.K_1, unicode="1", mod=0))
                     elif window.request and window.request.story:
                         raise RuntimeError(f"Unexpected decision before {map_key}: {window.request.label}")
                 else:
@@ -274,7 +286,7 @@ def capture_montage(output: Path, *, fps: int = 12, maps: tuple[str, ...] | None
                         frames.append(frame.resize((320, 240), Image.Resampling.NEAREST))
                         next_sample += 1 / fps
                     validate()
-                shots.append({"map": map_key, "scene": scene, "origin": state.character.origin, "captured_start_frame": first_frame, "captured_frames": len(frames) - first_frame, "inspection": inspected, "story_state_unchanged": True, "party": list(world.party_positions), "world_rect": tuple(world._rect)})
+                shots.append({"map": map_key, "scene": scene, "origin": state.character.origin, "captured_start_frame": first_frame, "captured_frames": len(frames) - first_frame, "setup_choices": setup_choices, "inspection": inspected, "story_state_unchanged": True, "party": list(world.party_positions), "world_rect": tuple(world._rect)})
                 print(f"Captured {map_key}: {len(frames) - first_frame} actual frames", flush=True)
                 # Cancel only after the captured clip; no paid story choice.
                 window.answer(None)

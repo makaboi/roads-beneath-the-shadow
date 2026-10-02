@@ -10,7 +10,9 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from roads_beneath_shadow.pixel_panels import PanelView, _wrap
-from roads_beneath_shadow.player_view import background_snapshot, chronicle_snapshot
+from roads_beneath_shadow.content import ORIGINS, QUEST_REACH_CALENOR
+from roads_beneath_shadow.models import Character, GameState
+from roads_beneath_shadow.player_view import background_snapshot, chronicle_snapshot, player_snapshot
 from roads_beneath_shadow.profile import PlayerProfile
 
 
@@ -166,6 +168,33 @@ class PixelPanelTests(unittest.TestCase):
             self.assertEqual(self.panel.scroll, self.panel.max_scroll)
             self.assertEqual(self.key(self.pg.K_RETURN), (True, {"action": "close"}))
             self.assertFalse(self.panel.active)
+
+    def test_character_fate_cards_show_recorded_whereabouts_and_close_without_changing_the_journey(self):
+        state = GameState(Character.from_origin("Mira", ORIGINS[1]), scene="complete", chapter=2)
+        state.completed_quests.append(QUEST_REACH_CALENOR)
+        state.flags.update({"part2_mara_left": True, "tobin_stays_at_threshold": True, "part2_calenor_rebound": True})
+        before = state.to_dict()
+        drawn = []
+        paragraph = self.panel._paragraph
+
+        def capture(screen, text, *args, **kwargs):
+            drawn.append(str(text))
+            return paragraph(screen, text, *args, **kwargs)
+
+        self.panel._paragraph = capture
+        for size in ((760, 560), (1920, 1080)):
+            with self.subTest(size=size):
+                self.screen = self.pg.Surface(size)
+                self.rect = self.screen.get_rect()
+                self.panel.open("character", player_snapshot(state))
+                self.panel.draw(self.screen, self.rect, text_size="larger")
+                self.key(self.pg.K_END)
+                self.panel.draw(self.screen, self.rect, text_size="larger")
+                for fact in ("Left at the burned refuge to seek the prisoners", "Remained at the threshold with Ned's lantern", "Bound again at the Last Seal"):
+                    self.assertTrue(any(fact in text for text in drawn), fact)
+                self.assertFalse(any("Elsewhere on the road" in text for text in drawn))
+                self.assertEqual(self.click("close"), (True, {"action": "close"}))
+                self.assertEqual(state.to_dict(), before)
 
     def test_journal_tabs_show_active_completed_and_clues_with_aliases(self):
         self.panel.open("journal", {"active_quests": ["Active"], "completed_quests": ["Done"], "journal": ["Clue"]})

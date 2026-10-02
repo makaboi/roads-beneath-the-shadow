@@ -171,7 +171,7 @@ ENDING_TEXT = {
     ),
     "shadow_claim": (
         "SHADOW-MARKED",
-        "You descend wounded while the Black Rider claims the threshold behind you. The star-key "
+        "You descend as the Black Rider claims the threshold behind you. The star-key "
         "burns with a mark it did not bear before, and the Dead Road now knows both your name and your fear.",
     ),
     "living_road": (

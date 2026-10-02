@@ -10,6 +10,7 @@ import textwrap
 import time
 from collections.abc import Callable, Sequence
 from numbers import Real
+from unicodedata import decimal
 
 from .lighting import ASCII_RAMP, Color, art_ink
 
@@ -24,6 +25,24 @@ TEXT_SPEED_DELAYS: dict[str, float] = {
 
 class InputClosed(Exception):
     """Raised when the terminal input stream is closed."""
+
+
+def choice_number(text: str, option_count: int) -> int | None:
+    """Read a bounded menu number without converting an unbounded integer.
+
+    Unicode decimal digits share the ordinary numbered-choice behavior.
+    Superscripts and other numeric-looking text are unrelated input, and
+    oversized pasted numbers must not interrupt the pending choice.
+    """
+
+    if option_count < 1 or not text.isdecimal():
+        return None
+    value = 0
+    for character in text:
+        value = value * 10 + decimal(character)
+        if value > option_count:
+            return None
+    return value if value >= 1 else None
 
 
 class TerminalUI:
@@ -391,8 +410,8 @@ class TerminalUI:
                 return selected + 1
             elif allow_back and normalized in {"a", "h", "b", "q", "\x1b[d", "\x1b"}:
                 return None
-            elif normalized.isdigit() and 1 <= int(normalized) <= len(options):
-                return int(normalized)
+            elif (number := choice_number(normalized, len(options))) is not None:
+                return number
             else:
                 continue
             updated = self._choice_lines(title, options, selected, allow_back, raw_keys=True)
@@ -419,8 +438,8 @@ class TerminalUI:
             answer = self.prompt("Enter your choice: ").lower()
             if allow_back and answer in {"b", "back", "q", "a", "h", "\x1b[d"}:
                 return None
-            if answer.isdigit() and 1 <= int(answer) <= len(options):
-                return int(answer)
+            if (number := choice_number(answer, len(options))) is not None:
+                return number
             if self.keyboard_navigation:
                 if answer in {"w", "k", "up", "\x1b[a"}:
                     selected = (selected - 1) % len(options)

@@ -38,7 +38,7 @@ class RecoveryUI(TerminalUI):
             return None
         return next(index + 1 for index, option in enumerate(options) if label in option)
 
-    def toast(self, text):
+    def toast(self, text, *, kind="notice"):
         self.toasts.append(text)
 
     def pause(self, message=""):
@@ -154,7 +154,7 @@ class CheckpointIntegrationTests(unittest.TestCase):
             game._run_journey()
         scene.assert_called_once()
         self.assertIn("Checkpoint could not be saved: disk full", "\n".join(ui.output))
-        self.assertFalse(ui.toasts)
+        self.assertEqual(ui.toasts, ["Checkpoint could not be saved: disk full"])
 
     def test_main_menu_can_resume_checkpoint_without_touching_manual_slots(self):
         saved = self.state("Mira", scene="north_gate")

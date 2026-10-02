@@ -27,7 +27,7 @@ from .pixel_world import WorldView
 from .player_view import player_snapshot
 from .soundscapes import SoundscapePlayer
 from .text_input import TextEntry
-from .ui import InputClosed, TerminalUI
+from .ui import InputClosed, TerminalUI, choice_number
 
 
 INK = (16, 21, 27)
@@ -37,6 +37,7 @@ AMBER = (219, 168, 92)
 TEAL = (105, 156, 151)
 MUTED = (159, 161, 150)
 RED = (219, 132, 113)
+SCENE_CACHE_BYTES = 64 * 1024 * 1024
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 STORY_COMMANDS = (("i", "Inventory"), ("c", "Character"), ("j", "Journal"), ("s", "Save"), ("r", "Road map"), ("m", "Main menu"), ("p", "Pause"), ("h", "Controls"))
 UTILITY_COMMANDS = tuple(command for command in STORY_COMMANDS if command[0] in {"i", "c", "j", "s", "r", "p"})
@@ -80,6 +81,7 @@ class PixelUI(TerminalUI):
         self._creation_source: Any = None
         self._state_reference: Any = None
         self._presentation_number = 0
+        self._transcript_state_reference: Any = None
 
     @property
     def width(self) -> int:
@@ -95,6 +97,13 @@ class PixelUI(TerminalUI):
     def _post(self, kind: str, **data: Any) -> None:
         if self.closed.is_set():
             raise InputClosed
+        state = self.state_provider()
+        if state is not None and (self._transcript_state_reference is None or self._transcript_state_reference() is not state):
+            # Post the boundary before the first output from an accepted new
+            # traveler or loaded checkpoint. Continuing and canceling creation
+            # keep the same state object and preserve the current archive.
+            self._transcript_state_reference = ref(state)
+            self.events.put(UIEvent("journey"))
         self.events.put(UIEvent(kind, data))
 
     def _request(self, kind: str, label: str, options: Sequence[str] = (), *, allow_back: bool = False, story: bool = False, context: dict[str, Any] | None = None) -> Any:
@@ -205,6 +214,12 @@ class PixelUI(TerminalUI):
 
     def toast(self, text: str, *, kind: str = "notice") -> None:
         self._post("toast", text=text, toast_kind=kind)
+
+    def begin_creation(self) -> None:
+        self._post("creation_begin")
+
+    def cancel_creation(self) -> None:
+        self._post("creation_cancel")
 
     def prompt(self, label: str = "> ") -> str:
         limit = 24 if label.strip() == "Traveler's name:" else 64
@@ -323,6 +338,7 @@ class PixelWindow:
         self._saved_journey: str | None = None
         self._saved_decision: tuple[Any, ...] | None = None
         self._saved_navigation: tuple[int, int, bool] | None = None
+        self._creation_archive_start: int | None = None
         self._read_boundaries: Any = WeakKeyDictionary()
         self._page_token: Any = None
         self._page_reveal = 0.0
@@ -383,6 +399,18 @@ class PixelWindow:
             except Empty:
                 break
             data = event.data
+            if event.kind == "journey":
+                self._reset_journey_presentation()
+            elif event.kind == "creation_begin":
+                self._creation_archive_start = len(self.history)
+            elif event.kind == "creation_cancel":
+                if self._creation_archive_start is not None:
+                    del self.history[self._creation_archive_start:]
+                    self._reveals = {index: value for index, value in self._reveals.items() if index < self._creation_archive_start}
+                    self._text_layout.clear()
+                    self._history_layout_key = None
+                    self.archive.set_entries(self.history)
+                self._creation_archive_start = None
             if event.kind in {"clear", "title", "art", "text"}:
                 self.narrative.feed(event)
             if event.kind == "clear":
@@ -420,7 +448,7 @@ class PixelWindow:
                     self.panels.close()
                     restored_narrative = False
                     if self.request.story and self._saved_narrative is not None:
-                        if self._decision_key(self.request, self.hud) == self._saved_decision:
+                        if self._same_decision(self._decision_key(self.request, self.hud), self._saved_decision):
                             self.narrative = self._saved_narrative
                             self.narrative.discard_pending()
                             restored_narrative = True
@@ -491,6 +519,42 @@ class PixelWindow:
                 self.error = data.get("error")
                 if self.error:
                     self.history.append((self.error, Color.RED, True))
+                    self.history_scroll = 0
+                    self.narrative = NarrativeDirector()
+                    self._combat_active = False
+                    self.world.set_request(None)
+                    self.panels.close()
+                    self.archive.close()
+                    self.transcript_open = False
+                else:
+                    self.ui.close()
+
+    def _reset_journey_presentation(self) -> None:
+        self.history.clear()
+        self.history_scroll = 0
+        self._text_layout.clear()
+        self._history_layout_key = None
+        self._reveals.clear()
+        self.archive.reset()
+        self.transcript_open = False
+        self.narrative = NarrativeDirector()
+        self._saved_narrative = None
+        self._saved_decision = None
+        self._saved_navigation = None
+        self._creation_archive_start = None
+        self._read_boundaries.clear()
+        self._page_token = None
+        self._page_reveal = 0.0
+        self.world.set_request(None)
+        self.battle.set_snapshot(None)
+        self._battle_log.clear()
+        self._turn_summary = CombatTurnSummary()
+        self._combat_active = False
+        self._battle_transition_hold = False
+        self._observed_details.clear()
+        self._observation_session = None
+        self._toasts.clear()
+        self.hud = None
 
     @property
     def reading(self) -> bool:
@@ -526,8 +590,14 @@ class PixelWindow:
 
     @staticmethod
     def _decision_key(request: InputRequest, hud: dict[str, Any] | None) -> tuple[Any, ...]:
-        identity = request.context.get("presentation_id", request.context.get("decision_id"))
-        return ((hud or {}).get("journey_id"), request.context.get("scene", (hud or {}).get("scene")), request.label, request.options, identity)
+        return ((hud or {}).get("journey_id"), request.context.get("scene", (hud or {}).get("scene")), request.label,
+                request.context.get("presentation_id"), request.options, request.context.get("decision_id"))
+
+    @staticmethod
+    def _same_decision(current: tuple[Any, ...], saved: tuple[Any, ...] | None) -> bool:
+        if saved is None or current[:4] != saved[:4]:
+            return False
+        return current[4] == saved[4] or (current[5] is not None and current[5] == saved[5])
 
     def _page_source_offset(self, page: Any) -> int:
         paragraphs = self.narrative.beats[page.beat_index].paragraphs
@@ -755,7 +825,7 @@ class PixelWindow:
             self._sync_world()
             return
         if self.world.active and not self.transcript_open:
-            if self._menu_focused and not self.world.inspection_open and event.type == pg.KEYDOWN and event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE):
+            if self._menu_focused and not self.world.inspection_open and event.type == pg.KEYDOWN and event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE, pg.K_RIGHT):
                 self._choose(self.selected + 1)
                 return
             was_inspecting = self.world.inspection_open
@@ -785,10 +855,11 @@ class PixelWindow:
                 return
         if event.type == pg.MOUSEMOTION:
             hovered = next((answer - 1 for rect, answer in self.choice_hits if isinstance(answer, int) and rect.collidepoint(event.pos)), None)
-            if hovered is not None and hovered != self.selected:
-                self.selected = hovered
+            if hovered is not None:
                 self._menu_focused = True
-                self.soundscape.play_effect("hover")
+                if hovered != self.selected:
+                    self.selected = hovered
+                    self.soundscape.play_effect("hover")
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             for rect, answer in self.choice_hits + self.utility_hits:
                 if rect.collidepoint(event.pos):
@@ -868,8 +939,8 @@ class PixelWindow:
             self._choose(self.selected + 1)
         elif request.allow_back and key in (pg.K_LEFT, pg.K_a, pg.K_b):
             self.answer(None)
-        elif character.isdigit() and character != "0" and int(character) <= len(request.options):
-            self._choose(int(character))
+        elif (number := choice_number(character, len(request.options))) is not None:
+            self._choose(number)
 
     def _choose(self, answer: int) -> None:
         if self.request and self.request.kind == "combat" and self.battle.snapshot:
@@ -964,10 +1035,23 @@ class PixelWindow:
         self._text("PIXEL EDITION  /  PARTS I & II", (margin, 49), TEAL, self.small_font)
         if self.hud:
             hud = self.hud
-            self._text(f"{hud['name']}  |  Part {hud['chapter']}", (right_x, 19), PARCHMENT, self.small_font)
-            self._text(f"HP {hud['hp']}/{hud['max_hp']}   FOCUS {hud['focus']}/{hud['max_focus']}", (right_x, 40), TEAL, self.small_font)
+            hp, max_hp = hud['hp'], hud['max_hp']
+            focus, max_focus = hud['focus'], hud['max_focus']
+            if self._combat_active and not self.reading and self.battle.snapshot is not None:
+                visible_health = self.battle.displayed_player_health
+                if visible_health is not None:
+                    hp, max_hp = visible_health
+                focus, max_focus = self.battle.snapshot.player.focus, self.battle.snapshot.player.max_focus
+            name = hud['name']
+            suffix = f"  |  Part {hud['chapter']}"
+            if self.small_font.size(name + suffix)[0] > right_width:
+                while name and self.small_font.size(name + "…" + suffix)[0] > right_width:
+                    name = name[:-1]
+                name += "…"
+            self._text(name + suffix, (right_x, 19), PARCHMENT, self.small_font)
+            self._text(f"HP {hp}/{max_hp}   FOCUS {focus}/{max_focus}", (right_x, 40), TEAL, self.small_font)
             meter_width = max(60, (right_width - 12) // 2)
-            for x, value, maximum, color in ((right_x, hud['hp'], hud['max_hp'], AMBER), (right_x + meter_width + 12, hud['focus'], hud['max_focus'], TEAL)):
+            for x, value, maximum, color in ((right_x, hp, max_hp, AMBER), (right_x + meter_width + 12, focus, max_focus, TEAL)):
                 pg.draw.rect(self.screen, PANEL, (x, 59, meter_width, 5))
                 pg.draw.rect(self.screen, color, (x, 59, int(meter_width * max(0, min(1, value / max(1, maximum)))), 5))
             self._text(f"HOPE {hud['hope']}   SHADOW {hud['corruption']}", (right_x, 70), MUTED, self.small_font)
@@ -983,7 +1067,7 @@ class PixelWindow:
             self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion, text_size=self.ui.text_size)
         elif self._combat_active and not self.reading and self.battle.snapshot is not None:
             self.battle.set_scene(self.scene)
-            self.battle.draw(self.screen, inner, now)
+            self.battle.draw(self.screen, inner, now, text_size=self.ui.text_size)
         elif self.scene is not None:
             sw, sh = self.scene.get_size()
             # Integer enlargement at the default size; smaller windows still
@@ -993,11 +1077,17 @@ class PixelWindow:
                 scale = int(scale)
             target = (max(1, int(sw * scale)), max(1, int(sh * scale)))
             cache_key = (self.scene_key, target)
-            if cache_key not in self._scaled_scenes:
-                if len(self._scaled_scenes) >= 24:
-                    self._scaled_scenes.clear()
-                self._scaled_scenes[cache_key] = pg.transform.scale(self.scene, target)
-            picture = self._scaled_scenes[cache_key]
+            picture = self._scaled_scenes.pop(cache_key, None)
+            if picture is None:
+                picture = pg.transform.scale(self.scene, target)
+                self._scaled_scenes[cache_key] = picture
+                while len(self._scaled_scenes) > 1 and (
+                    len(self._scaled_scenes) > 24 or
+                    sum(surface.get_pitch() * surface.get_height() for surface in self._scaled_scenes.values()) > SCENE_CACHE_BYTES
+                ):
+                    self._scaled_scenes.pop(next(iter(self._scaled_scenes)))
+            else:
+                self._scaled_scenes[cache_key] = picture
             picture_rect = picture.get_rect(center=inner.center)
             self.screen.blit(picture, picture_rect)
             if self.ui.motion_enabled:
@@ -1009,7 +1099,7 @@ class PixelWindow:
         self._render_history()
         right = pg.Rect(right_x, top, right_width, available)
         self._panel(right)
-        label = "Resolving the encounter" if self._battle_transition_hold else (self.heading if self.reading else (self.request.label if self.request is not None else ("JOURNEY COMPLETE" if self.finished else self.heading)))
+        label = "Resolving the encounter" if self._battle_transition_hold else (self.heading if self.reading else (self.request.label if self.request is not None else (("THE JOURNEY STOPPED" if self.error else "JOURNEY COMPLETE") if self.finished else self.heading)))
         label_lines = wrap_pixels(label.strip(), self.font, right.width - 32)
         label_y = right.top + 17
         for line in label_lines:
@@ -1051,8 +1141,11 @@ class PixelWindow:
         elif not self.reading and request is not None and request.kind == "pause":
             self._render_continue("Continue", self.menu_rect.top + 12)
         elif self.finished:
-            self._text("May a star shine", (self.menu_rect.left + 6, self.menu_rect.top + 22), TEAL)
-            self._text("upon your road.", (self.menu_rect.left + 6, self.menu_rect.top + 47), TEAL)
+            if self.error:
+                self._text("Details are in Archive.", (self.menu_rect.left + 6, self.menu_rect.top + 22), PARCHMENT, self.small_font)
+            else:
+                self._text("May a star shine", (self.menu_rect.left + 6, self.menu_rect.top + 22), TEAL)
+                self._text("upon your road.", (self.menu_rect.left + 6, self.menu_rect.top + 47), TEAL)
             self._text("Return or Esc to close", (self.menu_rect.left + 6, self.menu_rect.top + 95), MUTED, self.small_font)
         if self.reading:
             footer = "SPACE / ENTER Read   BACKSPACE Previous   TAB Archive   F1 Controls   F11 Fullscreen"
@@ -1187,8 +1280,6 @@ class PixelWindow:
             self._text(line, (rect.left + 16, y), color_map.get(color, PARCHMENT))
             y += self.line_height
         self.screen.set_clip(None)
-        if maximum_scroll:
-            self._text(f"STORY  {end}/{len(self._text_layout)}", (rect.right - 145, rect.bottom - 18), TEAL, self.small_font)
 
     def _finish_narration(self) -> None:
         self._reveals.clear()

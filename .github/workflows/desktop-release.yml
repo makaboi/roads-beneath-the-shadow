@@ -23,6 +23,7 @@ on:
       - Play Roads Beneath the Shadow.command
       - README.md
       - CHANGELOG.md
+      - assets/**
       - roads_beneath_shadow/**
       - tests/**
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from uuid import uuid4
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from .artwork import (
     ANCIENT_ROAD_DISCOVERY_ART,
@@ -63,6 +63,7 @@ from .combat import (
     orc_captain,
     orc_scout,
 )
+from .story_choices import RefreshingOptions
 from .checkpoint import CheckpointManager
 from .content import (
     CHAPTER_ONE_CHOICES,
@@ -80,7 +81,7 @@ from .part_two import PartTwoEpisode, begin_part_two, part_two_ending_breakdown
 from .profile import ACHIEVEMENTS, PlayerProfile, ProfileManager
 from .savegame import SaveManager
 from .settings import SettingsManager, UserSettings
-from .ui import Color, TerminalUI
+from .ui import Color, TerminalUI, choice_number
 
 
 DIFFICULTY_MODES = {
@@ -204,6 +205,16 @@ class Game:
             if confirm != 2:
                 self.ui.write("Your current journey has been kept.", color=Color.YELLOW)
                 return False
+        begin_creation = getattr(self.ui, "begin_creation", None)
+        if callable(begin_creation):
+            begin_creation()
+
+        def cancel_creation() -> bool:
+            cancel = getattr(self.ui, "cancel_creation", None)
+            if callable(cancel):
+                cancel()
+            return False
+
         self.ui.clear()
         self.ui.title("WHO WALKS THE ROAD?")
         self.ui.narrate(
@@ -214,7 +225,7 @@ class Game:
             name_prompt = getattr(self.ui, "choose_name", self.ui.prompt)
             name = name_prompt("Traveler's name: ")
             if name is None:
-                return False
+                return cancel_creation()
             name = name.strip()
             if 1 <= len(name) <= 24 and name.isprintable():
                 break
@@ -232,12 +243,12 @@ class Game:
                 response = background_choice(background_snapshot())
                 if isinstance(response, dict):
                     if response.get("action") == "close":
-                        return False
+                        return cancel_creation()
                     selected = next((index for index, item in enumerate(ORIGINS, 1) if item.origin_id == response.get("origin_id")), None)
                 else:
                     selected = response
                 if selected is None:
-                    return False
+                    return cancel_creation()
                 if type(selected) is not int or not 1 <= selected <= len(ORIGINS):
                     self.ui.write("Choose one of the three backgrounds.", color=Color.RED)
                     continue
@@ -381,7 +392,11 @@ class Game:
         try:
             path = self.checkpoints.record(self.state)
         except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError) as error:
-            self.ui.write(f"Checkpoint could not be saved: {error}", color=Color.YELLOW)
+            notice = f"Checkpoint could not be saved: {error}"
+            self.ui.write(notice, color=Color.YELLOW)
+            toast = getattr(self.ui, "toast", None)
+            if callable(toast):
+                toast(notice, kind="error")
             return
         toast = getattr(self.ui, "toast", None)
         if callable(toast) and self._checkpoint_stamp(path) != before:
@@ -1434,21 +1449,26 @@ class Game:
             )
             self.state.flags["missing_watchman_approach_chosen"] = True
 
-        if not self.state.flags.get("missing_watchman_rescue_chosen"):
-            rescue_options = []
+        while not self.state.flags.get("missing_watchman_rescue_chosen"):
             rescue_routes = []
-            if character.origin == "healers_apprentice":
-                rescue_options.append("Set Ned's leg and bind the wound with your healer's training")
-                rescue_routes.append("heal_skill")
-            if character.inventory.get("healing_herb", 0):
-                rescue_options.append("Use one Healing Herb to steady Ned")
-                rescue_routes.append("herb")
-            rescue_options.extend([
-                "Free him now and have Tobin defend him during the fight",
-                "Leave him concealed until the enemies are defeated",
-            ])
-            rescue_routes.extend(["free_now", "hide"])
-            rescue = self._story_choice("NED IS FADING", rescue_options)
+
+            def rescue_options():
+                options = []
+                rescue_routes.clear()
+                if character.origin == "healers_apprentice":
+                    options.append("Set Ned's leg and bind the wound with your healer's training")
+                    rescue_routes.append("heal_skill")
+                if character.inventory.get("healing_herb", 0):
+                    options.append("Use one Healing Herb to steady Ned")
+                    rescue_routes.append("herb")
+                options.extend([
+                    "Free him now and have Tobin defend him during the fight",
+                    "Leave him concealed until the enemies are defeated",
+                ])
+                rescue_routes.extend(["free_now", "hide"])
+                return options
+
+            rescue = self._story_choice("NED IS FADING", RefreshingOptions(rescue_options))
             if rescue is None:
                 return False
             route = rescue_routes[rescue - 1]
@@ -1457,7 +1477,9 @@ class Game:
                 character.tobin_trust += 2
                 character.hope += 1
             elif route == "herb":
-                character.remove_item("healing_herb")
+                if not character.remove_item("healing_herb"):
+                    self.ui.write("You no longer have a Healing Herb. Choose another way to help Ned.", color=Color.YELLOW)
+                    continue
                 self.state.flags["ned_stabilized"] = True
                 character.tobin_trust += 2
                 character.hope += 1
@@ -2191,16 +2213,17 @@ class Game:
             self.ui.write(f"{marker} {description}")
         self.ui.pause()
 
-    def _story_choice(self, heading: str, options: Sequence[str]) -> int | None:
-        self._active_decision = {"heading": heading, "options": tuple(options)}
+    def _story_choice(self, heading: str, options: Sequence[str] | Callable[[], Sequence[str]]) -> int | None:
         self.ui.story_decision_token = uuid4().hex
         while True:
+            current_options = tuple(options() if callable(options) else options)
+            self._active_decision = {"heading": heading, "options": current_options}
             # Exploration and conversation loops may finish several choices
             # without changing the scene ID. Each new decision is a safe stop.
             self._record_checkpoint()
             graphical_choice = getattr(self.ui, "choose_story", None)
             if graphical_choice is not None:
-                selected = graphical_choice(heading, options)
+                selected = graphical_choice(heading, current_options)
                 if selected is None:
                     return None
                 answer = str(selected).lower()
@@ -2209,13 +2232,14 @@ class Game:
                 self.ui.rule()
                 self.ui.write(heading.center(min(72, self.ui.width)), color=Color.YELLOW, bold=True)
                 self.ui.rule()
-                for index, option in enumerate(options, 1):
+                for index, option in enumerate(current_options, 1):
                     self.ui.write(f"[{index}] {option}")
                 self.ui.write("[I] Inventory  [C] Character  [J] Journal  [S] Save  [M] Main menu", color=Color.DIM)
                 self.ui.write("[R] Road map  [P] Pause  [H] Controls", color=Color.DIM)
                 answer = self.ui.prompt("Enter your choice: ").lower()
-            if answer.isdigit() and 1 <= int(answer) <= len(options):
-                return int(answer)
+            number = choice_number(answer, len(current_options))
+            if number is not None:
+                return number
             if answer in {"i", "inventory"}:
                 self._inventory_menu()
             elif answer in {"c", "character", "status"}:
@@ -2397,9 +2421,17 @@ class Game:
         try:
             self.saves.save(selected, self.state)
         except (OSError, ValueError, TypeError) as error:
-            self.ui.write(f"Could not save the journey: {error}", color=Color.RED)
+            notice = f"Could not save the journey: {error}"
+            self.ui.write(notice, color=Color.RED)
+            toast = getattr(self.ui, "toast", None)
+            if callable(toast):
+                toast(notice, kind="error")
             return False
-        self.ui.write(f"Journey saved in slot {selected}.", color=Color.GREEN)
+        notice = f"Journey saved in slot {selected}."
+        self.ui.write(notice, color=Color.GREEN)
+        toast = getattr(self.ui, "toast", None)
+        if callable(toast):
+            toast(notice, kind="notice")
         return True
 
     def _load_menu(self) -> bool:

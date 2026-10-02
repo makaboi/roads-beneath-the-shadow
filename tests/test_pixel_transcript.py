@@ -107,6 +107,47 @@ class TranscriptTests(unittest.TestCase):
         self.assertFalse(self.view.searching)
         self.assertTrue(self.key(self.pg.K_ESCAPE))
 
+    def test_accepted_journey_reset_discards_archive_search_and_place_without_reloading_fonts(self):
+        self.view.open([(f"Old journey {index}: silver star.", None, False) for index in range(80)])
+        self.draw()
+        self.search("silver star")
+        self.key(self.pg.K_ESCAPE)
+        self.key(self.pg.K_HOME)
+        self.view.close()
+        self.view.open(self.view.entries)
+        self.draw()
+        self.assertGreater(self.view.scroll, 0)
+        self.key(self.pg.K_f, mod=self.pg.KMOD_CTRL)
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTEDITING, text="composing", start=0, length=9))
+        self.view._dragging = 4
+        fonts = (self.view.font, self.view.bold_font, self.view.small_font, self.view.title_font)
+
+        self.view.reset()
+
+        self.assertEqual((self.view.entries, self.view.query, self.view.scroll, self.view.maximum_scroll), ((), "", 0, 0))
+        self.assertFalse(self.view.searching)
+        self.assertEqual(self.view._composition, "")
+        self.assertIsNone(self.view._dragging)
+        self.assertEqual(self.view.matches, [])
+        self.assertEqual(self.view._search_sources, [])
+        self.assertEqual(self.view._lines, [])
+        self.assertIsNone(self.view.reading_anchor)
+        self.assertIsNone(self.view._pending_anchor)
+        self.assertIsNone(self.view._pending_scroll)
+        self.assertEqual((self.view.font, self.view.bold_font, self.view.small_font, self.view.title_font), fonts)
+
+        new_entries = [("A new road begins in Bree.", None, False)]
+        self.view.open(new_entries)
+        self.draw()
+        self.assertEqual(self.view.entries, tuple(new_entries))
+        self.assertEqual(self.view.query, "")
+        self.assertEqual(self.view.scroll, 0)
+        self.assertNotIn("Old journey", str(self.visible_lines()))
+        self.search("silver star")
+        self.assertEqual(self.view.matches, [])
+        self.search("new road")
+        self.assertEqual(self.view.matches, [0])
+
     def test_focused_search_caret_and_selection_edit_the_query_without_scrolling(self):
         self.view.open([(f"Memory {index}: the silver star and the silver moon.", None, False) for index in range(40)])
         self.draw()
