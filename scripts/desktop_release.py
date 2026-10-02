@@ -311,13 +311,24 @@ def local_readme_images(readme: Path) -> list[Path]:
 
 
 def assemble_archive(executable: Path, platform: str, version: str, output: Path) -> Path:
+    if not (executable.parent / "_internal").is_dir():
+        raise ValueError("Desktop downloads require a complete onedir build with _internal libraries")
+    for name in ("THIRD-PARTY-NOTICES.md", "THIRD-PARTY-INVENTORY.json"):
+        if not (executable.parent / name).is_file():
+            raise ValueError(f"Prepare the build's third-party notices before packaging: {name}")
+    build_directory = executable.parent.resolve()
+    for path in executable.parent.rglob("*"):
+        if path.is_symlink() and not path.resolve().is_relative_to(build_directory):
+            raise ValueError(f"A build link leaves the standalone folder: {path.name}")
     output.mkdir(parents=True, exist_ok=True)
     archive = output / archive_name(platform)
     with tempfile.TemporaryDirectory(prefix="rbs-player-package-") as temporary:
         package = Path(temporary) / GAME_NAME
-        package.mkdir()
+        # PyInstaller uses internal library/framework symlinks on Unix. Copy
+        # their contents as regular files, preserving the loader's paths while
+        # keeping the player archive safe for the strict extractor below.
+        shutil.copytree(executable.parent, package, symlinks=False)
         bundled_executable = package / executable.name
-        shutil.copy2(executable, bundled_executable)
         if platform != "Windows-x64":
             bundled_executable.chmod(0o755)
         for document in ("README.md", "CHANGELOG.md"):
@@ -355,6 +366,7 @@ def assemble_archive(executable: Path, platform: str, version: str, output: Path
         (package / "START-HERE.txt").write_text(
             f"Roads Beneath the Shadow {version} — {platform}\n\n"
             f"Extract the complete archive first. {launch}\n"
+            "Keep the executable and the complete _internal folder together.\n"
             "Python and separate game packages are not required.\n"
             "The game runs offline; a desktop display is required for pixel mode.\n"
             "Pass --terminal to play with terminal prompts.\n"
@@ -424,12 +436,21 @@ def extract_player_archive(archive: Path, platform: str, destination: Path) -> t
         "Play Roads Beneath the Shadow.command" if platform.startswith("macOS-") else
         "Play Roads Beneath the Shadow.sh"
     )
-    required = [executable, launcher, *(package / name for name in ("START-HERE.txt", "README.md", "CHANGELOG.md"))]
+    required = [executable, launcher, *(package / name for name in (
+        "START-HERE.txt", "README.md", "CHANGELOG.md", "THIRD-PARTY-NOTICES.md", "THIRD-PARTY-INVENTORY.json",
+    ))]
     if (ROOT / "roads_beneath_shadow" / "font_assets" / "LICENSE.txt").is_file():
         required.append(package / "FONT-LICENSE.txt")
     missing = [path.name for path in required if not path.is_file()]
     if missing:
         raise ValueError("The player archive is incomplete: " + ", ".join(missing))
+    if not (package / "_internal").is_dir():
+        raise ValueError("The player archive is incomplete: _internal shared libraries")
+    if __package__:
+        from .third_party import verify_inventory
+    else:
+        from third_party import verify_inventory
+    verify_inventory(package)
     local_readme_images(package / "README.md")
     if platform != "Windows-x64":
         for path in (executable, launcher):
@@ -448,9 +469,15 @@ def package_release(platform: str, version: str, output: Path) -> None:
     verify_version(version)
     verify_host(platform)
     suffix = ".exe" if platform == "Windows-x64" else ""
-    executable = ROOT / "dist" / f"{GAME_NAME}{suffix}"
+    bundle = ROOT / "dist" / GAME_NAME
+    executable = bundle / f"{GAME_NAME}{suffix}"
     if not executable.is_file():
         raise FileNotFoundError(f"Build the standalone executable first: {executable}")
+    if __package__:
+        from .third_party import prepare_bundle
+    else:
+        from third_party import prepare_bundle
+    notice_inventory = prepare_bundle(bundle, platform, ROOT / "build" / GAME_NAME / "Analysis-00.toc")
     binary_report = smoke_test(executable, expected_version=version)
     archive = assemble_archive(executable, platform, version, output)
     player_report = verify_player_archive(archive, platform, expected_version=version)
@@ -459,10 +486,18 @@ def package_release(platform: str, version: str, output: Path) -> None:
             "platform": platform, "version": version, "source_commit": os.environ.get("GITHUB_SHA"),
             "archive": {"name": archive.name, "sha256": archive_digest(archive), "size_bytes": archive.stat().st_size},
             "binary": binary_report, "extracted_launcher": player_report,
+            "third_party": {
+                "inventory_sha256": archive_digest(bundle / "THIRD-PARTY-INVENTORY.json"),
+                "unresolved": notice_inventory["runtime"]["unresolved"],
+            },
         }, indent=2) + "\n",
         encoding="utf-8",
     )
     print(f"Created {archive.name} and its SHA-256 checksum.")
+    unresolved = notice_inventory["runtime"]["unresolved"]
+    print(f"Retained {len(notice_inventory['source_archives'])} third-party source archives; unresolved runtime notices: {len(unresolved)}.")
+    for issue in unresolved:
+        print(f"  {issue['component']}: {issue['reason']}")
 
 
 def verified_downloads(output: Path) -> list[Path]:
@@ -477,6 +512,50 @@ def verified_downloads(output: Path) -> list[Path]:
             raise ValueError(f"Archive checksum mismatch: {archive.name}")
         downloads.extend((archive, checksum))
     return downloads
+
+
+def verify_notice_gate(output: Path, version: str) -> None:
+    """Allow preview inspection, but stop publication with unresolved notices."""
+    for platform in PLATFORMS:
+        archive = output / archive_name(platform)
+        report_path = archive.with_name(f"{archive.name}.qa.json")
+        if not report_path.is_file():
+            raise ValueError(f"The release has no native third-party QA report: {report_path.name}")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        if (
+            report.get("platform") != platform or report.get("version") != version
+            or report.get("source_commit") != github_commit()
+            or report.get("archive", {}).get("sha256") != archive_digest(archive)
+        ):
+            raise ValueError(f"Native third-party QA does not match the exact archive/commit: {platform}")
+        notices = report.get("third_party", {})
+        if not isinstance(notices.get("unresolved"), list) or notices["unresolved"]:
+            raise ValueError(f"Native third-party notices require review before publication: {platform}")
+        if not re.fullmatch(r"[0-9a-f]{64}", notices.get("inventory_sha256", "")):
+            raise ValueError(f"Native third-party QA has no inventory hash: {platform}")
+        inventory_name = f"{GAME_NAME}/THIRD-PARTY-INVENTORY.json"
+        try:
+            if platform == "Linux-x64":
+                with tarfile.open(archive, "r:gz") as source:
+                    members = [member for member in source.getmembers() if member.name == inventory_name]
+                    if len(members) != 1 or not members[0].isfile() or members[0].size > 16 * 1024 * 1024:
+                        raise ValueError("The archive must contain one regular third-party inventory")
+                    with source.extractfile(members[0]) as incoming:
+                        inventory_bytes = incoming.read()
+            else:
+                with zipfile.ZipFile(archive) as source:
+                    members = [member for member in source.infolist() if member.filename == inventory_name]
+                    if len(members) != 1 or members[0].is_dir() or stat.S_ISLNK(members[0].external_attr >> 16) or members[0].file_size > 16 * 1024 * 1024:
+                        raise ValueError("The archive must contain one regular third-party inventory")
+                    inventory_bytes = source.read(members[0])
+            inventory = json.loads(inventory_bytes)
+        except (tarfile.TarError, zipfile.BadZipFile, json.JSONDecodeError, UnicodeError) as error:
+            raise ValueError(f"The archive has no readable third-party inventory: {platform}") from error
+        if hashlib.sha256(inventory_bytes).hexdigest() != notices["inventory_sha256"]:
+            raise ValueError(f"The packaged third-party inventory does not match native QA: {platform}")
+        packaged_unresolved = inventory.get("runtime", {}).get("unresolved")
+        if inventory.get("schema_version") != 1 or not isinstance(packaged_unresolved, list) or packaged_unresolved != notices["unresolved"]:
+            raise ValueError(f"The packaged third-party notice results do not match native QA: {platform}")
 
 
 def verify_quality_gate(*, timeout: float = 600, poll_interval: float = 10) -> dict:
@@ -547,6 +626,7 @@ def verify_quality_gate(*, timeout: float = 600, poll_interval: float = 10) -> d
 def publish_release(version: str, output: Path) -> None:
     verify_version(version)
     downloads = verified_downloads(output)
+    verify_notice_gate(output, version)
     tag = f"v{version}"
     existing = release_for_tag(tag)
     if existing is not None and not existing["draft"]:

@@ -132,6 +132,7 @@ class BattleView:
         self.feedback_labels: list[tuple[str, str, Any]] = []
         self.target_marker_rect: Any = None
         self.tooltip_rect: Any = None
+        self.enemy_stat_rects: list[Any] = []
         self.hovered_id: str | None = None
         self.hovered_actor_id: str | None = None
         self.tooltip_hits: list[tuple[Any, str]] = []
@@ -142,7 +143,7 @@ class BattleView:
         self._fitted_fonts: dict[tuple[int, float], Any] = {}
         self._typography_cache: dict[tuple[Any, ...], tuple[bool, Any, Any, Any]] = {}
         self._single_card_heights: dict[tuple[Any, ...], int] = {}
-        self._tooltip_layout_cache: dict[tuple[Any, ...], tuple[Any, list[str], int, int]] = {}
+        self._tooltip_layout_cache: dict[tuple[Any, ...], tuple[Any, list[str], int, int, str]] = {}
         self._character_atlas: Any = None
         self._motion_atlas: Any = None
         self._atlas_checked = False
@@ -150,6 +151,8 @@ class BattleView:
         self._scaled_backdrop: tuple[Any, tuple[int, int], Any] | None = None
         self._backdrop_veil: Any = None
         self._scene_override: str | Any | None = None
+        self._scene_ground_y: float | None = None
+        self._backdrop_crop: Any = None
         self._rect = pg.Rect(0, 0, 0, 0)
         self._arena_rect = pg.Rect(0, 0, 0, 0)
         self._reduced_motion = False
@@ -183,6 +186,7 @@ class BattleView:
             self._effects.clear()
             self._cues.clear()
             self.enemy_hits.clear()
+            self.enemy_stat_rects.clear()
             self.sprite_hits.clear()
             self.actor_positions.clear()
             self.actor_rects.clear()
@@ -198,14 +202,28 @@ class BattleView:
             self._health_targets.clear()
             self._health_ages.clear()
             self._player_health_base = None
+            self._scene_ground_y = None
+            self._backdrop_crop = None
         self.snapshot = snapshot
 
-    def set_scene(self, scene: str | Any | None) -> None:
-        """Use a packaged scene key or the window's already loaded illustration."""
-        if scene is self._scene_override or isinstance(scene, str) and scene == self._scene_override:
+    def set_scene(self, scene: str | Any | None, *, ground_y: float | None = None) -> None:
+        """Use an illustration, optionally aligning a native floor row to actors."""
+        anchor = float(ground_y) if ground_y is not None else None
+        if anchor is not None and not math.isfinite(anchor):
+            raise ValueError("ground_y must be a finite native image row")
+        same_scene = scene is self._scene_override or isinstance(scene, str) and scene == self._scene_override
+        if same_scene and anchor == self._scene_ground_y:
             return
         self._scene_override = scene
-        self._scaled_backdrop = None
+        self._scene_ground_y = anchor
+        self._backdrop_crop = None
+        if not same_scene:
+            self._scaled_backdrop = None
+
+    @property
+    def backdrop_crop(self) -> Any:
+        """Return a copy of the last scaled source crop for composition checks."""
+        return self._backdrop_crop.copy() if self._backdrop_crop is not None else None
 
     def queue_feedback(self, feedback: CombatFeedback) -> None:
         if feedback.kind in {"inspect", "notice", "info"}:
@@ -397,9 +415,10 @@ class BattleView:
                 self._backdrops[scene] = None
         return self._backdrops[scene]
 
-    def _draw_backdrop(self, surface: Any, rect: Any) -> None:
+    def _draw_backdrop(self, surface: Any, rect: Any, *, ground_offset: float | None = None) -> None:
         pg = self.pg
         image = self._backdrop()
+        self._backdrop_crop = None
         pg.draw.rect(surface, SHADOW, rect)
         if image is not None and rect.w > 0 and rect.h > 0:
             cache = self._scaled_backdrop
@@ -408,7 +427,13 @@ class BattleView:
                 scaled = pg.transform.scale(image, (math.ceil(image.get_width() * scale), math.ceil(image.get_height() * scale)))
                 self._scaled_backdrop = (image, rect.size, scaled)
             scaled = self._scaled_backdrop[2]
-            surface.blit(scaled, rect, pg.Rect((scaled.get_width() - rect.w) // 2, max(0, (scaled.get_height() - rect.h) // 3), rect.w, rect.h))
+            crop_y = max(0, (scaled.get_height() - rect.h) // 3)
+            if self._scene_ground_y is not None and ground_offset is not None:
+                projected_ground = self._scene_ground_y * scaled.get_height() / image.get_height()
+                crop_y = round(projected_ground - ground_offset)
+                crop_y = min(max(0, crop_y), max(0, scaled.get_height() - rect.h))
+            self._backdrop_crop = pg.Rect((scaled.get_width() - rect.w) // 2, crop_y, rect.w, rect.h)
+            surface.blit(scaled, rect, self._backdrop_crop)
         if self._backdrop_veil is None or self._backdrop_veil.get_size() != rect.size:
             veil = pg.Surface(rect.size, pg.SRCALPHA)
             veil.fill((*INK, 88))
@@ -956,6 +981,7 @@ class BattleView:
         scale = self._layout_scale
         pad = round((7 if compact else 12) * scale)
         x, y = rect.x + pad, rect.y + round((6 if compact else 10) * scale)
+        stats_top = y
         width = rect.w - pad * 2
         details_x = x
         details_width = width
@@ -971,6 +997,9 @@ class BattleView:
             self._health(surface, meter, enemy.hp, enemy.max_hp, actor_id=enemy.id)
         y += round((6 if compact else 11) * scale)
         y = self._paragraph(surface, self._armor_label(enemy), (x, y), title_width, MUTED, font=body_font)
+        # Measured separately from the intent column so a persistent hover
+        # after targeting never hides a foe's name, Health, or Armor.
+        self.enemy_stat_rects.append(pg.Rect(x, stats_top, title_width, y - stats_top))
         y += round((2 if compact else 6) * scale)
         if wide:
             self._status_line(surface, enemy.statuses, x, y, title_width, font=body_font)
@@ -1098,14 +1127,25 @@ class BattleView:
     def _draw_tooltip(self, surface: Any) -> None:
         if self._mouse is None:
             return
-        text = next((text for rect, text in reversed(self.tooltip_hits) if rect.collidepoint(self._mouse)), None)
+        hit = next(((rect, text) for rect, text in reversed(self.tooltip_hits) if rect.collidepoint(self._mouse)), None)
+        if hit is None:
+            return
+        source, text = hit
         if not text:
             return
-        key = (text, self._rect.w, self._rect.h, id(self.small_font), id(self.mini_font))
         scale = self._layout_scale
+        regions = {"canvas": self._rect}
+        from_card = any(card.collidepoint(self._mouse) and source.w <= card.w and source.h <= card.h for card, _ in self.enemy_hits)
+        if from_card and self.enemy_stat_rects:
+            top = max(stats.bottom for stats in self.enemy_stat_rects) + round(4 * scale)
+            regions["body"] = self.pg.Rect(self._rect.x, top, self._rect.w, max(1, self._rect.bottom - top))
+            regions["arena"] = self._arena_rect
+        placement = "body" if "body" in regions else "canvas"
+        region = regions[placement]
+        key = (text, tuple((name, box.size) for name, box in regions.items()), id(self.small_font), id(self.mini_font))
         if key not in self._tooltip_layout_cache:
-            width = min(round(320 * scale), max(round(170 * scale), self._rect.w - round(32 * scale)))
-            maximum = max(1, self._rect.h - round(12 * scale))
+            width = min(round(320 * scale), max(round(170 * scale), region.w - round(32 * scale)))
+            maximum = max(1, region.h - round(12 * scale))
             font = self.small_font
 
             def layout(selected_font: Any) -> tuple[list[str], int]:
@@ -1114,8 +1154,19 @@ class BattleView:
 
             lines, height = layout(font)
             if height > maximum:
-                width = max(40, self._rect.w - round(16 * scale))
+                width = max(40, region.w - round(16 * scale))
                 lines, height = layout(font)
+            # A short single-card body can be smaller than the arena. Use
+            # that existing space before reducing the requested font size.
+            if height > maximum and "arena" in regions and regions["arena"].h > region.h:
+                placement = "arena"
+                region = regions[placement]
+                maximum = max(1, region.h - round(12 * scale))
+                width = min(round(320 * scale), max(round(170 * scale), region.w - round(32 * scale)))
+                lines, height = layout(font)
+                if height > maximum:
+                    width = max(40, region.w - round(16 * scale))
+                    lines, height = layout(font)
             if height > maximum:
                 font = self.mini_font
                 lines, height = layout(font)
@@ -1135,10 +1186,11 @@ class BattleView:
                         upper = candidate_scale
             if len(self._tooltip_layout_cache) >= 32:
                 self._tooltip_layout_cache.clear()
-            self._tooltip_layout_cache[key] = font, lines, width, height
-        font, lines, width, height = self._tooltip_layout_cache[key]
-        x = max(self._rect.x + round(8 * scale), min(self._mouse[0] + round(12 * scale), self._rect.right - width - round(8 * scale)))
-        y = max(self._rect.y + round(4 * scale), min(self._mouse[1] - height - round(10 * scale), self._rect.bottom - height - round(4 * scale)))
+            self._tooltip_layout_cache[key] = font, lines, width, height, placement
+        font, lines, width, height, placement = self._tooltip_layout_cache[key]
+        region = regions[placement]
+        x = max(region.x + round(8 * scale), min(self._mouse[0] + round(12 * scale), region.right - width - round(8 * scale)))
+        y = max(region.y + round(4 * scale), min(self._mouse[1] - height - round(10 * scale), region.bottom - height - round(4 * scale)))
         rect = self.pg.Rect(x, y, width, height)
         self.tooltip_rect = rect.copy()
         self.pg.draw.rect(surface, INK, rect)
@@ -1155,6 +1207,7 @@ class BattleView:
         scale = self._layout_scale
         self._rect = rect.copy()
         self.enemy_hits.clear()
+        self.enemy_stat_rects.clear()
         self.sprite_hits.clear()
         self.tooltip_hits.clear()
         self.actor_positions.clear()
@@ -1201,7 +1254,8 @@ class BattleView:
             cards_y = max(header_bottom + round(110 * scale), rect.bottom - card_height)
         arena = pg.Rect(rect.x + 1, header_bottom, rect.w - 2, max(1, cards_y - header_bottom - round(8 * scale)))
         self._arena_rect = arena.copy()
-        self._draw_backdrop(surface, arena)
+        ground = arena.bottom - round((16 if compact else 25) * scale)
+        self._draw_backdrop(surface, arena, ground_offset=ground - arena.y)
         surface.set_clip(arena.clip(previous_clip))
         # Keep environmental motion slow, sparse, and deterministic. Reduced
         # motion removes both these drifting embers and actor displacement.
@@ -1210,7 +1264,6 @@ class BattleView:
                 px = arena.x + int((index * 71 + now_ms * (0.007 + index % 3 * 0.002)) % max(1, arena.w))
                 py = arena.y + int((index * 29 - now_ms * 0.009) % max(1, arena.h - 20))
                 pg.draw.rect(surface, (96, 84, 59) if index % 3 else (133, 108, 65), (px, py, 2, 2))
-        ground = arena.bottom - round((16 if compact else 25) * scale)
         available_scale = (arena.h - round((16 if compact else 25) * scale) - round(11 * scale)) / 48
         actor_scale = 2 * scale if available_scale >= 2 * scale and arena.w >= 400 * scale else scale if available_scale >= scale else 0.75 if available_scale >= 0.75 else 0.5
         player_x = arena.x + max(65, round(arena.w * 0.19))

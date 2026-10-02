@@ -38,6 +38,17 @@ TEAL = (105, 156, 151)
 MUTED = (159, 161, 150)
 RED = (219, 132, 113)
 SCENE_CACHE_BYTES = 64 * 1024 * 1024
+BATTLE_BACKDROPS = {
+    "branch_fight": "tavern-interior",
+    "branch_hide": "tavern-interior",
+    "branch_search": "tavern-interior",
+    "branch_escape": "tavern-interior",
+    "branch_question": "tavern-interior",
+    "part2_teren": "seal",
+    "part2_final_battle": "seal",
+    "part2_echo_bridge": "echo-bridge-battle",
+}
+BATTLE_GROUND_Y = {"echo-bridge-battle": 135.0}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 STORY_COMMANDS = (("i", "Inventory"), ("c", "Character"), ("j", "Journal"), ("s", "Save"), ("r", "Road map"), ("m", "Main menu"), ("p", "Pause"), ("h", "Controls"))
 UTILITY_COMMANDS = tuple(command for command in STORY_COMMANDS if command[0] in {"i", "c", "j", "s", "r", "p"})
@@ -383,6 +394,20 @@ class PixelWindow:
         except (ImportError, OSError, ValueError, self.pg.error):
             # Missing artwork never removes a story choice or prevents play.
             pass
+
+    def _battle_backdrop(self) -> Any:
+        """Battles keep their location while prose retains its subject art."""
+        backdrop = BATTLE_BACKDROPS.get((self.hud or {}).get("scene"))
+        if backdrop:
+            try:
+                from .pixel_art import ASSET_DIR
+                key = str(ASSET_DIR / f"{backdrop}.png")
+                if key not in self.scene_cache:
+                    self.scene_cache[key] = self.pg.image.load(key).convert()
+                return self.scene_cache[key]
+            except (ImportError, OSError, ValueError, self.pg.error):
+                pass
+        return self.scene
 
     def drain(self) -> None:
         if self._local_help:
@@ -1066,7 +1091,8 @@ class PixelWindow:
         if self.world.active and not self.reading:
             self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion, text_size=self.ui.text_size)
         elif self._combat_active and not self.reading and self.battle.snapshot is not None:
-            self.battle.set_scene(self.scene)
+            backdrop_key = BATTLE_BACKDROPS.get((self.hud or {}).get("scene"))
+            self.battle.set_scene(self._battle_backdrop(), ground_y=BATTLE_GROUND_Y.get(backdrop_key))
             self.battle.draw(self.screen, inner, now, text_size=self.ui.text_size)
         elif self.scene is not None:
             sw, sh = self.scene.get_size()

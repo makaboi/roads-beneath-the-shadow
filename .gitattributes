@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Upstream notices and provenance manifests retain their original hashed bytes.
+third_party/** -text -whitespace
+# Retained upstream notices contain original whitespace and setext headings.
+third_party/licenses/** -diff

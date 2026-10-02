@@ -130,6 +130,9 @@ class DesktopPreviewTests(unittest.TestCase):
         self.assertIn("scripts/check_installed_game.py", build)
         self.assertIn("scripts/desktop_release.py package", build)
         self.assertIn("--collect-data roads_beneath_shadow", build)
+        self.assertIn("--onedir", build)
+        self.assertNotIn("--onefile", build)
+        self.assertIn("pygame-ce==2.5.8", build)
         self.assertIn("actions/upload-artifact@v4", build)
 
 

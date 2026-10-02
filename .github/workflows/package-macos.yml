@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check ".[test]"
+        run: python -m pip install --disable-pip-version-check ".[test]" pygame-ce==2.5.8
       - name: Verify the release candidate
         env:
           RBS_SAVE_DIR: ${{ runner.temp }}/rbs-package-saves
@@ -47,7 +47,7 @@ jobs:
         run: >-
           python -m PyInstaller
           --clean
-          --onefile
+          --onedir
           --name Roads-Beneath-the-Shadow
           --collect-data roads_beneath_shadow
           scripts/standalone_entry.py

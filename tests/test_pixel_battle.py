@@ -157,6 +157,129 @@ class BattleSDLTests(unittest.TestCase):
                 self.assertTrue(canvas.contains(self.view.tooltip_rect))
                 self.view.handle_event(self.pg.event.Event(self.pg.WINDOWLEAVE))
 
+    def test_card_tooltip_after_target_click_preserves_visible_health_and_armor(self):
+        surface = self.pg.Surface((3840, 2160))
+        canvases = ((418, 330), (680, 496), (1488, 842), (2256, 1310))
+        for size in canvases:
+            for preference in ("standard", "large", "larger"):
+                for count in (1, 2, 3):
+                    with self.subTest(canvas=size, preference=preference, enemies=count):
+                        snapshot = battle_snapshot(count)
+                        self.view.handle_event(self.pg.event.Event(self.pg.WINDOWLEAVE))
+                        self.view.set_snapshot(snapshot)
+                        self.view.update(0, reduced_motion=True)
+                        canvas = self.pg.Rect(22, 87, *size)
+                        self.view.draw(surface, canvas, text_size=preference)
+                        card, target_id = self.view.enemy_hits[-1]
+                        intent = self.view._intent_help(snapshot.enemies[-1])
+                        hit = next(rect for rect, text in self.view.tooltip_hits if text == intent and card.contains(rect))
+                        pos = (hit.x + 3, hit.y + 3)
+                        self.assertEqual(self.click(pos), (True, target_id))
+                        self.assertEqual(self.view.snapshot, snapshot)
+                        # The engine owns free target selection; publish its
+                        # resulting immutable view before recording stats.
+                        selected = replace(snapshot, target_id=target_id)
+                        self.view.set_snapshot(selected)
+                        self.view.draw(surface, canvas, text_size=preference)
+                        before = [self.pg.image.tobytes(surface.subsurface(rect), "RGB") for rect in self.view.enemy_stat_rects]
+                        rendered = []
+                        original = self.view._text
+
+                        def record(surface, text, pos, color=(239, 225, 188), *, font=None):
+                            if self.view.tooltip_rect is not None:
+                                selected_font = font or self.view.font
+                                glyph = selected_font.render(str(text), True, color)
+                                rendered.append(self.pg.Rect(*pos, glyph.get_width(), max(glyph.get_height(), selected_font.get_linesize())))
+                            original(surface, text, pos, color, font=font)
+
+                        self.view._text = record
+                        self.view.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=pos, rel=(0, 0), buttons=(0, 0, 0)))
+                        self.view.draw(surface, canvas, text_size=preference)
+                        self.view._text = original
+                        tooltip = self.view.tooltip_rect
+                        self.assertIsNotNone(tooltip)
+                        self.assertTrue(canvas.contains(tooltip))
+                        self.assertTrue(all(not tooltip.colliderect(rect) for rect in self.view.enemy_stat_rects))
+                        self.assertTrue(rendered)
+                        self.assertTrue(all(tooltip.contains(glyph) for glyph in rendered))
+                        after = [self.pg.image.tobytes(surface.subsurface(rect), "RGB") for rect in self.view.enemy_stat_rects]
+                        self.assertEqual(before, after, "hover must leave the actual stats pixels readable")
+                        self.assertEqual(self.view.snapshot, selected)
+                        self.assertEqual(self.view.snapshot.actions, snapshot.actions)
+                        self.assertLessEqual(len(self.view._tooltip_layout_cache), 32)
+
+    def test_enemy_status_tooltip_also_avoids_measured_card_stats(self):
+        guarded = CombatStatusView("guarded", "Guarded", 2, "Until your next Attack or Power Attack; Flanking Strike also removes it.")
+        snapshot = battle_snapshot(3)
+        snapshot = replace(snapshot, enemies=tuple(replace(enemy, statuses=(guarded,)) for enemy in snapshot.enemies))
+        self.view.set_snapshot(snapshot)
+        canvas = self.pg.Rect(24, 100, 418, 330)
+        self.view.draw(self.surface, canvas, text_size="larger")
+        hit = next(rect for rect, text in self.view.tooltip_hits if text.startswith("Guarded:"))
+        self.view.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=hit.center, rel=(0, 0), buttons=(0, 0, 0)))
+        self.view.draw(self.surface, canvas, text_size="larger")
+        self.assertIsNotNone(self.view.tooltip_rect)
+        self.assertTrue(canvas.contains(self.view.tooltip_rect))
+        self.assertTrue(all(not self.view.tooltip_rect.colliderect(rect) for rect in self.view.enemy_stat_rects))
+        self.assertEqual(self.view.snapshot, snapshot)
+
+    def test_optional_scene_floor_aligns_existing_actor_ground_without_moving_actors(self):
+        surface = self.pg.Surface((3840, 2160))
+        image = self.pg.Surface((320, 240))
+        image.fill((61, 75, 84))
+        for size in ((418, 330), (680, 496), (1488, 842), (2256, 1310)):
+            for preference in ("standard", "larger"):
+                with self.subTest(canvas=size, preference=preference):
+                    canvas = self.pg.Rect(22, 87, *size)
+                    self.view.set_scene(image)
+                    self.view.draw(surface, canvas, text_size=preference)
+                    positions = self.view.actor_positions.copy()
+                    scaled = self.view._scaled_backdrop[2]
+                    generic_crop = self.view.backdrop_crop
+                    self.assertEqual(generic_crop.y, (scaled.get_height() - self.view._arena_rect.h) // 3)
+                    self.view.set_scene(image, ground_y=135)
+                    self.view.draw(surface, canvas, text_size=preference)
+                    self.assertEqual(self.view.actor_positions, positions)
+                    self.assertEqual(self.view.snapshot, self.snapshot)
+                    self.assertIs(self.view._scaled_backdrop[2], scaled, "changing the floor must reuse the existing scaled bitmap")
+                    crop = self.view.backdrop_crop
+                    scale_y = scaled.get_height() / image.get_height()
+                    actor_offset = positions["player"][1] - self.view._arena_rect.y
+                    native_ground = (crop.y + actor_offset) / scale_y
+                    self.assertAlmostEqual(native_ground, 135, delta=0.51 / scale_y)
+                    self.assertTrue(scaled.get_rect().contains(crop))
+                    self.view.set_scene(image)
+                    self.view.draw(surface, canvas, text_size=preference)
+                    self.assertEqual(self.view.backdrop_crop, generic_crop)
+
+    def test_scene_floor_crop_clamps_and_diagnostic_cannot_mutate_renderer(self):
+        image = self.pg.Surface((320, 240))
+        for anchor in (-1000, 1000):
+            self.view.set_scene(image, ground_y=anchor)
+            self.view.draw(self.surface, self.canvas)
+            scaled = self.view._scaled_backdrop[2]
+            crop = self.view.backdrop_crop
+            self.assertTrue(scaled.get_rect().contains(crop))
+            expected = 0 if anchor < 0 else scaled.get_height() - self.view._arena_rect.h
+            self.assertEqual(crop.y, expected)
+            crop.y = 100000
+            self.assertEqual(self.view.backdrop_crop.y, expected)
+
+    def test_scene_floor_and_crop_clear_when_scene_or_journey_changes(self):
+        image = self.pg.Surface((320, 240))
+        self.view.set_scene(image, ground_y=135)
+        self.view.draw(self.surface, self.canvas)
+        self.assertIsNotNone(self.view.backdrop_crop)
+        self.view.set_scene(self.pg.Surface((320, 240)))
+        self.assertIsNone(self.view._scene_ground_y)
+        self.assertIsNone(self.view.backdrop_crop)
+        self.view.set_scene(image, ground_y=135)
+        self.view.draw(self.surface, self.canvas)
+        self.view.set_snapshot(None)
+        self.assertIsNone(self.view._scene_ground_y)
+        self.assertIsNone(self.view.backdrop_crop)
+        self.assertFalse(self.view.enemy_stat_rects)
+
     def test_high_resolution_font_fallback_preserves_actual_card_glyph_bounds(self):
         with patch("roads_beneath_shadow.pixel_theme.FONT_DIRECTORY", Path("/tmp/rbs-missing-battle-fonts")):
             view = BattleView(self.pg)

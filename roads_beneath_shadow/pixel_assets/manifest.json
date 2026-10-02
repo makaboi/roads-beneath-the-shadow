@@ -31,5 +31,28 @@
     "cages"
   ],
   "art_direction": "Gothic dark fantasy: charcoal, sepia, bone, amber and muted teal",
-  "source_atlases": "Generated with OpenAI image generation; original atlases retained outside the package."
+  "source_atlases": "Generated with OpenAI image generation; original atlases retained outside the package.",
+  "battle_backgrounds": [
+    "echo-bridge-battle"
+  ],
+  "battle_background_sources": {
+    "echo-bridge-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-816ee190-2eb7-4eb2-9dd1-eec817ceb7fd.png",
+      "source_sha256": "f4ee0e2c133423daee19e9965419d08ee9693a8f7cc45ded2a9614efb1bcaa61",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "resize": "nearest-neighbor",
+        "palette": "median-cut",
+        "colors": 32,
+        "dither": "none"
+      },
+      "native_sha256": "eb92891e7b91cb97faf75a752632e4262e40963f62a06017aa217f0803fcf407"
+    }
+  }
 }

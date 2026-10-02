@@ -3,9 +3,13 @@
 from copy import deepcopy
 import builtins
 import hashlib
+import json
+import io
 from pathlib import Path
 import subprocess
 import tempfile
+import tarfile
+import zipfile
 import unittest
 from unittest.mock import patch
 
@@ -72,11 +76,24 @@ class DesktopReleaseTests(unittest.TestCase):
         self.output = Path(temporary.name)
         for platform in desktop_release.PLATFORMS:
             archive = self.output / desktop_release.archive_name(platform)
-            archive.write_bytes(f"Verified player archive for {platform}".encode())
+            inventory = json.dumps({"schema_version": 1, "runtime": {"unresolved": []}}).encode()
+            name = f"{desktop_release.GAME_NAME}/THIRD-PARTY-INVENTORY.json"
+            if platform == "Linux-x64":
+                with tarfile.open(archive, "w:gz") as target:
+                    member = tarfile.TarInfo(name)
+                    member.size = len(inventory)
+                    target.addfile(member, io.BytesIO(inventory))
+            else:
+                with zipfile.ZipFile(archive, "w") as target:
+                    target.writestr(name, inventory)
             checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
             archive.with_name(f"{archive.name}.sha256").write_text(
                 f"{checksum}  {archive.name}\n", encoding="ascii"
             )
+            archive.with_name(f"{archive.name}.qa.json").write_text(json.dumps({
+                "platform": platform, "version": VERSION, "source_commit": COMMIT,
+                "archive": {"sha256": checksum}, "third_party": {"unresolved": [], "inventory_sha256": hashlib.sha256(inventory).hexdigest()},
+            }))
         self.downloads = desktop_release.verified_downloads(self.output)
         self.addCleanup(patch.stopall)
         # Version parsing itself is a Python 3.13 CI concern; these release and
@@ -103,6 +120,56 @@ class DesktopReleaseTests(unittest.TestCase):
         self.assertEqual(found["id"], 42)
         self.assertTrue(found["draft"])
         self.assertEqual(server.requests, [f"releases/tags/{TAG}", "releases?per_page=100&page=1"])
+
+    def test_unresolved_native_notice_prevents_every_github_request(self):
+        path = self.output / (desktop_release.archive_name("Windows-x64") + ".qa.json")
+        report = json.loads(path.read_text())
+        report["third_party"]["unresolved"] = [{"component": "compiler runtime", "reason": "Notice unavailable"}]
+        path.write_text(json.dumps(report))
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "notices require review"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
+
+    def test_qa_report_for_another_archive_cannot_authorize_publication(self):
+        path = self.output / (desktop_release.archive_name("Linux-x64") + ".qa.json")
+        report = json.loads(path.read_text())
+        report["archive"]["sha256"] = "f" * 64
+        path.write_text(json.dumps(report))
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "exact archive/commit"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
+
+    def test_forged_inventory_hash_cannot_authorize_publication(self):
+        path = self.output / (desktop_release.archive_name("Windows-x64") + ".qa.json")
+        report = json.loads(path.read_text())
+        report["third_party"]["inventory_sha256"] = "e" * 64
+        path.write_text(json.dumps(report))
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "packaged third-party inventory"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
+
+    def test_changed_packaged_notice_result_cannot_be_hidden_by_empty_qa(self):
+        archive = self.output / desktop_release.archive_name("Windows-x64")
+        inventory = json.dumps({"schema_version": 1, "runtime": {"unresolved": [{"component": "missing native notice"}]}}).encode()
+        with zipfile.ZipFile(archive, "w") as target:
+            target.writestr(f"{desktop_release.GAME_NAME}/THIRD-PARTY-INVENTORY.json", inventory)
+        archive.with_name(archive.name + ".sha256").write_text(f"{desktop_release.archive_digest(archive)}  {archive.name}\n")
+        path = archive.with_name(archive.name + ".qa.json")
+        report = json.loads(path.read_text())
+        report["archive"]["sha256"] = desktop_release.archive_digest(archive)
+        report["third_party"]["inventory_sha256"] = hashlib.sha256(inventory).hexdigest()
+        path.write_text(json.dumps(report))
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "notice results do not match"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
 
     def test_draft_lookup_paginates_before_deciding_no_release_exists(self):
         first_page = [{"tag_name": f"other-{index}"} for index in range(100)]

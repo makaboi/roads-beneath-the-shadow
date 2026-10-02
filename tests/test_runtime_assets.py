@@ -61,6 +61,16 @@ class RuntimeAssetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"world-motion\.png.*geometry"):
             self.verify()
 
+    def test_missing_battle_background_fails_instead_of_using_the_previous_story_subject(self):
+        (self.package / "pixel_assets/echo-bridge-battle.png").unlink()
+        with self.assertRaisesRegex(ValueError, r"missing: echo-bridge-battle\.png"):
+            self.verify()
+
+    def test_wrong_battle_background_geometry_is_rejected_by_the_native_decoder(self):
+        self.pg.image.save(self.pg.Surface((320, 180)), str(self.package / "pixel_assets/echo-bridge-battle.png"))
+        with self.assertRaisesRegex(ValueError, r"echo-bridge-battle\.png.*geometry"):
+            self.verify()
+
     def test_damaged_ttf_cannot_silently_use_a_system_font(self):
         (self.package / "font_assets/DejaVuSansMono.ttf").write_bytes(b"damaged font")
         with patch.dict(os.environ, {"SDL_AUDIODRIVER": "rbs-previous-driver"}), self.assertRaisesRegex(ValueError, r"decode DejaVuSansMono\.ttf"):

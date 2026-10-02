@@ -28,7 +28,7 @@ The game contains two complete playable episodes: **Part I — The Black Rider's
 | Windows, x64 | [Windows ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Windows-x64.zip) | Double-click `Roads-Beneath-the-Shadow.exe` |
 | Linux, x64 | [Linux TAR.GZ](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Linux-x64.tar.gz) | Run `./Roads-Beneath-the-Shadow` from the extracted folder |
 
-Each release includes a matching `.sha256` checksum for every archive and a `START-HERE.txt` guide. A desktop display is required for pixel mode. The game runs offline, and the same executable accepts `--terminal` for terminal play.
+Each release includes a matching `.sha256` checksum for every archive and a `START-HERE.txt` guide. Keep the executable and its complete `_internal` folder together after extraction. A desktop display is required for pixel mode. The game runs offline, and the same executable accepts `--terminal` for terminal play.
 
 ### Run from source
 
@@ -102,7 +102,7 @@ The game records a separate automatic checkpoint at safe story transitions. **Re
 | F11 | Toggle fullscreen |
 | Escape | Close a panel, end transcript search, or return from a menu with Back |
 
-Enter your traveler's name with the keyboard. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Unicode text and input-method composition are supported. Escape cancels character creation. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
+Enter your traveler's name with the keyboard. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Unicode text and input-method composition are supported. Escape cancels name entry or background selection; **Choose again** returns from the confirmation screen to background selection. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
 
 ### Terminal and accessibility
 
@@ -134,7 +134,7 @@ Set persistent preferences from **Settings**, including Standard, Large, or Larg
 - Animated tactical battles with visible Health impacts, enemy phase changes, concise turn summaries, intentions, status, selectable targets, and clear survival objectives
 - Graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels with readable equipment comparisons and companion whereabouts that follow earned story outcomes
 - A separate automatic story checkpoint alongside three manual save slots, with atomic writes and compatible existing saves
-- Eighteen bundled scene illustrations, thirteen world maps, shared character and depth atlases, and bundled fonts in a restrained dark fantasy palette
+- Nineteen bundled scene and battle illustrations, thirteen world maps, shared character and depth atlases, and bundled fonts in a restrained dark fantasy palette
 - Five original, seamless ambient scores, terrain footsteps, and battle and story cues, with shared mute/volume controls and graceful audio-device recovery
 - Two complete episodes with branching routes, optional conversations, and consequences carried into their endings
 - Editable Unicode character names, three distinct backgrounds, and a formative lesson from Calenor
@@ -233,7 +233,7 @@ The code is split into portable systems:
 - `audio.py` / `soundscapes.py` — optional original cues, ambience, and nonblocking music transitions
 - `content.py` — items, backgrounds, and chapter content
 
-Pixel artwork provenance is bundled with the assets. `scripts/generate_world_assets.py` rebuilds the authored world maps, character motion, depth atlas, and origin portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`.
+Pixel artwork provenance is bundled with the assets. `scripts/generate_world_assets.py` rebuilds the authored world maps, character motion, depth atlas, and origin portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`. Desktop downloads retain third-party licenses, LGPL library source archives, and build provenance in `third-party/`, with a guide in `THIRD-PARTY-NOTICES.md` and file hashes in `THIRD-PARTY-INVENTORY.json`. Their pygame libraries remain separate files for compatible replacement; the game's copyright terms are unchanged.
 
 ## Roadmap
 

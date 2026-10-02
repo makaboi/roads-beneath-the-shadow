@@ -33,7 +33,8 @@ _CONTROLS = {'title': 'HOW TO PLAY',
                'text': 'At story choices, I opens inventory, C shows your character, J opens '
                        'the journal, and R shows the road map. F5 opens manual saves. Escape '
                        'or P opens the pause menu for saving, Settings, and Controls; F1 '
-                       'opens Controls at any time. Escape closes a panel. M returns to the '
+                       'opens Controls while reading or choosing; close an open panel or '
+                       'transcript first. Escape closes a panel. M returns to the '
                        'main menu. Resume checkpoint restores the last automatic story '
                        'checkpoint; you can turn checkpoints off in Settings.'},
               {'heading': 'Make yourself comfortable',

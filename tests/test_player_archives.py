@@ -1,4 +1,6 @@
 import os
+import hashlib
+import json
 from pathlib import Path
 import platform
 import shutil
@@ -27,7 +29,17 @@ class PlayerArchiveTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.work = Path(temporary.name)
         self.platform = native_platform()
-        self.binary = self.work / (desktop_release.GAME_NAME + (".exe" if os.name == "nt" else ""))
+        build = self.work / "build" / desktop_release.GAME_NAME
+        (build / "_internal").mkdir(parents=True)
+        library = build / "_internal" / "shared-library.bin"
+        library.write_bytes(b"replaceable runtime library fixture")
+        (build / "THIRD-PARTY-NOTICES.md").write_text("Runtime licenses and sources.\n")
+        (build / "THIRD-PARTY-INVENTORY.json").write_text(json.dumps({
+            "schema_version": 1, "payload": [{
+                "path": "_internal/shared-library.bin", "sha256": hashlib.sha256(library.read_bytes()).hexdigest(),
+            }], "source_archives": [],
+        }))
+        self.binary = build / (desktop_release.GAME_NAME + (".exe" if os.name == "nt" else ""))
         self.binary.write_bytes(b"standalone executable fixture")
         self.archive = desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "downloads")
 
@@ -80,6 +92,9 @@ class PlayerArchiveTests(unittest.TestCase):
                 "README.md": b"![Gameplay](assets/missing.gif)\n",
                 "CHANGELOG.md": b"Changes",
                 "FONT-LICENSE.txt": b"Font license fixture",
+                "THIRD-PARTY-NOTICES.md": b"License fixture",
+                "THIRD-PARTY-INVENTORY.json": b'{"schema_version":1,"payload":[]}',
+                "_internal/shared-library.bin": b"Runtime fixture",
             }
             for name, data in files.items():
                 archive.writestr(f"{desktop_release.GAME_NAME}/{name}", data)
@@ -108,6 +123,49 @@ class PlayerArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid player archive path"):
             desktop_release.extract_player_archive(invalid, "Windows-x64", self.work / "invalid extraction")
         self.assertFalse((self.work / "outside.txt").exists())
+
+    def test_archive_retains_separate_runtime_and_detects_missing_library(self):
+        executable, _ = desktop_release.extract_player_archive(self.archive, self.platform, self.work / "libraries")
+        library = executable.parent / "_internal/shared-library.bin"
+        self.assertEqual(library.read_bytes(), b"replaceable runtime library fixture")
+        library.write_bytes(b"modified runtime")
+        from scripts.third_party import verify_inventory
+        with self.assertRaisesRegex(ValueError, "missing or altered runtime/source"):
+            verify_inventory(executable.parent)
+
+    def test_file_cli_checks_runtime_inventory_without_source_import_path(self):
+        inventory = self.binary.parent / "THIRD-PARTY-INVENTORY.json"
+        data = json.loads(inventory.read_text())
+        data["payload"][0]["sha256"] = "0" * 64
+        inventory.write_text(json.dumps(data))
+        archive = desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "bad runtime downloads")
+        environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+        result = subprocess.run([
+            sys.executable, str(desktop_release.ROOT / "scripts/desktop_release.py"), "verify-archive",
+            "--platform", self.platform, "--version", "0.5.0", "--archive", str(archive),
+        ], cwd=self.work, env=environment, capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing or altered runtime/source", result.stderr)
+        self.assertNotIn("ModuleNotFoundError", result.stderr)
+
+    @unittest.skipIf(os.name == "nt", "PyInstaller's Unix library links are checked on Unix")
+    def test_internal_library_links_are_archived_as_regular_replaceable_files(self):
+        original = self.binary.parent / "_internal/shared-library.bin"
+        link = original.with_name("shared-library-link.bin")
+        link.symlink_to(original.name)
+        archive = desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "linked downloads")
+        executable, _ = desktop_release.extract_player_archive(archive, self.platform, self.work / "linked extraction")
+        retained = executable.parent / "_internal" / link.name
+        self.assertFalse(retained.is_symlink())
+        self.assertEqual(retained.read_bytes(), original.read_bytes())
+
+    @unittest.skipIf(os.name == "nt", "PyInstaller's Unix library links are checked on Unix")
+    def test_assembly_refuses_to_copy_an_external_symlink_target(self):
+        external = self.work / "outside the build.txt"
+        external.write_text("This file is not part of the standalone build.\n")
+        (self.binary.parent / "_internal" / "outside-link.txt").symlink_to(external)
+        with self.assertRaisesRegex(ValueError, "build link leaves the standalone folder"):
+            desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "external links")
 
     def test_png_header_without_image_data_cannot_pass_frozen_smoke(self):
         calls = []

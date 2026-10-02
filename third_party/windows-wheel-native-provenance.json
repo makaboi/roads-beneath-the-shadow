@@ -1,0 +1,278 @@
+{
+  "pygame_tag": "2.5.8",
+  "pygame_commit": "c8200a9eaa530f884a0a4c3384cefc48006e58be",
+  "wheel": "pygame_ce-2.5.8-cp313-cp313-win_amd64.whl",
+  "wheel_sha256": "f495b0eb7a5c54c59da58e964bc7f68073c3f43cf307729fd48309104a04c190",
+  "provenance_basis": "Windows AMD64/x86 CI legacy prebuilt path; exact SHA256 byte matches to SHA1-verified download_win_prebuilt.py pinned archive members",
+  "natives": [
+    {
+      "wheel_member": "pygame/SDL2.dll",
+      "binary_sha256": "b37740a72a7a9706216df9f0134894bb7a850b356fd149398c67d874cbcfacb4",
+      "size": 1586176,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "archive_member": "SDL2-2.32.10/lib/x64/SDL2.dll",
+          "binary_sha256": "b37740a72a7a9706216df9f0134894bb7a850b356fd149398c67d874cbcfacb4",
+          "archive": "SDL2-devel-2.32.10-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/SDL2_image.dll",
+      "binary_sha256": "71607e840f462799652023d394fad7aed1f348a3cd52f88a8b3b7842fa7a3147",
+      "size": 158208,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/SDL2_image.dll",
+          "binary_sha256": "71607e840f462799652023d394fad7aed1f348a3cd52f88a8b3b7842fa7a3147",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libtiff-5.dll",
+      "binary_sha256": "32a7816d6480f06bc5b8b030f134852b0e2d9f07fc3a4c06e0419a7f3b77671b",
+      "size": 385536,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libtiff-5.dll",
+          "binary_sha256": "32a7816d6480f06bc5b8b030f134852b0e2d9f07fc3a4c06e0419a7f3b77671b",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": [
+        "LIBTIFF, Version 4.2.0"
+      ]
+    },
+    {
+      "wheel_member": "pygame/libwebp-7.dll",
+      "binary_sha256": "6f9a53679ef7b9b55cd479bc5ef840e196368630e7930b8669bd3a1a6c0ddc75",
+      "size": 444416,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libwebp-7.dll",
+          "binary_sha256": "6f9a53679ef7b9b55cd479bc5ef840e196368630e7930b8669bd3a1a6c0ddc75",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libwebpdemux-2.dll",
+      "binary_sha256": "53645d4daf4379e8e454d28d6eaaf2949ab0f1686b2fc3edf529b5f2560dd971",
+      "size": 24064,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libwebpdemux-2.dll",
+          "binary_sha256": "53645d4daf4379e8e454d28d6eaaf2949ab0f1686b2fc3edf529b5f2560dd971",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libjpeg-62.dll",
+      "binary_sha256": "207c139e6029741b786d08942dbad54127520b361dda56228e660e4d556d8ca1",
+      "size": 1147092,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libjpeg-62.dll",
+          "binary_sha256": "207c139e6029741b786d08942dbad54127520b361dda56228e660e4d556d8ca1",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": [
+        "libjpeg-turbo version 3.1.4.1 (build 20260327)"
+      ]
+    },
+    {
+      "wheel_member": "pygame/libpng16-16.dll",
+      "binary_sha256": "fb243cedb9b55b9095596be133636f7681f31a4b0d2ab54607551addb1f60902",
+      "size": 248832,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libpng16-16.dll",
+          "binary_sha256": "fb243cedb9b55b9095596be133636f7681f31a4b0d2ab54607551addb1f60902",
+          "archive": "SDL2_image-devel-2.8.12-VCpgce.zip"
+        }
+      ],
+      "static_version_strings": [
+        "libpng version 1.6.58",
+        " libpng version 1.6.58"
+      ]
+    },
+    {
+      "wheel_member": "pygame/SDL2_mixer.dll",
+      "binary_sha256": "0edd228575842920848b204cf7b9707d4159366d8ed7cee74c592462a3a503fd",
+      "size": 425984,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/SDL2_mixer.dll",
+          "binary_sha256": "0edd228575842920848b204cf7b9707d4159366d8ed7cee74c592462a3a503fd",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libogg-0.dll",
+      "binary_sha256": "76344182f53695db65fca5921ab4e478cdf2f954d86628b27dab0fb9327bf2e7",
+      "size": 32768,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/libogg-0.dll",
+          "binary_sha256": "76344182f53695db65fca5921ab4e478cdf2f954d86628b27dab0fb9327bf2e7",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libopus-0.dll",
+      "binary_sha256": "064aaa2aee76ac93df0f9ec78a670a49954e3f4ac1bc1fd70ebda2f035ccc073",
+      "size": 367616,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/libopus-0.dll",
+          "binary_sha256": "064aaa2aee76ac93df0f9ec78a670a49954e3f4ac1bc1fd70ebda2f035ccc073",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libopusfile-0.dll",
+      "binary_sha256": "31f695d1e45596aa29a3fa4e694ce3a5355216ddc74d15f1b3739cc09bbda529",
+      "size": 48640,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/libopusfile-0.dll",
+          "binary_sha256": "31f695d1e45596aa29a3fa4e694ce3a5355216ddc74d15f1b3739cc09bbda529",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libwavpack-1.dll",
+      "binary_sha256": "eb288e9e8d18e5477dcaffd49712daa393bcb58f8dbd988027a53a8684654ee7",
+      "size": 171520,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/libwavpack-1.dll",
+          "binary_sha256": "eb288e9e8d18e5477dcaffd49712daa393bcb58f8dbd988027a53a8684654ee7",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/libxmp.dll",
+      "binary_sha256": "53e9650b772fc510f70d5e307e8c7802fb205124113c1f1d994d2142b2b39d05",
+      "size": 413696,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/libxmp.dll",
+          "binary_sha256": "53e9650b772fc510f70d5e307e8c7802fb205124113c1f1d994d2142b2b39d05",
+          "archive": "SDL2_mixer-devel-2.8.2-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/SDL2_ttf.dll",
+      "binary_sha256": "86febaf2ca137e417808a646b5920cdd10d7093b30a2071abde40b012c923c3d",
+      "size": 1751552,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-VC.zip",
+          "archive_sha1": "2d18b9a4fc2ec0eee80de2a946b088d4e6efd0ee",
+          "archive_sha256": "2dea8ea01e04756ead27e196a681034ed71342562a75b512ea279fcdfde83307",
+          "archive_member": "SDL2_ttf-2.24.0/lib/x64/SDL2_ttf.dll",
+          "binary_sha256": "86febaf2ca137e417808a646b5920cdd10d7093b30a2071abde40b012c923c3d",
+          "archive": "SDL2_ttf-devel-2.24.0-VC.zip"
+        }
+      ],
+      "static_version_strings": []
+    },
+    {
+      "wheel_member": "pygame/freetype.dll",
+      "binary_sha256": "1c487392d6d06970ba3c7b52705881f1fb069f607243499276c2f0c033c7df6f",
+      "size": 654336,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "archive_member": "prebuilt-x64/lib/freetype.dll",
+          "binary_sha256": "1c487392d6d06970ba3c7b52705881f1fb069f607243499276c2f0c033c7df6f",
+          "archive": "prebuilt-x64-pygame-2.1.4-20220319_2.zip"
+        }
+      ],
+      "static_version_strings": [],
+      "binary_version": "2.11.1",
+      "version_evidence": {
+        "method": "Export-address static x86-64 disassembly of FT_New_Library and FT_Library_Version; initialization immediates2,11,1 correspond to the read version offsets; bundled header independently agrees",
+        "file": "licenses/windows-freetype-version-disassembly.txt",
+        "sha256": "2c74a50a97f1c294635ce1f7e2363dfac15af8bb46ec04a257b2f6057e316ffe"
+      }
+    },
+    {
+      "wheel_member": "pygame/portmidi.dll",
+      "binary_sha256": "c9f8d9043ac1570b10f104f2d00aec791f56261c84ee40773be73d0a3822e013",
+      "size": 41984,
+      "exact_archive_hash_matches": [
+        {
+          "archive_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "archive_member": "prebuilt-x64/lib/portmidi.dll",
+          "binary_sha256": "c9f8d9043ac1570b10f104f2d00aec791f56261c84ee40773be73d0a3822e013",
+          "archive": "prebuilt-x64-pygame-2.1.4-20220319_2.zip"
+        }
+      ],
+      "static_version_strings": []
+    }
+  ]
+}

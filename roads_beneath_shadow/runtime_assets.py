@@ -28,7 +28,7 @@ def expected_image_sizes(manifest: dict) -> dict[str, tuple[int, int]]:
     if not isinstance(resolution, list) or len(resolution) != 2 or any(type(value) is not int or value <= 0 for value in resolution):
         raise ValueError("manifest.json contains an invalid pixel resolution")
     scenes = []
-    for category in ("environment_scenes", "encounter_scenes", "original_pixel_props"):
+    for category in ("environment_scenes", "encounter_scenes", "original_pixel_props", "battle_backgrounds"):
         values = manifest.get(category)
         if not isinstance(values, list) or any(not isinstance(name, str) or re.fullmatch(r"[a-z0-9-]+", name) is None for name in values):
             raise ValueError("manifest.json contains invalid pixel scene names")
