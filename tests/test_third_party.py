@@ -25,7 +25,7 @@ class MaterializedPayloadTests(unittest.TestCase):
 
     def link(self, path, target, *, directory=False):
         try:
-            path.symlink_to(target, target_is_directory=directory)
+            path.symlink_to(Path(target), target_is_directory=directory)
         except OSError:
             self.skipTest("Symbolic links are unavailable")
 
