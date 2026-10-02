@@ -8,6 +8,7 @@ dist/
 *.spec
 *.egg-info/
 .venv/
+.pixel-venv/
 venv/
 .superpowers/
 docs/superpowers/plans/

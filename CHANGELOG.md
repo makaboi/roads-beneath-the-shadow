@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — Pixel-Art Edition
+
+- Made the desktop pixel-art game the default presentation, with illustrated dark fantasy scenes, parchment menus, graphical character meters, and mouse and keyboard controls.
+- Kept the complete two-episode story, tactical combat, companion routes, quests, inventory, Chronicle, and existing version-2 saves on the same engine.
+- Added scrollable narration and choice lists, name entry, resizing, fullscreen, reduced motion, and a headless screenshot command.
+- Retained dependency-free terminal play with `--terminal`; screen-reader preferences select the accessible terminal presentation.
+- Bundled pixel scenes and sound cues, added pygame-ce installation instructions, and updated GitHub quality and macOS packaging checks for graphical and terminal play.
+
 ## Unreleased — Bold Silhouettes
 
 - Rebuilt the title, Prancing Pony exterior, mounted Black Rider, Marsh Warg, Ghorak, ruined-gateway battle, and final-seal confrontation from new flat, high-contrast references that stay recognizable at terminal size.

@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the dependency-free macOS release."""
+"""PyInstaller entry point for the pixel-art macOS release."""
 
 from roads_beneath_shadow.__main__ import main
 

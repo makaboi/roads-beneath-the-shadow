@@ -10,7 +10,11 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 -m roads_beneath_shadow
+if [[ -x "$SCRIPT_DIR/.venv/bin/python" ]]; then
+  "$SCRIPT_DIR/.venv/bin/python" -m roads_beneath_shadow
+else
+  python3 -m roads_beneath_shadow
+fi
 STATUS=$?
 
 if [[ $STATUS -ne 0 ]]; then

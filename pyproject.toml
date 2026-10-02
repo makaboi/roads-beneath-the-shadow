@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "roads-beneath-the-shadow"
-version = "0.2.2"
-description = "A story-driven terminal RPG set in Middle-earth."
+version = "0.3.0"
+description = "A pixel-art, choice-driven dark fantasy RPG set in Middle-earth."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "All rights reserved" }
 authors = [{ name = "makaboi" }]
-dependencies = []
+dependencies = ["pygame-ce>=2.5,<3"]
 
 [project.optional-dependencies]
 test = ["Pillow==12.3.0"]
@@ -22,7 +22,7 @@ roads-beneath-shadow = "roads_beneath_shadow.__main__:main"
 include = ["roads_beneath_shadow*"]
 
 [tool.setuptools.package-data]
-roads_beneath_shadow = ["audio_assets/*.wav"]
+roads_beneath_shadow = ["audio_assets/*.wav", "pixel_assets/*.png", "pixel_assets/*.json"]
 
 [tool.unittest]
 start-directory = "tests"

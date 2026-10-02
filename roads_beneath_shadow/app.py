@@ -2068,14 +2068,21 @@ class Game:
 
     def _story_choice(self, heading: str, options: Sequence[str]) -> int | None:
         while True:
-            self.ui.write()
-            self.ui.rule()
-            self.ui.write(heading.center(min(72, self.ui.width)), color=Color.YELLOW, bold=True)
-            self.ui.rule()
-            for index, option in enumerate(options, 1):
-                self.ui.write(f"[{index}] {option}")
-            self.ui.write("[I] Inventory  [C] Character  [J] Journal  [S] Save  [M] Main menu", color=Color.DIM)
-            answer = self.ui.prompt("Enter your choice: ").lower()
+            graphical_choice = getattr(self.ui, "choose_story", None)
+            if graphical_choice is not None:
+                selected = graphical_choice(heading, options)
+                if selected is None:
+                    return None
+                answer = str(selected).lower()
+            else:
+                self.ui.write()
+                self.ui.rule()
+                self.ui.write(heading.center(min(72, self.ui.width)), color=Color.YELLOW, bold=True)
+                self.ui.rule()
+                for index, option in enumerate(options, 1):
+                    self.ui.write(f"[{index}] {option}")
+                self.ui.write("[I] Inventory  [C] Character  [J] Journal  [S] Save  [M] Main menu", color=Color.DIM)
+                answer = self.ui.prompt("Enter your choice: ").lower()
             if answer.isdigit() and 1 <= int(answer) <= len(options):
                 return int(answer)
             if answer in {"i", "inventory"}:

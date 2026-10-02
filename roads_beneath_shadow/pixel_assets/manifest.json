@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "resolution": [
+    320,
+    240
+  ],
+  "scaling": "nearest-neighbor",
+  "palette_colors_per_scene": 32,
+  "environment_scenes": [
+    "title",
+    "tavern",
+    "marsh",
+    "camp",
+    "rider",
+    "seal"
+  ],
+  "encounter_scenes": [
+    "orc",
+    "warg",
+    "ghorak",
+    "troll",
+    "ranger",
+    "tavern-interior"
+  ],
+  "original_pixel_props": [
+    "key",
+    "broken-key",
+    "sword",
+    "map",
+    "lantern",
+    "cages"
+  ],
+  "art_direction": "Gothic dark fantasy: charcoal, sepia, bone, amber and muted teal",
+  "source_atlases": "Generated with OpenAI image generation; original atlases retained outside the package."
+}
