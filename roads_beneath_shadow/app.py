@@ -2125,6 +2125,9 @@ class Game:
 
     def _story_choice(self, heading: str, options: Sequence[str]) -> int | None:
         while True:
+            # Exploration and conversation loops may finish several choices
+            # without changing the scene ID. Each new decision is a safe stop.
+            self._record_checkpoint()
             graphical_choice = getattr(self.ui, "choose_story", None)
             if graphical_choice is not None:
                 selected = graphical_choice(heading, options)

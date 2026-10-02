@@ -33,6 +33,30 @@ class _Effect:
     duration: float = 1.05
 
 
+class _ScaledFont:
+    """Keep measured text and rendered glyphs identical when fitting a card.
+
+    System font names resolve differently on macOS, Linux, and Windows. A
+    requested point size alone cannot guarantee the same line height or width.
+    """
+
+    def __init__(self, pg: Any, font: Any, scale: float) -> None:
+        self.pg = pg
+        self.font = font
+        self.scale = scale
+
+    def size(self, text: str) -> tuple[int, int]:
+        width, height = self.font.size(text)
+        return math.ceil(width * self.scale), math.ceil(height * self.scale)
+
+    def get_linesize(self) -> int:
+        return max(1, math.ceil(self.font.get_linesize() * self.scale))
+
+    def render(self, *args: Any, **kwargs: Any) -> Any:
+        glyph = self.font.render(*args, **kwargs)
+        return self.pg.transform.scale(glyph, (max(1, math.ceil(glyph.get_width() * self.scale)), max(1, math.ceil(glyph.get_height() * self.scale))))
+
+
 def _wrapped(text: str, font: Any, width: int) -> list[str]:
     """Measure whole words, splitting a long identifier only when necessary."""
     width = max(1, width)
@@ -86,6 +110,8 @@ class BattleView:
         self._mouse: tuple[int, int] | None = None
         self._effects: list[_Effect] = []
         self._sprites: dict[tuple[str, bool, int], Any] = {}
+        self._fitted_fonts: dict[tuple[int, float], Any] = {}
+        self._typography_cache: dict[tuple[Any, ...], tuple[bool, Any, Any, Any]] = {}
         self._character_atlas: Any = None
         self._atlas_checked = False
         self._backdrops: dict[str, Any] = {}
@@ -98,6 +124,7 @@ class BattleView:
 
     def set_snapshot(self, snapshot: CombatSnapshot | None) -> None:
         """Replace presentation data without retaining mutable engine objects."""
+        self._typography_cache.clear()
         if snapshot is None:
             self._effects.clear()
             self.enemy_hits.clear()
@@ -401,6 +428,109 @@ class BattleView:
         description = "\n".join(f"{status.label}: {status.description}" for status in self.snapshot.player.statuses)
         self.tooltip_hits.append((panel, description))
 
+    @staticmethod
+    def _damage_label(enemy: Any) -> str:
+        return f"{enemy.damage_min}–{enemy.damage_max} DAMAGE" if enemy.damage_max or enemy.threat in {"attack", "danger"} else str(enemy.threat).upper()
+
+    @staticmethod
+    def _status_text(statuses: Any) -> str:
+        return "  ".join(f"{status.label} {status.remaining}" for status in statuses)
+
+    @staticmethod
+    def _health_label(enemy: Any) -> str:
+        return f"{max(0, enemy.hp)} / {enemy.max_hp} HEALTH"
+
+    @staticmethod
+    def _armor_label(enemy: Any) -> str:
+        return f"ARMOR {enemy.armor}" + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
+
+    def _interrupt_label(self, enemy: Any) -> str:
+        if enemy.interruptible:
+            return "◆ CAN INTERRUPT"
+        return "◇ HOLD YOUR GROUND" if self.snapshot and self.snapshot.defensive_objective else "◇ COMMITTED INTENT"
+
+    def _card_content_height(self, rect: Any, enemy: Any, wide: bool, compact: bool, fonts: tuple[Any, Any, Any]) -> int:
+        """Measure every visible field using the same spacing as drawing."""
+        title_font, body_font, prose_font = fonts
+        pad = 7 if compact else 12
+        width = rect.w - pad * 2
+        title_width = round(width * 0.44) if wide else width
+        details_width = width - title_width - 22 if wide else width
+        top = 6 if compact else 10
+
+        def paragraph_height(text: str, font: Any, available: int) -> int:
+            return len(_wrapped(text, font, available)) * font.get_linesize() if text else 0
+
+        y = top + paragraph_height(enemy.name, title_font, title_width) + (1 if compact else 4)
+        y += paragraph_height(self._health_label(enemy), body_font, title_width) + (1 if compact else 4)
+        y += 6 if compact else 11  # Health bar and its lower gap.
+        y += paragraph_height(self._armor_label(enemy), body_font, title_width) + (2 if compact else 6)
+        left_height = y
+        statuses = self._status_text(enemy.statuses)
+        if wide:
+            left_height += paragraph_height(statuses, body_font, title_width)
+            y = top
+        if enemy.hp <= 0:
+            return max(left_height, y + 3 + title_font.get_linesize()) + top
+        y += paragraph_height(enemy.intent_label.upper(), title_font, details_width) + (1 if compact else 3)
+        y += paragraph_height(self._damage_label(enemy), body_font, details_width) + (2 if compact else 5)
+        y += paragraph_height(enemy.telegraph, prose_font, details_width) + (3 if compact else 6)
+        y += paragraph_height(self._interrupt_label(enemy), body_font, details_width) + (2 if compact else 6)
+        if not wide:
+            y += paragraph_height(statuses, body_font, details_width)
+        return max(left_height, y) + top
+
+    def _card_typography(self, rect: Any, enemy: Any, wide: bool) -> tuple[bool, Any, Any, Any]:
+        key = (enemy, rect.w, rect.h, wide, bool(self.snapshot and self.snapshot.defensive_objective),
+               *(id(font) for font in (self.bold_font, self.compact_bold_font, self.small_font,
+                                       self.mini_bold_font, self.mini_font, self.mini_prose_font)))
+        if key in self._typography_cache:
+            return self._typography_cache[key]
+
+        def remember(style: tuple[bool, Any, Any, Any]) -> tuple[bool, Any, Any, Any]:
+            # Resize events can produce many dimensions in one snapshot; keep
+            # fitting work off ordinary animation frames without growing an
+            # unbounded layout cache during a long drag of the window border.
+            if len(self._typography_cache) >= 64:
+                self._typography_cache.clear()
+            self._typography_cache[key] = style
+            return style
+
+        compact = rect.h < 180
+        fonts = (self.mini_bold_font if compact else self.compact_bold_font if rect.w < 180 else self.bold_font,
+                 self.mini_font if compact else self.small_font,
+                 self.mini_prose_font if compact else self.small_font)
+        if self._card_content_height(rect, enemy, wide, compact, fonts) <= rect.h:
+            return remember((compact, *fonts))
+        compact = True
+        fonts = (self.mini_bold_font, self.mini_font, self.mini_prose_font)
+        if self._card_content_height(rect, enemy, wide, compact, fonts) <= rect.h:
+            return remember((compact, *fonts))
+
+        def scaled_fonts(scale: float) -> tuple[Any, Any, Any]:
+            output = []
+            for font in fonts:
+                key = (id(font), scale)
+                if key not in self._fitted_fonts:
+                    self._fitted_fonts[key] = _ScaledFont(self.pg, font, scale)
+                output.append(self._fitted_fonts[key])
+            return tuple(output)
+
+        # Find the largest readable scale which preserves every card field.
+        # Wrapping is recalculated at each candidate; scaling a height estimate
+        # alone would miss extra lines caused by a platform's wider glyphs.
+        lower, upper = 0.35, 1.0
+        fitted = scaled_fonts(lower)
+        for _ in range(9):
+            candidate = round((lower + upper) / 2, 4)
+            candidate_fonts = scaled_fonts(candidate)
+            if self._card_content_height(rect, enemy, wide, compact, candidate_fonts) <= rect.h:
+                lower = candidate
+                fitted = candidate_fonts
+            else:
+                upper = candidate
+        return remember((compact, *fitted))
+
     def _draw_card(self, surface: Any, rect: Any, enemy: Any, *, wide: bool = False) -> None:
         pg = self.pg
         alive = enemy.hp > 0
@@ -411,25 +541,21 @@ class BattleView:
         if selected:
             pg.draw.rect(surface, AMBER, (rect.x, rect.y, 4, rect.h))
         self.enemy_hits.append((rect.copy(), enemy.id))
-        compact = rect.h < 180
+        compact, title_font, body_font, prose_font = self._card_typography(rect, enemy, wide)
         pad = 7 if compact else 12
         x, y = rect.x + pad, rect.y + (6 if compact else 10)
         width = rect.w - pad * 2
-        title_font = self.mini_bold_font if compact else self.compact_bold_font if rect.w < 180 else self.bold_font
-        body_font = self.mini_font if compact else self.small_font
-        prose_font = self.mini_prose_font if compact else self.small_font
         details_x = x
         details_width = width
         title_width = round(width * 0.44) if wide else width
         y = self._paragraph(surface, enemy.name, (x, y), title_width, BONE if alive else MUTED, font=title_font)
         y += 1 if compact else 4
-        self._text(surface, f"{max(0, enemy.hp)} / {enemy.max_hp} HEALTH", (x, y), RED if alive else MUTED, font=body_font)
-        y += body_font.get_linesize() + (1 if compact else 4)
+        y = self._paragraph(surface, self._health_label(enemy), (x, y), title_width, RED if alive else MUTED, font=body_font)
+        y += 1 if compact else 4
         self._health(surface, pg.Rect(x, y, title_width, 3 if compact else 5), enemy.hp, enemy.max_hp)
         y += 6 if compact else 11
-        armor = f"ARMOR {enemy.armor}" + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
-        self._text(surface, armor, (x, y), MUTED, font=body_font)
-        y += body_font.get_linesize() + (2 if compact else 6)
+        y = self._paragraph(surface, self._armor_label(enemy), (x, y), title_width, MUTED, font=body_font)
+        y += 2 if compact else 6
         if wide:
             self._status_line(surface, enemy.statuses, x, y, title_width, font=body_font)
             details_x = x + title_width + 22
@@ -437,24 +563,20 @@ class BattleView:
             y = rect.y + (6 if compact else 10)
             pg.draw.line(surface, EDGE, (details_x - 11, rect.y + 12), (details_x - 11, rect.bottom - 12))
         if not alive:
-            self._text(surface, "FALLEN", (details_x, y + 3), MUTED, font=self.bold_font)
+            self._text(surface, "FALLEN", (details_x, y + 3), MUTED, font=title_font)
             return
         intent_y = y
         y = self._paragraph(surface, enemy.intent_label.upper(), (details_x, y), details_width, AMBER, font=title_font)
         y += 1 if compact else 3
-        damage = (f"{enemy.damage_min}–{enemy.damage_max} DAMAGE" if enemy.damage_max or enemy.threat in {"attack", "danger"} else str(enemy.threat).upper())
+        damage = self._damage_label(enemy)
         y = self._paragraph(surface, damage, (details_x, y), details_width, RED if enemy.damage_max else MUTED, font=body_font)
         y += 2 if compact else 5
         y = self._paragraph(surface, enemy.telegraph, (details_x, y), details_width, MUTED, font=prose_font)
         y += 3 if compact else 6
-        if enemy.interruptible:
-            self._text(surface, "◆ CAN INTERRUPT", (details_x, y), TEAL, font=body_font)
-        elif self.snapshot and self.snapshot.defensive_objective:
-            self._text(surface, "◇ HOLD YOUR GROUND", (details_x, y), AMBER, font=body_font)
-        else:
-            self._text(surface, "◇ COMMITTED INTENT", (details_x, y), MUTED, font=body_font)
-        y += body_font.get_linesize() + (2 if compact else 6)
-        self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), f"{enemy.intent_label}: {enemy.telegraph}\n{enemy.threat}" + ("\nPower Attack or Mara can interrupt this intent." if enemy.interruptible else "")))
+        interrupt_color = TEAL if enemy.interruptible else AMBER if self.snapshot and self.snapshot.defensive_objective else MUTED
+        y = self._paragraph(surface, self._interrupt_label(enemy), (details_x, y), details_width, interrupt_color, font=body_font)
+        y += 2 if compact else 6
+        self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), f"{enemy.intent_label}: {enemy.telegraph}\n{enemy.threat}" + ("\nPower Attack or Mara can interrupt this intent." if enemy.interruptible else "") + "\nDamage is a forecast before your move. Defend, Power Attack, and interruptions can change it."))
         if not wide:
             self._status_line(surface, enemy.statuses, details_x, y, details_width, font=body_font)
 

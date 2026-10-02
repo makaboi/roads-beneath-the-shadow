@@ -9,6 +9,8 @@ on:
       - .github/workflows/desktop-release.yml
       - scripts/desktop_release.py
       - scripts/standalone_entry.py
+      - roads_beneath_shadow/**
+      - tests/**
 
 permissions:
   contents: read

@@ -118,6 +118,21 @@ class CheckpointIntegrationTests(unittest.TestCase):
         self.assertEqual(self.checkpoints.path.read_bytes(), recorded)
         self.assertEqual(ui.toasts, ["Checkpoint saved."])
 
+    def test_exploration_checkpoint_keeps_completed_clues_before_leaving_the_map(self):
+        ui = RecoveryUI()
+        choices = iter((1, 1, None))
+        ui.choose_story = lambda heading, options: next(choices)
+        game = self.game(ui)
+        game.state = self.state(scene="bree_exploration")
+        self.assertFalse(game._bree_exploration())
+        restored = self.checkpoints.resume()
+        self.assertEqual(restored.scene, "bree_exploration")
+        self.assertTrue(restored.flags["identified_ghorak_mark"])
+        self.assertIn("messenger_room", restored.visited)
+        self.assertIn("black_arrowhead", restored.character.inventory)
+        self.assertEqual(restored.to_dict(), game.state.to_dict())
+        self.assertEqual(self.saves.all_slots(), [None, None, None])
+
     def test_disabled_autosave_or_terminal_capability_creates_no_checkpoint(self):
         for ui, settings in (
             (RecoveryUI(), UserSettings(autosave=False)),

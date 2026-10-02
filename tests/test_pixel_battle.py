@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -193,6 +194,59 @@ class BattleSDLTests(unittest.TestCase):
             self.assertEqual(len(rendered), 3)
             for (pos, line_height), (card, _) in zip(rendered, self.view.enemy_hits):
                 self.assertTrue(card.contains(self.pg.Rect(*pos, 50, line_height)))
+
+    def test_larger_platform_font_metrics_keep_every_enemy_card_field_visible(self):
+        # Emulate a platform resolving the same requested system family to a
+        # taller, wider font. These are real SDL fonts and glyph surfaces.
+        self.view.mini_bold_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 18, bold=True)
+        self.view.mini_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 17)
+        self.view.mini_prose_font = self.pg.font.SysFont("dejavusans,arial,sans", 17)
+        guarded = CombatStatusView("guarded", "Guarded", 2, "+2 Armor until struck.")
+        weakened = CombatStatusView("weakened", "Weakened", 1, "Reduce incoming attacks by 2.")
+        enemy = replace(self.snapshot.enemies[0], name="Ash-Hand Commander", phase=2,
+                        intent_label="Ash-Hand Execution", telegraph="a devastating blow; interrupt it now",
+                        statuses=(guarded, weakened))
+        card = self.pg.Rect(14, 14, 134, 164)
+        fonts = (self.view.mini_bold_font, self.view.mini_font, self.view.mini_prose_font)
+        self.assertGreater(self.view._card_content_height(card, enemy, False, True, fonts), card.h)
+        rendered = []
+        original_text = self.view._text
+
+        def record_text(surface, text, pos, color=(239, 225, 188), *, font=None):
+            selected_font = font or self.view.font
+            glyph = selected_font.render(str(text), True, color)
+            rendered.append((str(text), self.pg.Rect(*pos, glyph.get_width(), max(glyph.get_height(), selected_font.get_linesize()))))
+            original_text(surface, text, pos, color, font=font)
+
+        self.view._text = record_text
+        self.view._draw_card(self.surface, card, enemy)
+        self.assertTrue(all(card.contains(glyph_rect) for _, glyph_rect in rendered), rendered)
+        text = " ".join(text for text, _ in rendered)
+        for field in (enemy.name, "HEALTH", "ARMOR", "PHASE", enemy.intent_label.upper(), "DAMAGE", enemy.telegraph, "CAN INTERRUPT", "Guarded 2", "Weakened 1"):
+            self.assertIn(field, text)
+
+    def test_fitted_font_measurements_match_its_actual_rendered_glyphs(self):
+        from roads_beneath_shadow.pixel_battle import _ScaledFont
+        native = self.pg.font.SysFont("dejavusansmono,courier,monospace", 17)
+        fitted = _ScaledFont(self.pg, native, 0.73)
+        for text in ("Ash-Hand Commander", "◆ CAN INTERRUPT", "Guarded 2"):
+            glyph = fitted.render(text, True, (239, 225, 188))
+            self.assertEqual(fitted.size(text), glyph.get_size())
+            self.assertGreaterEqual(fitted.get_linesize(), glyph.get_height())
+
+    def test_animation_frames_reuse_measured_card_typography(self):
+        self.view.mini_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 17)
+        enemy = self.snapshot.enemies[0]
+        card = self.pg.Rect(14, 14, 134, 164)
+        with patch.object(self.view, "_card_content_height", wraps=self.view._card_content_height) as measure:
+            self.view._draw_card(self.surface, card, enemy)
+            first_frame_calls = measure.call_count
+            self.assertGreater(first_frame_calls, 1)
+            self.view._draw_card(self.surface, card, enemy)
+            self.assertEqual(measure.call_count, first_frame_calls)
+            self.view.set_snapshot(replace(self.snapshot, round_number=3))
+            self.view._draw_card(self.surface, card, enemy)
+            self.assertGreater(measure.call_count, first_frame_calls)
 
     def test_original_sprite_styles_distinguish_enemy_roles(self):
         sprites = [self.view._sprite(kind, True) for kind in ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider")]
