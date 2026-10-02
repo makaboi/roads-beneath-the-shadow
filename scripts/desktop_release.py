@@ -18,7 +18,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import tomllib
 import zipfile
 
 
@@ -29,6 +28,10 @@ VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\Z")
 
 
 def project_version() -> str:
+    # The release workflow runs Python 3.13. Keep this import local so its
+    # protocol and archive helpers can also be tested on the game's Python 3.10.
+    import tomllib
+
     with (ROOT / "pyproject.toml").open("rb") as source:
         version = tomllib.load(source)["project"]["version"]
     if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
@@ -55,7 +58,7 @@ def github_commit() -> str:
     return commit
 
 
-def github_api(path: str, *, missing_ok: bool = False) -> dict | None:
+def github_api(path: str, *, missing_ok: bool = False) -> dict | list[dict] | None:
     result = subprocess.run(
         ["gh", "api", f"repos/{github_repository()}/{path}"],
         capture_output=True,
@@ -68,6 +71,27 @@ def github_api(path: str, *, missing_ok: bool = False) -> dict | None:
             return None
         raise RuntimeError(f"GitHub API request failed: {result.stderr.strip()}")
     return json.loads(result.stdout)
+
+
+def release_for_tag(tag: str) -> dict | None:
+    existing = github_api(f"releases/tags/{tag}", missing_ok=True)
+    if existing is not None:
+        if not isinstance(existing, dict):
+            raise ValueError("GitHub returned an invalid release object")
+        return existing
+    # Before publication the tag might not exist. GitHub's tag lookup returns
+    # 404 for that draft, even though the authenticated release list includes it.
+    page = 1
+    while True:
+        releases = github_api(f"releases?per_page=100&page={page}")
+        if not isinstance(releases, list):
+            raise ValueError("GitHub returned an invalid release list")
+        for release in releases:
+            if release["tag_name"] == tag:
+                return release
+        if len(releases) < 100:
+            return None
+        page += 1
 
 
 def verify_existing_tag(tag: str) -> None:
@@ -95,7 +119,7 @@ def verify_existing_tag(tag: str) -> None:
 def plan_release() -> None:
     version = project_version()
     tag = f"v{version}"
-    existing = github_api(f"releases/tags/{tag}", missing_ok=True)
+    existing = release_for_tag(tag)
     build = existing is None or existing["draft"]
     if build:
         verify_existing_tag(tag)
@@ -116,8 +140,11 @@ def archive_name(platform: str) -> str:
 
 
 def archive_digest(archive: Path) -> str:
+    digest = hashlib.sha256()
     with archive.open("rb") as source:
-        return hashlib.file_digest(source, "sha256").hexdigest()
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def verify_host(platform: str) -> None:
@@ -263,7 +290,7 @@ def publish_release(version: str, output: Path) -> None:
     verify_version(version)
     downloads = verified_downloads(output)
     tag = f"v{version}"
-    existing = github_api(f"releases/tags/{tag}", missing_ok=True)
+    existing = release_for_tag(tag)
     if existing is not None and not existing["draft"]:
         print(f"{tag} is already published; leaving its downloads unchanged.")
         return
@@ -278,13 +305,34 @@ def publish_release(version: str, output: Path) -> None:
             env=environment,
             check=True,
         )
+        existing = release_for_tag(tag)
+    else:
+        # A failed publishing attempt can leave a private draft. All archives
+        # have just been rebuilt; name their exact commit before retrying.
+        subprocess.run(
+            ["gh", "release", "edit", tag, "--draft", "--target", github_commit()],
+            env=environment,
+            check=True,
+        )
+    if existing is None or not existing["draft"]:
+        raise ValueError("GitHub did not create an unpublished release draft")
+    release_path = f"releases/{existing['id']}"
+    draft = github_api(release_path)
+    if (
+        not isinstance(draft, dict) or not draft["draft"]
+        or draft["tag_name"] != tag or draft["target_commitish"] != github_commit()
+    ):
+        raise ValueError("The release draft does not name the exact rebuilt commit")
     subprocess.run(
         ["gh", "release", "upload", tag, *(str(path) for path in downloads), "--clobber"],
         env=environment,
         check=True,
     )
-    uploaded = github_api(f"releases/tags/{tag}")
-    if uploaded is None or not uploaded["draft"]:
+    uploaded = github_api(release_path)
+    if (
+        not isinstance(uploaded, dict) or not uploaded["draft"]
+        or uploaded["tag_name"] != tag or uploaded["target_commitish"] != github_commit()
+    ):
         raise ValueError("The release must remain a draft until every download is verified")
     assets = {asset["name"]: asset for asset in uploaded["assets"]}
     for download in downloads:
