@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — Clearer Panels and Complete Downloads
+
+- Restore the latest narration behind Settings and other utility menus after closing a searched or scrolled story Archive, while keeping the Archive's place for reopening.
+- Safely materialize bundled Python framework aliases before recording the desktop payload inventory, including the macOS framework's duplicate runtime and metadata paths.
+- Reject unlisted payload files as well as missing or changed files when verifying and publishing desktop archives.
+
 ## 0.6.0 — Sharper Shadows
 
 - Refreshed twelve original scene illustrations, including the title, Prancing Pony, marshes, camp, Black Rider, and major enemies, with cohesive dark-fantasy pixel art.

@@ -124,6 +124,103 @@ class JourneyControlsTests(unittest.TestCase):
         self.assertEqual(self.results, [None])
         self.assertEqual(self.game.state.to_dict(), before)
 
+    def _assert_archive_close_keeps_utility_context_current(self, close_key, *, compact=False):
+        if compact:
+            self.ui.text_size = "larger"
+            self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=760, h=560))
+        latest = "The rain weakens to a cold mist. Bree has drawn in upon itself. " * 18
+        self.ui.narrate(latest + "LATEST BREE CONTEXT: The road is quiet.")
+        self.start()
+        while self.window.reading:
+            self.key(self.pg.K_RETURN)
+            self.window.render()
+        # These previously read records belong to Archive, not this prompt's
+        # illustrated source. An old meter must not become utility context.
+        self.window.history[:0] = [
+            (f"Old combat record {index}: Focus 2/3; Orc Scout 9/9.", None, False)
+            for index in range(70)
+        ]
+        self.key(self.pg.K_DOWN)
+        original = self.window.request
+        old_pages = self.window.narrative.pages
+        old_index = self.window.narrative.index
+        old_position = self.window.world.player_position
+        before = self.game.state.to_dict()
+
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.window.handle_event(self.pg.event.Event(
+            self.pg.KEYDOWN, key=self.pg.K_f, unicode="f", mod=self.pg.KMOD_CTRL))
+        self.window.handle_event(self.pg.event.Event(
+            self.pg.TEXTINPUT, text="Old combat record 3"))
+        self.window.render()
+        self.assertTrue(self.window.archive.matches)
+        old_scroll = self.window.archive.scroll
+        old_anchor = self.window.archive.reading_anchor
+        self.assertGreater(old_scroll, 0)
+        self.assertEqual(self.window.history_scroll, old_scroll)
+        if close_key == self.pg.K_ESCAPE:
+            self.key(self.pg.K_ESCAPE)  # End search before closing Archive.
+            self.window.render()
+            self.assertTrue(self.window.transcript_open)
+            # Ending search changes the compact footer's row count; bind the
+            # retained reading position after that normal layout adjustment.
+            old_scroll = self.window.archive.scroll
+            old_anchor = self.window.archive.reading_anchor
+        self.key(close_key)
+        self.assertFalse(self.window.transcript_open)
+        self.assertEqual(self.window.history_scroll, 0)
+        self.assertEqual(self.window.archive.scroll, old_scroll)
+
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.assertEqual(self.window.archive.scroll, old_scroll)
+        self.assertEqual(self.window.archive.reading_anchor, old_anchor)
+        self.assertEqual(self.window.archive.query, "Old combat record 3")
+        self.key(self.pg.K_TAB)
+        self.assertEqual(self.window.history_scroll, 0)
+        self.key(self.pg.K_p, "p")
+        self.await_request(lambda request: request.label == "JOURNEY PAUSED")
+        self.key(self.pg.K_3, "3")
+        self.await_request(lambda request: request.label == "SETTINGS")
+        self.assertIsNone(self.window.narrative.current)
+        rendered = []
+        original_text = self.window._text
+
+        def record_text(text, position, *args, **kwargs):
+            if self.window.history_rect.collidepoint(position):
+                rendered.append(text)
+            return original_text(text, position, *args, **kwargs)
+
+        self.window._text = record_text
+        try:
+            self.window.render()
+        finally:
+            self.window._text = original_text
+        context = " ".join(rendered)
+        self.assertIn("LATEST BREE CONTEXT", context)
+        self.assertNotIn("Focus 2/3", context)
+        self.assertNotIn("Orc Scout 9/9", context)
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.label == "JOURNEY PAUSED")
+        self.key(self.pg.K_ESCAPE)
+        current = self.await_request(lambda request: request.story)
+        self.assertEqual(current.options, original.options)
+        self.assertEqual(current.context["decision_id"], original.context["decision_id"])
+        self.assertEqual(self.window.narrative.pages, old_pages)
+        self.assertEqual(self.window.narrative.index, old_index)
+        self.assertEqual(self.window.selected, 1)
+        self.assertEqual(self.window.world.player_position, old_position)
+        self.assertEqual(self.game.state.to_dict(), before)
+        self.assertEqual(self.window.archive.scroll, old_scroll)
+        self.assertEqual(self.results, [])
+
+    def test_archive_search_closed_by_tab_does_not_scroll_the_next_utility_context(self):
+        self._assert_archive_close_keeps_utility_context_current(self.pg.K_TAB)
+
+    def test_archive_search_closed_by_escape_keeps_compact_larger_utility_context_current(self):
+        self._assert_archive_close_keeps_utility_context_current(self.pg.K_ESCAPE, compact=True)
+
     def test_inventory_return_preserves_keyboard_selection_and_confirmation(self):
         self.start()
         self.key(self.pg.K_DOWN)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "roads-beneath-the-shadow"
-version = "0.6.0"
+version = "0.6.1"
 description = "A pixel-art, choice-driven dark fantasy RPG set in Middle-earth."
 readme = "README.md"
 requires-python = ">=3.10"

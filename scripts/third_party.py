@@ -21,6 +21,7 @@ import re
 import shutil
 import sys
 import tarfile
+import tempfile
 import urllib.request
 import urllib.error
 
@@ -290,6 +291,78 @@ def retain_windows_liblzma_notice(bundle: Path, destination: Path, runtime: dict
     }
 
 
+def materialize_internal_tree(bundle: Path) -> None:
+    """Retain safe framework aliases as regular files before recording hashes."""
+    bundle = bundle.resolve()
+    internal = bundle / "_internal"
+    if not internal.is_dir() or internal.is_symlink():
+        raise ValueError("A regular onedir _internal directory is required")
+    has_links = False
+
+    def inspect(directory: Path, ancestors: frozenset[Path]) -> None:
+        nonlocal has_links
+        try:
+            resolved = directory.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ValueError("The standalone payload has an unreadable or cyclic link") from error
+        if not resolved.is_relative_to(bundle):
+            raise ValueError("A build link leaves the standalone folder")
+        if resolved in ancestors:
+            raise ValueError("The standalone payload has a cyclic directory link")
+        for path in sorted(directory.iterdir()):
+            has_links = has_links or path.is_symlink()
+            try:
+                target = path.resolve(strict=True)
+            except (OSError, RuntimeError) as error:
+                raise ValueError("The standalone payload has an unreadable or cyclic link") from error
+            if not target.is_relative_to(bundle):
+                raise ValueError("A build link leaves the standalone folder")
+            if path.is_dir():
+                inspect(path, ancestors | {resolved})
+            elif not path.is_file():
+                raise ValueError("The standalone payload must contain only regular files and directories")
+
+    inspect(internal, frozenset())
+    if not has_links:
+        return
+    # Work on the same filesystem and retain the original tree until the
+    # complete copy succeeds. Notice collection and its QA hash happen later.
+    with tempfile.TemporaryDirectory(prefix=".rbs-materialized-", dir=bundle) as temporary:
+        root = Path(temporary)
+        materialized = root / "retained"
+        shutil.copytree(internal, materialized, symlinks=False)
+        backup = root / "original"
+        internal.replace(backup)
+        try:
+            materialized.replace(internal)
+        except BaseException:
+            backup.replace(internal)
+            raise
+
+
+def collect_payload_inventory(bundle: Path, manifest: dict, platform: str) -> tuple[list[dict], list[dict]]:
+    """Record every physical file in the already materialized runtime tree."""
+    components = {}
+    payload = []
+    for path in sorted((bundle / "_internal").rglob("*")):
+        if path.is_symlink():
+            raise ValueError("The retained payload must contain regular files without symbolic links")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(bundle).as_posix()
+        item = {"path": relative, "sha256": digest(path), "size_bytes": path.stat().st_size}
+        component = native_component(path, manifest, platform)
+        if component is not None:
+            item["component"] = component["id"]
+            components[component["id"]] = component
+        elif "pygame_ce.libs" in path.parts or ".dylibs" in path.parts:
+            raise ValueError(f"No third-party notice provenance for bundled pygame native library: {relative}")
+        elif "pygame" in path.parts and path.suffix.lower() in (".so", ".pyd", ".dll"):
+            item["component"] = "pygame-ce"
+        payload.append(item)
+    return payload, sorted(components.values(), key=lambda value: value["id"])
+
+
 def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
     """Prepare an onedir build for assembly; failures stop public packaging."""
     manifest = json.loads((CATALOG / "manifest.json").read_text(encoding="utf-8"))
@@ -301,6 +374,7 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
     internal = bundle / "_internal"
     if not internal.is_dir():
         raise ValueError("A persistent onedir _internal directory is required")
+    materialize_internal_tree(bundle)
     windows_system_exclusions = exclude_windows_system_ucrt(bundle, platform, analysis_toc)
     # The game ships and validates its own DejaVu fonts. pygame's default
     # font is unused in a complete release and has a separate GPL license.
@@ -390,22 +464,7 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
                         "distributed_filename": target.name, "sha512": digest(target, "sha512"),
                         "path": target.relative_to(bundle).as_posix(), "sha256": digest(target),
                         "size_bytes": target.stat().st_size, **transform})
-    components = {}
-    payload = []
-    for path in sorted(internal.rglob("*")):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(bundle).as_posix()
-        item = {"path": relative, "sha256": digest(path), "size_bytes": path.stat().st_size}
-        component = native_component(path, manifest, platform)
-        if component is not None:
-            item["component"] = component["id"]
-            components[component["id"]] = component
-        elif "pygame_ce.libs" in path.parts or ".dylibs" in path.parts:
-            raise ValueError(f"No third-party notice provenance for bundled pygame native library: {relative}")
-        elif "pygame" in path.parts and path.suffix.lower() in (".so", ".pyd", ".dll"):
-            item["component"] = "pygame-ce"
-        payload.append(item)
+    payload, components = collect_payload_inventory(bundle, manifest, platform)
     for source in sources:
         source["bundled_object_paths"] = [item["path"] for item in payload if item.get("component") == source["id"]]
         source["source_scope"] = (
@@ -413,12 +472,12 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
             else "Additional upstream wheel build-source reference; no separate library object is bundled"
         )
     supporting_files = [{"path": path.relative_to(bundle).as_posix(), "sha256": digest(path)}
-                        for path in sorted(destination.rglob("*")) if path.is_file() and "sources" not in path.relative_to(destination).parts]
+                        for path in sorted(destination.rglob("*")) if path.is_file() and path.relative_to(destination).parts[0] != "sources"]
     inventory = {
         "schema_version": 1, "platform": platform, "pygame_ce": pygame_version,
         "pygame_upstream_commit": manifest["pygame_upstream_commit"],
         "packaging": "onedir; shared libraries remain in _internal",
-        "components": sorted(components.values(), key=lambda value: value["id"]),
+        "components": components,
         "source_archives": sources, "runtime": runtime, "payload": payload, "supporting_files": supporting_files,
     }
     if platform == "Windows-x64":
@@ -465,12 +524,67 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
     return inventory
 
 
+def verify_inventory_coverage(inventory: dict, retained_paths: set[str]) -> None:
+    """Require exact runtime/source/notice path coverage, including aliases."""
+    if inventory.get("schema_version") != 1 or not isinstance(inventory.get("payload"), list):
+        raise ValueError("Invalid third-party payload inventory")
+    groups = []
+    for key in ("payload", "source_archives", "supporting_files"):
+        records = inventory.get(key, [])
+        if not isinstance(records, list):
+            raise ValueError("Invalid third-party payload inventory")
+        paths = []
+        for item in records:
+            raw = item.get("path") if isinstance(item, dict) else None
+            if not isinstance(raw, str):
+                raise ValueError("Invalid third-party inventory path")
+            relative = PurePosixPath(raw)
+            if relative.is_absolute() or ".." in relative.parts or "\\" in raw or any(":" in part for part in relative.parts):
+                raise ValueError("Third-party inventory path leaves the player folder")
+            if raw != relative.as_posix():
+                raise ValueError("Third-party inventory paths must be canonical")
+            prefix = "_internal/" if key == "payload" else "third-party/"
+            if not raw.startswith(prefix):
+                raise ValueError("Third-party inventory path is outside its retained group")
+            if key == "source_archives" and not raw.startswith("third-party/sources/"):
+                raise ValueError("A source archive is outside the retained sources group")
+            if key == "supporting_files" and raw.startswith("third-party/sources/"):
+                raise ValueError("A supporting notice cannot authorize a retained source archive")
+            paths.append(raw)
+        if len(paths) != len(set(paths)):
+            raise ValueError("Third-party inventory contains duplicate retained paths")
+        groups.append(set(paths))
+    if groups[1] & groups[2]:
+        raise ValueError("Third-party inventory contains duplicate retained paths")
+    expected = groups[0] | groups[1] | groups[2]
+    actual = {path for path in retained_paths if path.startswith(("_internal/", "third-party/"))}
+    extra, missing = actual - expected, expected - actual
+    if extra or missing:
+        details = []
+        if extra:
+            details.append("unlisted files: " + ", ".join(sorted(extra)))
+        if missing:
+            details.append("missing or altered runtime/source files: " + ", ".join(sorted(missing)))
+        raise ValueError("The retained payload inventory is incomplete; " + "; ".join(details))
+
+
 def verify_inventory(bundle: Path) -> dict:
     """Verify every retained runtime file and source after player extraction."""
     bundle = bundle.resolve()
     inventory = json.loads((bundle / INVENTORY_NAME).read_text(encoding="utf-8"))
-    if inventory.get("schema_version") != 1 or not isinstance(inventory.get("payload"), list):
-        raise ValueError("Invalid third-party payload inventory")
+    retained = set()
+    for name in ("_internal", "third-party"):
+        root = bundle / name
+        if root.is_symlink():
+            raise ValueError("Third-party inventory must name regular packaged files, without symbolic links")
+        for path in root.rglob("*"):
+            if path.is_symlink():
+                raise ValueError("Third-party inventory must name regular packaged files, without symbolic links")
+            if path.is_file():
+                retained.add(path.relative_to(bundle).as_posix())
+            elif not path.is_dir():
+                raise ValueError("The retained payload must contain only regular files and directories")
+    verify_inventory_coverage(inventory, retained)
     for item in [*inventory["payload"], *inventory.get("source_archives", []), *inventory.get("supporting_files", [])]:
         raw = item["path"]
         relative = PurePosixPath(raw)

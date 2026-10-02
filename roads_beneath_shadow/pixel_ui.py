@@ -843,7 +843,8 @@ class PixelWindow:
                 self._set_transcript(False)
             elif self.archive.handle_event(event):
                 self._set_transcript(False)
-            self.history_scroll = self.archive.scroll
+            if self.transcript_open:
+                self.history_scroll = self.archive.scroll
             return
         if self.panels.active:
             handled, action = self.panels.handle_event(event)

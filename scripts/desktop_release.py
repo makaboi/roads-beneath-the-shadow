@@ -594,6 +594,67 @@ def verified_downloads(output: Path) -> list[Path]:
     return downloads
 
 
+def retained_archive_paths(entries: list[tuple[str, bool, bool]]) -> set[str]:
+    """Read safe regular retained paths without trusting inventory omissions."""
+    files = set()
+    seen = set()
+    for name, directory, regular in entries:
+        path = PurePosixPath(name)
+        canonical = name[:-1] if directory and name.endswith("/") else name
+        if (
+            not path.parts or path.parts[0] != GAME_NAME or path.is_absolute()
+            or ".." in path.parts or "\\" in name or any(":" in part for part in path.parts)
+            or any(ord(character) < 32 or ord(character) == 127 for character in name)
+            or canonical != path.as_posix() or canonical in seen
+        ):
+            raise ValueError("The player archive has an unsafe or duplicate retained path")
+        seen.add(canonical)
+        if not regular:
+            raise ValueError("The player archive must retain regular files and directories")
+        if directory:
+            continue
+        if len(path.parts) < 2:
+            raise ValueError("The player archive must retain regular files")
+        files.add(PurePosixPath(*path.parts[1:]).as_posix())
+    return files
+
+
+def read_retained_inventory(data: bytes, notices: dict, platform: str) -> dict:
+    inventory = json.loads(data)
+    if hashlib.sha256(data).hexdigest() != notices["inventory_sha256"]:
+        raise ValueError(f"The packaged third-party inventory does not match native QA: {platform}")
+    runtime = inventory.get("runtime") if isinstance(inventory, dict) else None
+    unresolved = runtime.get("unresolved") if isinstance(runtime, dict) else None
+    if not isinstance(inventory, dict) or inventory.get("schema_version") != 1 or not isinstance(unresolved, list) or unresolved != notices["unresolved"]:
+        raise ValueError(f"The packaged third-party notice results do not match native QA: {platform}")
+    return inventory
+
+
+def verify_retained_archive_inventory(inventory: dict, retained_paths: set[str], entries, open_member) -> None:
+    """Verify declared physical paths and bytes before any release mutation."""
+    if __package__:
+        from .third_party import verify_inventory_coverage
+    else:
+        from third_party import verify_inventory_coverage
+    verify_inventory_coverage(inventory, retained_paths)
+    records = {item["path"]: item for group in ("payload", "source_archives", "supporting_files")
+               for item in inventory.get(group, [])}
+    prefix = GAME_NAME + "/"
+    for name, member in entries:
+        relative = name[len(prefix):]
+        if relative not in records:
+            continue
+        data = open_member(member)
+        if data is None:
+            raise ValueError(f"Unreadable retained runtime/source file: {relative}")
+        checksum = hashlib.sha256()
+        with data:
+            for block in iter(lambda: data.read(1024 * 1024), b""):
+                checksum.update(block)
+        if checksum.hexdigest() != records[relative].get("sha256"):
+            raise ValueError(f"The archive has an altered retained runtime/source file: {relative}")
+
+
 def verify_notice_gate(output: Path, version: str) -> None:
     """Allow preview inspection, but stop publication with unresolved notices."""
     for platform in PLATFORMS:
@@ -617,25 +678,39 @@ def verify_notice_gate(output: Path, version: str) -> None:
         try:
             if platform == "Linux-x64":
                 with tarfile.open(archive, "r:gz") as source:
-                    members = [member for member in source.getmembers() if member.name == inventory_name]
+                    entries = source.getmembers()
+                    retained_paths = retained_archive_paths([
+                        (member.name, member.isdir(), member.isfile() or (member.isdir() and member.size == 0))
+                        for member in entries
+                    ])
+                    members = [member for member in entries if member.name == inventory_name]
                     if len(members) != 1 or not members[0].isfile() or members[0].size > 16 * 1024 * 1024:
                         raise ValueError("The archive must contain one regular third-party inventory")
                     with source.extractfile(members[0]) as incoming:
                         inventory_bytes = incoming.read()
+                    inventory = read_retained_inventory(inventory_bytes, notices, platform)
+                    verify_retained_archive_inventory(inventory, retained_paths, [(member.name, member) for member in entries], source.extractfile)
             else:
                 with zipfile.ZipFile(archive) as source:
-                    members = [member for member in source.infolist() if member.filename == inventory_name]
+                    entries = source.infolist()
+                    if any(member.orig_filename != member.filename for member in entries):
+                        raise ValueError("The player archive has an unsafe or duplicate retained path")
+                    retained_paths = retained_archive_paths([
+                        (member.filename, member.is_dir(), (
+                            member.is_dir() and stat.S_IFMT(member.external_attr >> 16) in (0, stat.S_IFDIR) and member.file_size == 0
+                        ) or (
+                            not member.is_dir() and stat.S_IFMT(member.external_attr >> 16) in (0, stat.S_IFREG)
+                        ))
+                        for member in entries
+                    ])
+                    members = [member for member in entries if member.filename == inventory_name]
                     if len(members) != 1 or members[0].is_dir() or stat.S_ISLNK(members[0].external_attr >> 16) or members[0].file_size > 16 * 1024 * 1024:
                         raise ValueError("The archive must contain one regular third-party inventory")
                     inventory_bytes = source.read(members[0])
-            inventory = json.loads(inventory_bytes)
+                    inventory = read_retained_inventory(inventory_bytes, notices, platform)
+                    verify_retained_archive_inventory(inventory, retained_paths, [(member.filename, member) for member in entries], source.open)
         except (tarfile.TarError, zipfile.BadZipFile, json.JSONDecodeError, UnicodeError) as error:
             raise ValueError(f"The archive has no readable third-party inventory: {platform}") from error
-        if hashlib.sha256(inventory_bytes).hexdigest() != notices["inventory_sha256"]:
-            raise ValueError(f"The packaged third-party inventory does not match native QA: {platform}")
-        packaged_unresolved = inventory.get("runtime", {}).get("unresolved")
-        if inventory.get("schema_version") != 1 or not isinstance(packaged_unresolved, list) or packaged_unresolved != notices["unresolved"]:
-            raise ValueError(f"The packaged third-party notice results do not match native QA: {platform}")
 
 
 def verify_quality_gate(*, timeout: float = 600, poll_interval: float = 10) -> dict:

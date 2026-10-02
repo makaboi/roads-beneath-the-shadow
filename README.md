@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.6.0 redraws the road.** Refreshed pixel illustrations give the inn, marshes, buried halls, and major encounters a richer dark-fantasy atmosphere. Expressive origin portraits, distinct party and enemy sprites, and animated battle poses carry each traveler into the scene. Regional mist, shadows, and lamplight bring depth to thirteen walkable locations; pixel panel frames and clearer compact battle text keep choices readable. Both complete episodes, existing saves, and the same story and combat rules remain playable in the desktop and terminal editions.
+**Version 0.6.1 redraws the road.** Refreshed pixel illustrations give the inn, marshes, buried halls, and major encounters a richer dark-fantasy atmosphere. Expressive origin portraits, distinct party and enemy sprites, and animated battle poses carry each traveler into the scene. Regional mist, shadows, and lamplight bring depth to thirteen walkable locations; pixel panel frames and clearer compact battle text keep choices readable. Both complete episodes, existing saves, and the same story and combat rules remain playable in the desktop and terminal editions.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 

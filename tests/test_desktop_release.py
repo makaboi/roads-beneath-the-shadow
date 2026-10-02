@@ -6,6 +6,7 @@ import hashlib
 import json
 import io
 import re
+import stat
 from pathlib import Path
 import subprocess
 import tempfile
@@ -163,7 +164,7 @@ class DesktopReleaseTests(unittest.TestCase):
         self.output = Path(temporary.name)
         for platform in desktop_release.PLATFORMS:
             archive = self.output / desktop_release.archive_name(platform)
-            inventory = json.dumps({"schema_version": 1, "runtime": {"unresolved": []}}).encode()
+            inventory = json.dumps({"schema_version": 1, "runtime": {"unresolved": []}, "payload": []}).encode()
             name = f"{desktop_release.GAME_NAME}/THIRD-PARTY-INVENTORY.json"
             if platform == "Linux-x64":
                 with tarfile.open(archive, "w:gz") as target:
@@ -198,6 +199,100 @@ class DesktopReleaseTests(unittest.TestCase):
             desktop_release.subprocess, "run", side_effect=server.command
         ):
             desktop_release.publish_release(VERSION, self.output)
+
+    def replace_mac_archive(self, inventory, files):
+        archive = self.output / desktop_release.archive_name("macOS-Intel")
+        inventory_bytes = json.dumps(inventory).encode()
+        with zipfile.ZipFile(archive, "w") as target:
+            target.writestr(f"{desktop_release.GAME_NAME}/THIRD-PARTY-INVENTORY.json", inventory_bytes)
+            for name, data, mode in files:
+                member = zipfile.ZipInfo(f"{desktop_release.GAME_NAME}/{name}")
+                member.create_system = 3
+                member.external_attr = mode << 16
+                target.writestr(member, data)
+        checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        archive.with_name(f"{archive.name}.sha256").write_text(f"{checksum}  {archive.name}\n")
+        report_path = archive.with_name(f"{archive.name}.qa.json")
+        report = json.loads(report_path.read_text())
+        report["archive"]["sha256"] = checksum
+        report["third_party"]["inventory_sha256"] = hashlib.sha256(inventory_bytes).hexdigest()
+        report_path.write_text(json.dumps(report))
+
+    def test_unlisted_framework_alias_blocks_every_publication_write(self):
+        original = "_internal/Python.framework/Versions/3.13/Python"
+        alias = "_internal/Python.framework/Versions/Current/Python"
+        data = b"identical CPython runtime"
+        inventory = {"schema_version": 1, "runtime": {"unresolved": []}, "payload": [{
+            "path": original, "sha256": hashlib.sha256(data).hexdigest(),
+        }]}
+        self.replace_mac_archive(inventory, [(original, data, stat.S_IFREG | 0o755), (alias, data, stat.S_IFREG | 0o755)])
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "unlisted files"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
+
+    def test_declared_same_size_runtime_source_and_notice_mutations_block_publication(self):
+        groups = (("payload", "_internal/runtime"), ("source_archives", "third-party/sources/source.tar.gz"),
+                  ("supporting_files", "third-party/runtime/LICENSE.txt"))
+        for group, path in groups:
+            inventory = {"schema_version": 1, "runtime": {"unresolved": []}, "payload": [], group: [{
+                "path": path, "sha256": hashlib.sha256(b"original").hexdigest(),
+            }]}
+            self.replace_mac_archive(inventory, [(path, b"modified", stat.S_IFREG | 0o644)])
+            server = ReleaseServer(self.downloads)
+            with self.subTest(group=group), self.assertRaisesRegex(ValueError, "altered retained runtime/source"):
+                self.publish(server)
+            self.assertEqual(server.requests, [])
+            self.assertEqual(server.commands, [])
+
+    def test_directory_looking_special_zip_members_cannot_bypass_publication_gate(self):
+        cases = (("_internal/link/", b"", stat.S_IFLNK | 0o777),
+                 ("_internal/pipe/", b"", stat.S_IFIFO | 0o644),
+                 ("_internal/data/", b"hidden directory payload", stat.S_IFDIR | 0o755),
+                 ("_internal/not-a-file", b"", stat.S_IFDIR | 0o755))
+        inventory = {"schema_version": 1, "runtime": {"unresolved": []}, "payload": []}
+        for path, data, mode in cases:
+            self.replace_mac_archive(inventory, [(path, data, mode)])
+            server = ReleaseServer(self.downloads)
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "regular files"):
+                self.publish(server)
+            self.assertEqual(server.requests, [])
+            self.assertEqual(server.commands, [])
+
+    def test_noncanonical_and_control_character_paths_block_publication(self):
+        cases = (("_internal/directory//", stat.S_IFDIR | 0o755),
+                 ("_internal/line\nname", stat.S_IFREG | 0o644))
+        inventory = {"schema_version": 1, "runtime": {"unresolved": []}, "payload": []}
+        for path, mode in cases:
+            self.replace_mac_archive(inventory, [(path, b"", mode)])
+            server = ReleaseServer(self.downloads)
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+                self.publish(server)
+            self.assertEqual(server.requests, [])
+            self.assertEqual(server.commands, [])
+
+    def test_zip_nul_truncation_cannot_authorize_a_different_original_filename(self):
+        data = b"original"
+        inventory = {"schema_version": 1, "runtime": {"unresolved": []}, "payload": [{
+            "path": "_internal/runtime", "sha256": hashlib.sha256(data).hexdigest(),
+        }]}
+        self.replace_mac_archive(inventory, [("_internal/runtimeXignored", data, stat.S_IFREG | 0o644)])
+        archive = self.output / desktop_release.archive_name("macOS-Intel")
+        raw = archive.read_bytes()
+        self.assertEqual(raw.count(b"_internal/runtimeXignored"), 2)
+        archive.write_bytes(raw.replace(b"_internal/runtimeXignored", b"_internal/runtime\0ignored"))
+        checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        archive.with_name(f"{archive.name}.sha256").write_text(f"{checksum}  {archive.name}\n")
+        report_path = archive.with_name(f"{archive.name}.qa.json")
+        report = json.loads(report_path.read_text())
+        report["archive"]["sha256"] = checksum
+        report_path.write_text(json.dumps(report))
+        server = ReleaseServer(self.downloads)
+        with self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+            self.publish(server)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.commands, [])
 
     @staticmethod
     def draft():

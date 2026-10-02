@@ -12,7 +12,7 @@ import unittest
 import zipfile
 from unittest.mock import patch
 
-from scripts import desktop_release
+from scripts import desktop_release, third_party
 
 
 def native_platform():
@@ -93,7 +93,9 @@ class PlayerArchiveTests(unittest.TestCase):
                 "CHANGELOG.md": b"Changes",
                 "FONT-LICENSE.txt": b"Font license fixture",
                 "THIRD-PARTY-NOTICES.md": b"License fixture",
-                "THIRD-PARTY-INVENTORY.json": b'{"schema_version":1,"payload":[]}',
+                "THIRD-PARTY-INVENTORY.json": json.dumps({"schema_version": 1, "payload": [{
+                    "path": "_internal/shared-library.bin", "sha256": hashlib.sha256(b"Runtime fixture").hexdigest(),
+                }]}).encode(),
                 "_internal/shared-library.bin": b"Runtime fixture",
             }
             for name, data in files.items():
@@ -153,6 +155,11 @@ class PlayerArchiveTests(unittest.TestCase):
         original = self.binary.parent / "_internal/shared-library.bin"
         link = original.with_name("shared-library-link.bin")
         link.symlink_to(original.name)
+        third_party.materialize_internal_tree(self.binary.parent)
+        inventory_path = self.binary.parent / third_party.INVENTORY_NAME
+        inventory = json.loads(inventory_path.read_text())
+        inventory["payload"], _ = third_party.collect_payload_inventory(self.binary.parent, {"components": []}, self.platform)
+        inventory_path.write_text(json.dumps(inventory))
         archive = desktop_release.assemble_archive(self.binary, self.platform, "0.5.0", self.work / "linked downloads")
         executable, _ = desktop_release.extract_player_archive(archive, self.platform, self.work / "linked extraction")
         retained = executable.parent / "_internal" / link.name

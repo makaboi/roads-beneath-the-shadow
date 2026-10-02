@@ -3,14 +3,166 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import tarfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from scripts import third_party
 from scripts import runtime_notices
+from scripts import desktop_release
+
+
+class MaterializedPayloadTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.bundle = self.root / "bundle"
+        (self.bundle / "_internal").mkdir(parents=True)
+
+    def link(self, path, target, *, directory=False):
+        try:
+            path.symlink_to(Path(target), target_is_directory=directory)
+        except OSError:
+            self.skipTest("Symbolic links are unavailable")
+
+    def framework(self):
+        framework = self.bundle / "_internal/Python.framework"
+        version = framework / "Versions/3.13"
+        (version / "Resources").mkdir(parents=True)
+        (version / "Python").write_bytes(b"retained Python runtime")
+        (version / "Resources/Info.plist").write_bytes(b"retained CPython metadata")
+        self.link(framework / "Versions/Current", "3.13", directory=True)
+        self.link(framework / "Resources", "Versions/Current/Resources", directory=True)
+        self.link(framework / "Python", "Versions/Current/Python")
+        self.link(self.bundle / "_internal/Python", "Python.framework/Python")
+        return {
+            "_internal/Python": b"retained Python runtime",
+            "_internal/Python.framework/Python": b"retained Python runtime",
+            "_internal/Python.framework/Versions/3.13/Python": b"retained Python runtime",
+            "_internal/Python.framework/Versions/Current/Python": b"retained Python runtime",
+            "_internal/Python.framework/Resources/Info.plist": b"retained CPython metadata",
+            "_internal/Python.framework/Versions/3.13/Resources/Info.plist": b"retained CPython metadata",
+            "_internal/Python.framework/Versions/Current/Resources/Info.plist": b"retained CPython metadata",
+        }
+
+    def record_inventory(self):
+        payload, _ = third_party.collect_payload_inventory(self.bundle, {"components": []}, "macOS-Intel")
+        sources, supporting = [], []
+        third = self.bundle / "third-party"
+        for path in sorted(third.rglob("*")):
+            if not path.is_file():
+                continue
+            record = {"path": path.relative_to(self.bundle).as_posix(), "sha256": third_party.digest(path)}
+            (sources if record["path"].startswith("third-party/sources/") else supporting).append(record)
+        inventory = {"schema_version": 1, "payload": payload, "source_archives": sources, "supporting_files": supporting}
+        (self.bundle / third_party.INVENTORY_NAME).write_text(json.dumps(inventory))
+        return inventory
+
+    def test_framework_directory_aliases_are_inventoried_and_retained_exactly(self):
+        expected = self.framework()
+        third_party.materialize_internal_tree(self.bundle)
+        inventory = self.record_inventory()
+        self.assertEqual({item["path"] for item in inventory["payload"]}, set(expected))
+        for item in inventory["payload"]:
+            path = self.bundle / item["path"]
+            self.assertFalse(path.is_symlink())
+            self.assertEqual(path.read_bytes(), expected[item["path"]])
+            self.assertEqual(item["size_bytes"], len(expected[item["path"]]))
+        inventory_bytes = (self.bundle / third_party.INVENTORY_NAME).read_bytes()
+        (self.bundle / third_party.NOTICES_NAME).write_text("Retained CPython notices")
+        platform = "Windows-x64" if os.name == "nt" else "macOS-Intel"
+        executable = self.bundle / (desktop_release.GAME_NAME + (".exe" if os.name == "nt" else ""))
+        executable.write_bytes(b"fixture executable")
+        archive = desktop_release.assemble_archive(executable, platform, "0.6.1", self.root / "downloads")
+        with zipfile.ZipFile(archive) as retained:
+            prefix = desktop_release.GAME_NAME + "/"
+            self.assertEqual(retained.read(prefix + third_party.INVENTORY_NAME), inventory_bytes)
+            actual = {member.filename[len(prefix):] for member in retained.infolist()
+                      if member.filename.startswith(prefix + "_internal/") and not member.is_dir()}
+            self.assertEqual(actual, set(expected))
+            for path, data in expected.items():
+                self.assertEqual(retained.read(prefix + path), data)
+        extracted, _ = desktop_release.extract_player_archive(archive, platform, self.root / "extracted")
+        self.assertEqual(third_party.verify_inventory(extracted.parent), inventory)
+
+    def test_collection_rejects_unmaterialized_framework_aliases(self):
+        self.framework()
+        with self.assertRaisesRegex(ValueError, "without symbolic links"):
+            third_party.collect_payload_inventory(self.bundle, {"components": []}, "macOS-Intel")
+
+    def test_unlisted_runtime_source_and_notice_files_are_rejected(self):
+        payload = self.bundle / "_internal/declared"
+        payload.write_bytes(b"declared runtime")
+        self.record_inventory()
+        for name in ("_internal/extra", "third-party/sources/extra.tar.gz", "third-party/runtime/extra-LICENSE.txt"):
+            path = self.bundle / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"not authorized by the inventory")
+            with self.subTest(path=name), self.assertRaisesRegex(ValueError, "unlisted files"):
+                third_party.verify_inventory(self.bundle)
+            path.unlink()
+
+    def test_same_size_runtime_source_and_notice_mutations_are_rejected(self):
+        names = ("_internal/runtime", "third-party/sources/source.tar.gz", "third-party/runtime/LICENSE.txt")
+        for name in names:
+            path = self.bundle / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"original")
+        self.record_inventory()
+        for name in names:
+            path = self.bundle / name
+            path.write_bytes(b"modified")
+            with self.subTest(path=name), self.assertRaisesRegex(ValueError, "missing or altered"):
+                third_party.verify_inventory(self.bundle)
+            path.write_bytes(b"original")
+
+    def test_source_and_supporting_records_cannot_swap_groups(self):
+        for name in ("third-party/sources/source.tar.gz", "third-party/runtime/LICENSE.txt"):
+            path = self.bundle / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"retained bytes")
+        inventory = self.record_inventory()
+        inventory["source_archives"], inventory["supporting_files"] = inventory["supporting_files"], inventory["source_archives"]
+        (self.bundle / third_party.INVENTORY_NAME).write_text(json.dumps(inventory))
+        with self.assertRaisesRegex(ValueError, "outside the retained sources group"):
+            third_party.verify_inventory(self.bundle)
+
+    def test_materialization_rejects_a_nested_external_link_before_copying(self):
+        contained = self.bundle / "reference"
+        contained.mkdir()
+        external = self.root / "external"
+        external.write_bytes(b"external bytes must remain")
+        self.link(contained / "outside", external)
+        self.link(self.bundle / "_internal/alias", contained, directory=True)
+        with self.assertRaisesRegex(ValueError, "leaves the standalone folder"):
+            third_party.materialize_internal_tree(self.bundle)
+        self.assertTrue((self.bundle / "_internal/alias").is_symlink())
+        self.assertEqual(external.read_bytes(), b"external bytes must remain")
+
+    def test_materialization_rejects_indirect_directory_cycles(self):
+        internal = self.bundle / "_internal"
+        (internal / "one").mkdir()
+        (internal / "two").mkdir()
+        self.link(internal / "one/next", "../two", directory=True)
+        self.link(internal / "two/next", "../one", directory=True)
+        with self.assertRaisesRegex(ValueError, "cyclic directory link"):
+            third_party.materialize_internal_tree(self.bundle)
+        self.assertTrue((internal / "one/next").is_symlink())
+
+    def test_materialization_cannot_authorize_a_stale_recorded_hash(self):
+        path = self.bundle / "_internal/runtime"
+        path.write_bytes(b"original")
+        self.record_inventory()
+        path.write_bytes(b"modified")
+        self.link(self.bundle / "_internal/alias", "runtime")
+        third_party.materialize_internal_tree(self.bundle)
+        with self.assertRaisesRegex(ValueError, "unlisted files|missing or altered"):
+            third_party.verify_inventory(self.bundle)
 
 
 class ThirdPartySourceTests(unittest.TestCase):
@@ -208,10 +360,11 @@ class ThirdPartySourceTests(unittest.TestCase):
                     third_party.verify_inventory(bundle)
             if hasattr(Path, "symlink_to"):
                 try:
-                    (bundle / "linked.txt").symlink_to(external)
+                    (bundle / "_internal").mkdir()
+                    (bundle / "_internal/linked.txt").symlink_to(external)
                 except OSError:
                     return
-                inventory = {"schema_version": 1, "payload": [{"path": "linked.txt", "sha256": third_party.digest(external)}]}
+                inventory = {"schema_version": 1, "payload": [{"path": "_internal/linked.txt", "sha256": third_party.digest(external)}]}
                 (bundle / third_party.INVENTORY_NAME).write_text(json.dumps(inventory))
                 with self.assertRaisesRegex(ValueError, "without symbolic links"):
                     third_party.verify_inventory(bundle)
