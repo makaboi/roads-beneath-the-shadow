@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import tarfile
@@ -74,9 +75,10 @@ class MaterializedPayloadTests(unittest.TestCase):
             self.assertEqual(item["size_bytes"], len(expected[item["path"]]))
         inventory_bytes = (self.bundle / third_party.INVENTORY_NAME).read_bytes()
         (self.bundle / third_party.NOTICES_NAME).write_text("Retained CPython notices")
-        executable = self.bundle / desktop_release.GAME_NAME
+        platform = "Windows-x64" if os.name == "nt" else "macOS-Intel"
+        executable = self.bundle / (desktop_release.GAME_NAME + (".exe" if os.name == "nt" else ""))
         executable.write_bytes(b"fixture executable")
-        archive = desktop_release.assemble_archive(executable, "macOS-Intel", "0.6.1", self.root / "downloads")
+        archive = desktop_release.assemble_archive(executable, platform, "0.6.1", self.root / "downloads")
         with zipfile.ZipFile(archive) as retained:
             prefix = desktop_release.GAME_NAME + "/"
             self.assertEqual(retained.read(prefix + third_party.INVENTORY_NAME), inventory_bytes)
@@ -85,7 +87,7 @@ class MaterializedPayloadTests(unittest.TestCase):
             self.assertEqual(actual, set(expected))
             for path, data in expected.items():
                 self.assertEqual(retained.read(prefix + path), data)
-        extracted, _ = desktop_release.extract_player_archive(archive, "macOS-Intel", self.root / "extracted")
+        extracted, _ = desktop_release.extract_player_archive(archive, platform, self.root / "extracted")
         self.assertEqual(third_party.verify_inventory(extracted.parent), inventory)
 
     def test_collection_rejects_unmaterialized_framework_aliases(self):
