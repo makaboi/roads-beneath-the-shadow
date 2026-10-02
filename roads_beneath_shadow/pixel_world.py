@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .pixel_theme import load_font, wrap_text
+from .world_atmosphere import WorldAtmosphere
 
 
 TILE = 16
@@ -599,6 +600,7 @@ class WorldView:
         self._depth_atlas: Any = None
         self._depth_sprites: dict[str, list[tuple[int, Any, tuple[int, int]]]] = {}
         self._native = pygame.Surface(WORLD_SIZE)
+        self.atmosphere = WorldAtmosphere(pygame)
         self._font = load_font(pygame, 9)
         self._small_font = load_font(pygame, 8)
         self._inspection_fonts: dict[int, tuple[Any, Any]] = {}
@@ -1187,7 +1189,7 @@ class WorldView:
 
     def _draw_character(self, name: str, position: tuple[float, float], *, direction: int = 0, frame: int = 0, pose: str = "idle") -> None:
         x, y = round(position[0]), round(position[1])
-        self.pg.draw.ellipse(self._native, (12, 17, 19), (x - 6, y - 3, 12, 5))
+        self.atmosphere.draw_shadow(self._native, position)
         self._native.blit(self._sprite(name, direction, frame, pose), (x - 10, y - 21))
 
     def _face_player(self, position: tuple[float, float], default: int = 0) -> int:
@@ -1195,62 +1197,6 @@ class WorldView:
         if hypot(dx, dy) > 54:
             return default
         return (2 if dx > 0 else 1) if abs(dx) > abs(dy) else (0 if dy > 0 else 3)
-
-    def _ambient(self, reduced_motion: bool) -> None:
-        if not self.spec:
-            return
-        pg = self.pg
-        tick = 0 if reduced_motion else int(self._time * 1000)
-        overlay = pg.Surface(WORLD_SIZE, pg.SRCALPHA)
-        for index, (x, y) in enumerate(self.spec.lights):
-            offset = -10 if self.spec.key == "lantern" else 9 if self.spec.key == "camp" else 5
-            cx, cy = x * TILE + 8, y * TILE + offset
-            shimmer = 0 if reduced_motion else ((tick // 190 + index * 3) % 4)
-            for radius, alpha in ((26, 9), (18, 14), (11, 22), (5, 38)):
-                pg.draw.circle(overlay, (235, 164, 69, alpha + shimmer), (cx, cy), radius)
-            if self.spec.key != "camp":
-                pg.draw.rect(overlay, (255, 215, 125, 235), (cx, cy - shimmer // 2, 1, 3))
-        if self.spec.ambience == "rain" and not reduced_motion:
-            for index in range(25):
-                x = (index * 83 + tick // 70) % WORLD_SIZE[0]
-                y = (index * 47 + tick // 35 * 3) % WORLD_SIZE[1]
-                pg.draw.line(overlay, (120, 161, 170, 65), (x, y), (x - 1, y + 3))
-        elif self.spec.ambience in {"water", "marsh"}:
-            for y, row in enumerate(self.spec.grid):
-                for x, cell in enumerate(row):
-                    if cell == "~":
-                        offset = (tick // 390 + x + y) % 7
-                        pg.draw.line(overlay, (126, 164, 164, 70), (x * TILE + 3, y * TILE + offset + 4), (x * TILE + 10, y * TILE + offset + 4))
-            if self.spec.ambience == "marsh":
-                for index in range(5):
-                    x = (index * 67 + tick // 310) % 360 - 32
-                    y = 61 + (index * 37) % 150
-                    pg.draw.line(overlay, (160, 184, 171, 14), (x, y), (x + 29, y))
-                    pg.draw.line(overlay, (160, 184, 171, 8), (x + 5, y + 1), (x + 23, y + 1))
-        elif self.spec.ambience == "gulf":
-            for index in range(3):
-                x = 87 + (index * 37 + tick // 480) % 132
-                y = 171 + index * 13
-                pg.draw.line(overlay, (100, 131, 136, 14), (x, y), (min(247, x + 24), y))
-                pg.draw.line(overlay, (70, 102, 111, 9), (x + 3, y + 1), (min(247, x + 19), y + 1))
-        elif self.spec.ambience == "dust" and not reduced_motion:
-            for index in range(9):
-                x = (index * 43 + tick // 210) % 286 + 16
-                y = (index * 31 + tick // 380) % 190 + 22
-                pg.draw.rect(overlay, (190, 178, 133, 110), (x, y, 1, 1))
-        elif self.spec.ambience == "ash" and not reduced_motion:
-            for index in range(12):
-                x = (index * 71 + tick // 250) % 284 + 18
-                y = (index * 39 + tick // 430) % 188 + 25
-                pg.draw.rect(overlay, (149, 155, 147, 52), (x, y, 1, 1))
-        if not reduced_motion and self.spec.ambience in {"rain", "marsh"}:
-            for y, row in enumerate(self.spec.grid):
-                for x, cell in enumerate(row):
-                    if cell in {"V", "E"}:
-                        sway = ((tick // 530 + x + y) % 3) - 1
-                        cx, cy = x * TILE + (8 if cell == "V" else 11), y * TILE + (1 if cell == "V" else 3)
-                        pg.draw.line(overlay, (116, 139, 97, 115), (cx + sway, cy), (cx + sway + 2, cy))
-        self._native.blit(overlay, (0, 0))
 
     def _scene_details(self) -> None:
         """Known routes can reveal art; unknown optional routes remain hidden."""
@@ -1283,7 +1229,7 @@ class WorldView:
         pg = self.pg
         self._native.blit(self._backgrounds[self.spec.key], (0, 0))
         self._scene_details()
-        self._ambient(reduced_motion)
+        self.atmosphere.draw_ground(self._native, self.spec, self._time, reduced_motion=reduced_motion)
         for x, y in self._path:
             pg.draw.rect(self._native, (74, 116, 109), (round(x), round(y), 1, 1))
         if self._path:
@@ -1320,6 +1266,7 @@ class WorldView:
         for _anchor, sprite, prop_position in props[prop_index:]:
             self._native.blit(sprite, prop_position)
         self._foreground()
+        self.atmosphere.finish(self._native, self.spec, self._time, reduced_motion=reduced_motion)
         focus = self._focus()
         nearest = focus if isinstance(focus, BoundPoint) else None
         for bound in self.points:

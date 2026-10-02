@@ -4,6 +4,7 @@ import importlib.util
 import os
 import unittest
 from copy import deepcopy
+from unittest.mock import patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -73,6 +74,122 @@ class PixelPanelTests(unittest.TestCase):
         self.panel.selected = next(index for index, item in enumerate(self.panel.visible_items()) if item["id"] == item_id)
         self.panel._ensure_selection = True
         self.draw()
+
+    def test_face_portraits_show_the_chosen_background_and_stay_inside_their_tile(self):
+        from roads_beneath_shadow.pixel_theme import ORIGIN_PORTRAIT_FILE
+        atlas = self.pg.image.load(str(ORIGIN_PORTRAIT_FILE))
+        sentinel = (243, 12, 231, 255)
+        for index, origin in enumerate(ORIGINS):
+            for scale in (1, 2):
+                with self.subTest(origin=origin.origin_id, scale=scale):
+                    tile = self.pg.Rect(17, 21, 64 * scale, 80 * scale)
+                    surface = self.pg.Surface((180, 210), self.pg.SRCALPHA)
+                    expected = surface.copy()
+                    surface.fill(sentinel)
+                    expected.fill(sentinel)
+                    face = atlas.subsurface((index * 64, 0, 64, 80))
+                    expected.blit(self.pg.transform.scale(face, tile.size), tile)
+                    self.assertTrue(self.panel._identity_portrait(surface, origin.origin_id, tile))
+                    self.assertEqual(self.pg.image.tobytes(surface, "RGBA"), self.pg.image.tobytes(expected, "RGBA"))
+
+    def test_missing_or_malformed_face_sheet_falls_back_to_the_world_identity(self):
+        tile = self.pg.Rect(13, 15, 64, 80)
+        for failure in (OSError("missing optional portrait"), self.pg.Surface((10, 10))):
+            with self.subTest(failure=type(failure).__name__):
+                panel = PanelView(self.pg)
+                surface = self.pg.Surface((100, 110), self.pg.SRCALPHA)
+                surface.fill((0, 0, 0, 0))
+                real_load = self.pg.image.load
+                def load(path):
+                    if str(path).endswith("world-origin-portraits.png"):
+                        if isinstance(failure, BaseException):
+                            raise failure
+                        return failure
+                    return real_load(path)
+                with patch.object(self.pg.image, "load", side_effect=load):
+                    self.assertTrue(panel._identity_portrait(surface, "north_road_scout", tile))
+                self.assertTrue(tile.contains(surface.get_bounding_rect()))
+                self.assertGreater(surface.get_bounding_rect().width, 0)
+
+    def test_unknown_background_uses_generic_traveler_instead_of_another_origin_face(self):
+        with patch.object(self.panel, "_origin_portrait", return_value=True) as fallback:
+            self.assertTrue(self.panel._identity_portrait(self.screen, "unknown_origin", self.pg.Rect(0, 0, 64, 80)))
+        fallback.assert_called_once()
+        self.assertEqual(fallback.call_args.args[1], "unknown_origin")
+
+    def test_companion_portraits_keep_the_right_cast_identity_and_existing_bounds(self):
+        from pathlib import Path
+        import roads_beneath_shadow.pixel_panels as panels
+        atlas = self.pg.image.load(str(Path(panels.__file__).with_name("pixel_assets") / "world-battle-cast.png"))
+        for index, name in enumerate(("Mara", "Tobin", "Calenor")):
+            with self.subTest(name=name):
+                tile = self.pg.Rect(17, 21, 40, 48)
+                surface = self.pg.Surface((90, 90), self.pg.SRCALPHA)
+                expected = surface.copy()
+                surface.fill((243, 12, 231, 255))
+                expected.fill((243, 12, 231, 255))
+                expected.blit(atlas.subsurface((index * 40, 48, 40, 48)), tile)
+                self.assertTrue(self.panel._companion_portrait(surface, name, tile.x, tile.y))
+                self.assertEqual(self.pg.image.tobytes(surface, "RGBA"), self.pg.image.tobytes(expected, "RGBA"))
+
+    def test_missing_or_malformed_companion_sheet_preserves_legacy_identity(self):
+        for failure in (OSError("missing optional companion cast"), self.pg.Surface((10, 10))):
+            for name, row in (("Mara", 4), ("Tobin", 5), ("Calenor", 6)):
+                with self.subTest(failure=type(failure).__name__, name=name):
+                    panel = PanelView(self.pg)
+                    real_load = self.pg.image.load
+                    def load(path):
+                        if str(path).endswith("world-battle-cast.png"):
+                            if isinstance(failure, BaseException):
+                                raise failure
+                            return failure
+                        return real_load(path)
+                    with patch.object(self.pg.image, "load", side_effect=load), patch.object(panel, "_portrait", wraps=panel._portrait) as legacy:
+                        self.assertTrue(panel._companion_portrait(self.screen, name, 17, 21))
+                    legacy.assert_called_once_with(self.screen, row, 17, 21, 2)
+
+    def test_largest_text_save_caption_is_complete_inside_its_clickable_button(self):
+        panel = self.panel
+        screen = self.pg.Surface((760, 560))
+        panel.open("saves", {"mode": "save", "slots": [
+            {"slot": 1, "empty": False, "name": "Éowen", "chapter": 1, "location": "Bree", "hp": 18, "max_hp": 26},
+            {"slot": 2, "empty": True},
+        ]})
+        labels = []
+        original = panel._button
+        def button(surface, rect, label, target, value=None, **kwargs):
+            font = panel._button_font(label, rect)
+            ink = font.render(label, False, (255, 255, 255))
+            self.assertLessEqual(ink.get_width(), rect.width - 12, label)
+            self.assertLessEqual(ink.get_height(), rect.height - 6, label)
+            labels.append(label)
+            return original(surface, rect, label, target, value, **kwargs)
+        panel._button = button
+        panel.draw(screen, self.pg.Rect(18, 68, 724, 445), text_size="larger")
+        self.assertIn("Overwrite...", labels)
+        self.assertEqual(self.click("slot_action", 0), (True, {"action": "select_slot", "slot": 1}))
+
+    def test_compact_largest_character_keeps_health_and_focus_visible_with_long_names(self):
+        screen = self.pg.Surface((760, 560))
+        overlay = self.pg.Rect(18, 68, 724, 445)
+        for origin in ORIGINS:
+            with self.subTest(origin=origin.origin_id):
+                state = GameState(Character.from_origin("É" * 24, origin))
+                panel = PanelView(self.pg)
+                meters = []
+                original = panel._meter
+                def meter(surface, label, value, maximum, x, y, width, color):
+                    meters.append((label, self.pg.Rect(x, y + panel.line_height, width, 11)))
+                    return original(surface, label, value, maximum, x, y, width, color)
+                panel._meter = meter
+                panel.open("character", player_snapshot(state))
+                panel.draw(screen, overlay, text_size="larger")
+                self.assertEqual([label for label, _ in meters], ["Health", "Focus"])
+                for label, rect in meters:
+                    self.assertTrue(panel.content_rect.contains(rect), label)
+                close = next(rect for rect, target, _ in panel.hit_targets if target == "close")
+                self.assertTrue(overlay.contains(close))
+                self.assertEqual(panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=close.center)), (True, {"action": "close"}))
 
     def test_open_owns_a_deep_snapshot_and_actions_do_not_mutate_it(self):
         supplied = deepcopy(SNAPSHOT)

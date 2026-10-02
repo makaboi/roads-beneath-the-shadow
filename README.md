@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.5.1 opens more of the road.** Explore thirteen pixel-art locations with animated travelers, companion followers, and places to inspect. Read illustrated story pages, search your story and discoveries, and follow battles through visible blows, enemy phases, and clear turn summaries. Character panels remember who is still traveling with you. Bundled fonts, larger text preferences, and in-game Controls keep the journey readable. Both complete episodes and existing saves remain playable in the desktop and terminal editions.
+**Version 0.6.0 redraws the road.** Refreshed pixel illustrations give the inn, marshes, buried halls, and major encounters a richer dark-fantasy atmosphere. Expressive origin portraits, distinct party and enemy sprites, and animated battle poses carry each traveler into the scene. Regional mist, shadows, and lamplight bring depth to thirteen walkable locations; pixel panel frames and clearer compact battle text keep choices readable. Both complete episodes, existing saves, and the same story and combat rules remain playable in the desktop and terminal editions.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
@@ -134,7 +134,7 @@ Set persistent preferences from **Settings**, including Standard, Large, or Larg
 - Animated tactical battles with visible Health impacts, enemy phase changes, concise turn summaries, intentions, status, selectable targets, and clear survival objectives
 - Graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels with readable equipment comparisons and companion whereabouts that follow earned story outcomes
 - A separate automatic story checkpoint alongside three manual save slots, with atomic writes and compatible existing saves
-- Nineteen bundled scene and battle illustrations, thirteen world maps, shared character and depth atlases, and bundled fonts in a restrained dark fantasy palette
+- Twenty-seven bundled scene and battle illustrations, thirteen world maps, dedicated battle and portrait sheets, shared exploration and depth atlases, and bundled fonts in a restrained dark fantasy palette
 - Five original, seamless ambient scores, terrain footsteps, and battle and story cues, with shared mute/volume controls and graceful audio-device recovery
 - Two complete episodes with branching routes, optional conversations, and consequences carried into their endings
 - Editable Unicode character names, three distinct backgrounds, and a formative lesson from Calenor
@@ -215,7 +215,7 @@ The Quality Gate runs eight combinations of Python 3.10 and 3.13 on Linux, Windo
 The code is split into portable systems:
 
 - `pixel_ui.py` — desktop controls and the main-thread bridge to the story engine
-- `pixel_world.py` / `pixel_assets/` — walkable maps, collision, interaction points, and character animation
+- `pixel_world.py` / `world_atmosphere.py` / `pixel_assets/` — walkable maps, regional lighting and weather, collision, interaction points, and character animation
 - `narrative.py` / `pixel_transcript.py` — illustrated story pages, source-anchored reading position, and searchable transcripts
 - `pixel_theme.py` / `font_assets/` — bundled typography and measured wrapping
 - `controls.py` — shared in-game help
@@ -233,7 +233,7 @@ The code is split into portable systems:
 - `audio.py` / `soundscapes.py` — optional original cues, ambience, and nonblocking music transitions
 - `content.py` — items, backgrounds, and chapter content
 
-Pixel artwork provenance is bundled with the assets. `scripts/generate_world_assets.py` rebuilds the authored world maps, character motion, depth atlas, and origin portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`. Desktop downloads retain third-party licenses, LGPL library source archives, and build provenance in `third-party/`, with a guide in `THIRD-PARTY-NOTICES.md` and file hashes in `THIRD-PARTY-INVENTORY.json`. Their pygame libraries remain separate files for compatible replacement; the game's copyright terms are unchanged.
+Pixel artwork provenance is bundled in `pixel_assets/manifest.json`, including generated-source and native-image hashes, palette choices, and conversion details. `scripts/generate_pixel_assets.py` and `scripts/build_story_scene.py` convert the story illustrations; `scripts/build_origin_portraits.py`, `scripts/build_battle_cast.py`, `scripts/build_battle_enemies.py`, and `scripts/build_battle_locations.py` pack the generated portraits, actors, and battle floors. `scripts/generate_world_assets.py` rebuilds the authored world maps, walking animation, depth atlas, and small world portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`. Desktop downloads retain third-party licenses, LGPL library source archives, and build provenance in `third-party/`, with a guide in `THIRD-PARTY-NOTICES.md` and file hashes in `THIRD-PARTY-INVENTORY.json`. Their pygame libraries remain separate files for compatible replacement; the game's copyright terms are unchanged.
 
 ## Roadmap
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Sharper Shadows
+
+- Refreshed twelve original scene illustrations, including the title, Prancing Pony, marshes, camp, Black Rider, and major enemies, with cohesive dark-fantasy pixel art.
+- Added nine journey illustrations for Midgewater, the Hall of Eight, Echo Bridge, the Drowned Mile, the sluice prison, the House Under Ash, the Last Lantern, the burning-house memory, and the false-ranger duel.
+- Added five battle floors for the Prancing Pony, marsh, seal vault, dead road, and sluice, leaving the party and enemies to occupy the space as separate sprites.
+- Added expressive portraits for all three origins and dedicated sprites for the three origin travelers, Mara, Tobin, Calenor, eight enemy types, and Teren.
+- Refined battle poses, strikes, guards, and reactions around stable foot positions, with lighting that follows the encounter scene.
+- Added regional world atmosphere, mist, cast shadows, and reflected fire and lamplight, with foreground depth and reduced-motion preferences respected.
+- Added pixel panel frames and clearer inventory icons; improved compact battle fonts and actor labels while keeping full names available in the HUD and tooltips.
+- Recorded source and native asset provenance for the refreshed illustrations and sprite sheets. This presentation update preserves both complete episodes, story choices, combat rules, and existing saves.
+
 ## 0.5.1 — Fullscreen Window Restoration
 
 - Restored the previous window size when leaving fullscreen with F11.

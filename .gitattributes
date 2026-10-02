@@ -1,6 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
+# Packaged metadata and font notices have identical bytes on every desktop.
+roads_beneath_shadow/pixel_assets/*.json text eol=lf
+roads_beneath_shadow/font_assets/*.txt text eol=lf
+
 # Upstream notices and provenance manifests retain their original hashed bytes.
 third_party/** -text -whitespace
 # Retained upstream notices contain original whitespace and setext headings.

@@ -28,12 +28,21 @@ def expected_image_sizes(manifest: dict) -> dict[str, tuple[int, int]]:
     if not isinstance(resolution, list) or len(resolution) != 2 or any(type(value) is not int or value <= 0 for value in resolution):
         raise ValueError("manifest.json contains an invalid pixel resolution")
     scenes = []
-    for category in ("environment_scenes", "encounter_scenes", "original_pixel_props", "battle_backgrounds"):
-        values = manifest.get(category)
+    for category in ("environment_scenes", "encounter_scenes", "original_pixel_props", "battle_backgrounds", "additional_scenes"):
+        values = manifest.get(category, [] if category == "additional_scenes" else None)
         if not isinstance(values, list) or any(not isinstance(name, str) or re.fullmatch(r"[a-z0-9-]+", name) is None for name in values):
             raise ValueError("manifest.json contains invalid pixel scene names")
         scenes.extend(values)
     expected = {f"{name}.png": tuple(resolution) for name in scenes}
+    sheets = manifest.get("sprite_sheets", {})
+    if not isinstance(sheets, dict):
+        raise ValueError("manifest.json contains invalid sprite sheet geometry")
+    for name, dimensions in sheets.items():
+        if (not isinstance(name, str) or re.fullmatch(r"world-[a-z0-9-]+", name) is None or
+            not isinstance(dimensions, list) or len(dimensions) != 2 or
+            any(type(value) is not int or value <= 0 for value in dimensions)):
+            raise ValueError("manifest.json contains invalid sprite sheet geometry")
+        expected[f"{name}.png"] = tuple(dimensions)
     expected.update({f"world-{name}.png": WORLD_SIZE for name in WORLD_MAPS})
     expected["world-characters.png"] = (4 * CHARACTER_CELL[0], (max(CHARACTER_ATLAS_ROWS.values()) + 1) * CHARACTER_CELL[1])
     expected["world-motion.png"] = (MOTION_FRAMES * CHARACTER_CELL[0], len(MOTION_CHARACTERS) * MOTION_ROWS * CHARACTER_CELL[1])

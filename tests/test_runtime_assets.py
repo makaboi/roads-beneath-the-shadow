@@ -1,6 +1,7 @@
 """Exercise release diagnostics with the real SDL decoders and damaged assets."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -69,6 +70,21 @@ class RuntimeAssetTests(unittest.TestCase):
     def test_wrong_battle_background_geometry_is_rejected_by_the_native_decoder(self):
         self.pg.image.save(self.pg.Surface((320, 180)), str(self.package / "pixel_assets/echo-bridge-battle.png"))
         with self.assertRaisesRegex(ValueError, r"echo-bridge-battle\.png.*geometry"):
+            self.verify()
+
+    def test_missing_contextual_scene_cannot_silently_use_an_unrelated_illustration(self):
+        (self.package / "pixel_assets/hall-of-eight.png").unlink()
+        with self.assertRaisesRegex(ValueError, r"missing: hall-of-eight\.png"):
+            self.verify()
+
+    def test_missing_authored_cast_is_rejected_even_when_the_game_can_use_legacy_sprites(self):
+        (self.package / "pixel_assets/world-battle-cast.png").unlink()
+        with self.assertRaisesRegex(ValueError, r"missing: world-battle-cast\.png"):
+            self.verify()
+
+    def test_wrong_authored_portrait_geometry_is_rejected(self):
+        self.pg.image.save(self.pg.Surface((191, 80)), str(self.package / "pixel_assets/world-origin-portraits.png"))
+        with self.assertRaisesRegex(ValueError, r"world-origin-portraits\.png.*geometry"):
             self.verify()
 
     def test_damaged_ttf_cannot_silently_use_a_system_font(self):
@@ -154,6 +170,36 @@ class RuntimeAssetTests(unittest.TestCase):
             path.unlink()
         if self.font_initialized:
             self.pg.font.init()
+
+
+class RuntimeManifestTests(unittest.TestCase):
+    def manifest(self):
+        return json.loads((runtime_assets.PACKAGE_DIRECTORY / "pixel_assets/manifest.json").read_text())
+
+    def test_original_manifests_remain_valid_without_the_optional_visual_categories(self):
+        manifest = self.manifest()
+        manifest.pop("additional_scenes")
+        manifest.pop("sprite_sheets")
+        expected = runtime_assets.expected_image_sizes(manifest)
+        self.assertEqual(expected["world-motion.png"], (160, 4224))
+        self.assertEqual(expected["title.png"], (320, 240))
+        self.assertNotIn("world-battle-cast.png", expected)
+
+    def test_invalid_additional_scene_names_cannot_escape_the_asset_directory(self):
+        for name in ("../hall-of-eight", "/hall-of-eight", "hall.png", True):
+            manifest = self.manifest()
+            manifest["additional_scenes"] = [name]
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "invalid pixel scene names"):
+                runtime_assets.expected_image_sizes(manifest)
+
+    def test_sprite_sheet_geometry_requires_positive_integer_dimensions_and_safe_names(self):
+        for sheets in ([], {"../cast": [40, 48]}, {"world-cast": [True, 48]},
+                       {"world-cast": [0, 48]}, {"world-cast": [40.5, 48]},
+                       {"world-cast": [40]}, {"world-cast": "40x48"}):
+            manifest = self.manifest()
+            manifest["sprite_sheets"] = sheets
+            with self.subTest(sheets=sheets), self.assertRaisesRegex(ValueError, "invalid sprite sheet geometry"):
+                runtime_assets.expected_image_sizes(manifest)
 
 
 if __name__ == "__main__":

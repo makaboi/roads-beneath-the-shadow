@@ -52,6 +52,45 @@ class PixelArtworkTests(unittest.TestCase):
         for illustration, subject in expected:
             self.assertEqual(pixel_art.resolve_scene(illustration).stem, subject)
 
+    def test_contextual_journey_illustrations_keep_their_story_subjects(self):
+        expected = (
+            (journey_artwork.MIDGEWATER_CAMP_ART, "midgewater-camp"),
+            (part_two_artwork.HALL_EIGHT_WARDENS_ART, "hall-of-eight"),
+            (part_two_artwork.ERASED_EIGHTH_STATUE_ART, "hall-of-eight"),
+            (part_two_artwork.ECHO_BRIDGE_ART, "echo-bridge"),
+            (part_two_artwork.DROWNED_CARAVAN_ART, "drowned-mile"),
+            (part_two_artwork.PRISONERS_IRON_CAGES_ART, "sluice-prison"),
+            (part_two_artwork.HOUSE_UNDER_ASH_ART, "house-under-ash"),
+            (journey_artwork.LAST_LANTERN_ART, "last-lantern-scene"),
+            (artwork.CALENOR_BURNING_HOUSE_MEMORY_ART, "burning-house-memory"),
+            (part_two_artwork.FALSE_RANGER_DUEL_ART, "false-ranger-duel"),
+        )
+        for illustration, subject in expected:
+            with self.subTest(subject=subject):
+                self.assertEqual(pixel_art.resolve_scene(illustration).stem, subject)
+
+    def test_authored_asset_provenance_matches_packaged_bytes(self):
+        manifest = json.loads((pixel_art.ASSET_DIR / "manifest.json").read_text())
+        for category in ("scene_sources", "battle_background_sources", "sprite_sheet_sources"):
+            for name, metadata in manifest[category].items():
+                with self.subTest(category=category, scene=name):
+                    asset = pixel_art.ASSET_DIR / f"{name}.png"
+                    self.assertEqual(metadata["native_sha256"], hashlib.sha256(asset.read_bytes()).hexdigest())
+                    self.assertRegex(metadata["source_sha256"], r"^[0-9a-f]{64}$")
+                    self.assertEqual(Path(metadata["source_name"]).name, metadata["source_name"])
+                    self.assertTrue((Path(__file__).resolve().parents[1] / metadata["conversion"]["script"]).is_file())
+
+    def test_authored_sprite_sheets_preserve_binary_alpha_and_native_geometry(self):
+        manifest = json.loads((pixel_art.ASSET_DIR / "manifest.json").read_text())
+        for name, dimensions in manifest["sprite_sheets"].items():
+            with self.subTest(sheet=name), Image.open(pixel_art.ASSET_DIR / f"{name}.png") as sheet:
+                self.assertEqual(sheet.size, tuple(dimensions))
+                rgba = sheet.convert("RGBA")
+                pixels = rgba.tobytes()
+                self.assertTrue(set(pixels[3::4]) <= {0, 255})
+                visible = {pixels[index:index + 3] for index in range(0, len(pixels), 4) if pixels[index + 3]}
+                self.assertLessEqual(len(visible), 32)
+
     def test_standalone_background_build_preserves_existing_assets_and_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

@@ -12,19 +12,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .pixel_theme import load_font
+from .pixel_theme import (
+    AMBER, CARD, EDGE, INK, MUTED, PANEL, PARCHMENT, RED, SELECTED, STEEL, TEAL,
+    ORIGIN_PORTRAIT_FILE, ORIGIN_PORTRAIT_SIZE, draw_medallion, draw_pixel_frame,
+    load_font, origin_face_rect,
+)
 from .pixel_world import origin_portrait_rect
 
-
-INK = (16, 21, 27)
-PANEL = (23, 31, 38)
-CARD = (29, 39, 46)
-EDGE = (65, 78, 79)
-PARCHMENT = (239, 225, 188)
-AMBER = (219, 168, 92)
-TEAL = (105, 156, 151)
-MUTED = (159, 161, 150)
-RED = (219, 132, 113)
 
 _TITLES = {
     "inventory": ("THE TRAVELER'S PACK", "Equipment, provisions, and things worth keeping"),
@@ -47,6 +41,29 @@ _ICONS = {
     "armor": ("..aaaaaa....", ".aaaaaaaa...", ".aa....aa...", ".aa....aa...", ".aaa..aaa...", "..aaaaaa....", "..aaaaaa....", "...aaaa.....", "....aa......", "............", "............", "............"),
     "consumable": ("............", ".....aa.....", ".....aaa....", "..aa..aa....", "..aaa.a.....", "...aaaa.....", ".....a.aaa..", ".....aaaaa..", ".....a..a...", "....aa......", "...aa.......", "............"),
     "quest": (".....a......", "..a..a..a...", "...aaa.a....", "....aaa.....", "aaaaaaaaaaa.", "....aaa.....", "...a.aaa....", "..a..a..a...", ".....a......", "............", "............", "............"),
+}
+
+# Small material-colored silhouettes make a staff, letter, or flask distinct
+# at the same 24-pixel footprint. They describe objects, never their mechanics.
+_ITEM_ICONS = {
+    "ash_staff": ("..........w.", ".........wh.", "........wh..", ".......wh...", "......wh....", ".....wh.....", "....wh......", "...wh.......", "..wh........", ".wh.........", ".w..........", "............"),
+    "hunting_knife": ("............", ".........h..", "........hh..", ".......hh...", "......hh....", ".....hh.....", "....hh......", "...aaa......", "....a.......", "..ww........", ".ww.........", "............"),
+    "bree_blade": ("..........h.", ".........hh.", "........hh..", ".......hh...", "......hh....", ".....hh.....", "..a.hh......", "...aha......", "...aaa......", "..ww..a.....", ".ww.........", "............"),
+    "numenorean_blade": (".........h..", "........hh..", ".......hhh..", "......hhh...", ".....hhh....", ".....hh.....", "..a.hh......", "...aha......", "...aaa......", "..ww..a.....", ".ww.........", "............"),
+    "orc_cleaver": (".......hhh..", "......hhdd..", ".....hhddd..", "....hhddd...", "...hhddd....", "....hdd.....", ".....d......", "....a.......", "...ww.......", "..ww........", ".ww.........", "............"),
+    "patched_leather": ("..ww....ww..", ".wwww..wwww.", ".wwwwwwwwww.", "..wwwaawww..", "..wwwahwww..", "..wwwaawww..", "..wwwwwwww..", "..waawwwww..", "..wahwwwww..", "..waawwwww..", "..wwwwwwww..", "............"),
+    "ranger_cloak": ("....tttt....", "...ttddtt...", "...tddddt...", "..tttddttt..", "..tttttttt..", ".ttttattttt.", ".tttthttttt.", ".tttttttttt.", "tttttddttttt", "ttttddddtttt", ".ttddddddtt.", "............"),
+    "healing_herb": (".....h......", "....htt.....", ".ht..tt.....", ".htt.t..th..", "..tt.t.tth..", "...tttttt...", ".....tt.....", "..ht.t......", "..httth.....", "....aa......", "...aaa......", "............"),
+    "smoke_bomb": ("....hhhh....", "....wwww....", ".....ww.....", "....waaw....", "...waaaaw...", "..waaaaaaw..", "..waaaahaw..", "..waaaahaw..", "..waaaaaww..", "...wwwwww...", "............", "............"),
+    "lembas_scrap": ("............", "...tttttt...", "..ttpppptt..", ".ttppapaptt.", ".tppppppppt.", ".tppapapapt.", ".ttpppppptt.", "..ttaatttt..", "...taatt....", "....tttt....", "............", "............"),
+    "sealed_letter": ("............", ".pppppppppp.", ".phpppppphp.", ".pphpppphpp.", ".ppphpphppp.", ".pppprrpppp.", ".pppprrpppp.", ".pphpppphpp.", ".phpppppphp.", ".pppppppppp.", "............", "............"),
+    "calenor_map": (".wwwwwwwwww.", ".pppppppppw.", ".pptttppppw.", ".pppptpphpw.", ".pppptphppw.", ".ppptphpppw.", ".ppptpppppw.", ".ppppttpppw.", ".ppppptpppw.", ".pppppppppw.", ".wwwwwwwwww.", "............"),
+    "star_key": (".....h......", "..h..h..h...", "...h.h.h....", "....hhh.....", "hhhhhahhhhh.", "....hhh.....", "...h.h.h....", "..h..h..h...", ".....h......", "............", "............", "............"),
+    "silver_star": (".....h......", "..h..h......", "...h.h......", "....hhh.....", "hhhhhahhhhh.", "....hhh.....", "...h.h.h....", "..h..h..h...", ".....h......", "............", "............", "............"),
+    "ranger_token": ("............", ".....tt.....", "...tthtt....", "..ttthtttt..", ".tttthttt...", ".tttthtt....", "..ttthttt...", "...tthtttt..", "....thtt....", ".....h......", ".....w......", "............"),
+    "black_arrowhead": (".....h......", "....hdd.....", "....hddd....", "...hddddd...", "..hddrdddd..", ".hddrrrdddd.", ".ddddrddddd.", "..dddhdddd..", "....dhdd....", ".....h......", "............", "............"),
+    "watch_badge": ("..aaaaaaa...", ".aapppppaa..", ".apppapppa..", ".appaaappa..", ".apppapppa..", "..apppppa...", "..aapppaa...", "...aaaaa....", "....aaa.....", ".....a......", "............", "............"),
+    "calenor_broken_sword": ("............", "......hh....", ".....hdd....", "....hd......", "...hd.......", "..hd........", "...aaa......", "....a.......", "..ww........", ".ww.........", "............", "............"),
 }
 
 
@@ -376,11 +393,24 @@ class PanelView:
         return y
 
     def _icon(self, screen: Any, kind: str, x: int, y: int, color: Any = AMBER, scale: int = 2) -> None:
-        pattern = _ICONS.get(kind, _ICONS["quest"])
+        pattern = _ITEM_ICONS.get(kind, _ICONS.get(kind, _ICONS["quest"]))
+        palette = {"a": color, "h": STEEL, "p": PARCHMENT, "t": TEAL,
+                   "r": RED, "w": (163, 122, 78), "d": EDGE}
         for row, pixels in enumerate(pattern):
             for column, pixel in enumerate(pixels):
-                if pixel == "a":
-                    self.pg.draw.rect(screen, color, (x + column * scale, y + row * scale, scale, scale))
+                if pixel in palette:
+                    self.pg.draw.rect(screen, palette[pixel], (x + column * scale, y + row * scale, scale, scale))
+
+    def _item_icon(self, screen: Any, item: dict[str, Any], x: int, y: int, scale: int = 2) -> None:
+        """Keep the thumbnail and the inspected object visually identical."""
+        kind = str(item.get("kind", "quest"))
+        key = str(item.get("id", ""))
+        if key not in _ITEM_ICONS:
+            key = kind
+        size = 12 * scale
+        self.pg.draw.rect(screen, INK, (x - 3, y - 3, size + 6, size + 6))
+        color = TEAL if kind in {"armor", "consumable"} else AMBER
+        self._icon(screen, key, x, y, color, scale)
 
     def _portrait(self, screen: Any, row: int, x: int, y: int, scale: int = 4) -> bool:
         """Use the same nearest-neighbor sprites the player meets on the road."""
@@ -395,6 +425,28 @@ class PanelView:
         portrait = self._portraits[key]
         if portrait is None:
             return False
+        screen.blit(portrait, (x, y))
+        return True
+
+    def _companion_portrait(self, screen: Any, name: Any, x: int, y: int) -> bool:
+        """Reuse the authored companion identity at the existing 40×48 bounds."""
+        name = str(name).casefold()
+        index = {"mara": 3, "tobin": 4, "calenor": 5}.get(name)
+        if index is None:
+            return False
+        key = (f"companion:{name}", 1)
+        if key not in self._portraits:
+            try:
+                atlas = self.pg.image.load(str(Path(__file__).with_name("pixel_assets") / "world-battle-cast.png"))
+                if atlas.get_size() != (120, 96):
+                    raise ValueError("Companion portrait sheet has unexpected dimensions")
+                crop = self.pg.Rect((index % 3) * 40, (index // 3) * 48, 40, 48)
+                self._portraits[key] = atlas.subsurface(crop).copy()
+            except (OSError, ValueError, self.pg.error):
+                self._portraits[key] = None
+        portrait = self._portraits[key]
+        if portrait is None:
+            return self._portrait(screen, {"mara": 4, "tobin": 5, "calenor": 6}[name], x, y, 2)
         screen.blit(portrait, (x, y))
         return True
 
@@ -417,11 +469,51 @@ class PanelView:
         screen.blit(portrait, (x, y))
         return True
 
+    def _identity_portrait(self, screen: Any, origin: Any, rect: Any) -> bool:
+        """Center a crisp face, with the world sprite as a damaged-install fallback."""
+        rect = self.pg.Rect(rect)
+        crop = origin_face_rect(str(origin or ""))
+        face_width, face_height = ORIGIN_PORTRAIT_SIZE
+        scale = min(rect.width // face_width, rect.height // face_height)
+        if crop is not None and scale > 0:
+            key = (f"face:{crop[0]}", scale)
+            if key not in self._portraits:
+                try:
+                    atlas = self.pg.image.load(str(ORIGIN_PORTRAIT_FILE))
+                    if atlas.get_size() != (face_width * 3, face_height):
+                        raise ValueError("Origin portrait sheet has unexpected dimensions")
+                    frame = atlas.subsurface(self.pg.Rect(crop))
+                    self._portraits[key] = self.pg.transform.scale(frame, (face_width * scale, face_height * scale))
+                except (OSError, ValueError, self.pg.error):
+                    self._portraits[key] = None
+            portrait = self._portraits[key]
+            if portrait is not None:
+                screen.blit(portrait, portrait.get_rect(center=rect.center))
+                return True
+        sprite_scale = min(rect.width // 20, rect.height // 24)
+        if sprite_scale > 0:
+            x = rect.centerx - 20 * sprite_scale // 2
+            y = rect.centery - 24 * sprite_scale // 2
+            return self._origin_portrait(screen, origin, x, y, sprite_scale)
+        return False
+
+    def _button_font(self, label: str, rect: Any) -> Any:
+        """Keep complete captions inside their controls at enlarged text sizes."""
+        for font in (self.bold_font, self.small_font):
+            if font.size(label)[0] <= rect.width - 12 and font.get_linesize() <= rect.height - 6:
+                return font
+        size = max(11, self._font_size - 4)
+        font = load_font(self.pg, size, bold=True)
+        while size > 11 and (font.size(label)[0] > rect.width - 12 or font.get_linesize() > rect.height - 6):
+            size -= 1
+            font = load_font(self.pg, size, bold=True)
+        return font
+
     def _button(self, screen: Any, rect: Any, label: str, target: str, value: Any = None, *, primary: bool = False, enabled: bool = True) -> None:
         pg = self.pg
-        pg.draw.rect(screen, INK if not enabled else (47, 58, 57) if primary else CARD, rect)
-        pg.draw.rect(screen, AMBER if primary and enabled else EDGE, rect, 1)
-        text = self.bold_font.render(label, False, PARCHMENT if primary and enabled else MUTED)
+        draw_pixel_frame(pg, screen, rect, fill=INK if not enabled else (47, 58, 57) if primary else CARD,
+                         edge=AMBER if primary and enabled else EDGE)
+        text = self._button_font(label, rect).render(label, False, PARCHMENT if primary and enabled else MUTED)
         screen.blit(text, text.get_rect(center=rect.center))
         clip = screen.get_clip()
         visible = rect.clip(clip)
@@ -461,9 +553,7 @@ class PanelView:
         if frame.width > 1180:
             frame.width = 1180
             frame.centerx = rect.centerx
-        pg.draw.rect(screen, PANEL, frame)
-        pg.draw.rect(screen, EDGE, frame, 1)
-        pg.draw.line(screen, AMBER, (frame.left + 18, frame.top), (frame.left + min(frame.width - 18, 180), frame.top), 2)
+        draw_pixel_frame(pg, screen, frame, ornate=True)
         self.hit_targets = []
         self._scrollbars = {}
         padding = 22 if rect.width >= 700 else 14
@@ -475,8 +565,8 @@ class PanelView:
         elif self.kind == "saves":
             subtitle = "Choose the road you want to continue" if self.data.get("mode") == "load" else "Choose a campfire to remember this journey"
         title_y = frame.top + 20
-        self._icon(screen, "quest", left, title_y + 2, AMBER)
-        title_bottom = self._paragraph(screen, title, left + 36, title_y, width - 36, PARCHMENT, font=self.title_font)
+        draw_medallion(pg, screen, (left + 13, title_y + 14), radius=14)
+        title_bottom = self._paragraph(screen, title, left + 38, title_y, width - 38, PARCHMENT, font=self.title_font)
         subtitle_bottom = self._paragraph(screen, subtitle, left, title_bottom + 5, width, MUTED, font=self.small_font)
         return_label = "Return to the main menu  [Esc]" if self.kind in {"chronicle", "background"} else "Return to the road  [Esc]"
         if self.kind in {"information", "saves"}:
@@ -514,7 +604,7 @@ class PanelView:
             action_width = min(action_space, self.bold_font.size(choose_label)[0] + 26)
             self._button(screen, pg.Rect(left, footer_y + 12, max(1, action_width), 34), choose_label, "origin_action", primary=True, enabled=bool(self.data.get("origins")))
             if footer_height > 60:
-                self._text(screen, "Left / Right: compare", left, footer_y + 51, MUTED, font=self.small_font)
+                self._text(screen, "Scroll / PgDn: read background", left, footer_y + 51, MUTED, font=self.small_font)
         elif width > button_width + self.small_font.size(hint)[0] + 20:
             self._text(screen, hint, left, footer_y + 21, MUTED, font=self.small_font)
         elif footer_height > 60:
@@ -611,17 +701,16 @@ class PanelView:
             for index in range(len(origins)):
                 self._button(screen, pg.Rect(region.left + selector_width * index, top, selector_width - 6, 28), str(index + 1), "origin", index, primary=index == self.selected)
             top += 37
-        scale = 3 if region.width >= 1100 and region.height >= 400 else 2
-        portrait_width = 20 * scale
+        portrait_width, portrait_height = ORIGIN_PORTRAIT_SIZE
         header_width = card_width - portrait_width - 36
-        header_height = max(24 * scale, max(len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height for _, origin in rows))
+        header_height = max(portrait_height, max(len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height for _, origin in rows))
         ability_height = max(len(_wrap(origin.get("ability_name", ""), self.small_font, card_width - 24)) * (self.small_font.get_linesize() + 3) for _, origin in rows)
         card_height = header_height + self.line_height * 2 + ability_height + 37
         for column, (index, origin) in enumerate(rows):
             card = pg.Rect(region.left + column * (card_width + gap), top, card_width, card_height)
-            pg.draw.rect(screen, (40, 51, 52) if index == self.selected else CARD, card)
-            pg.draw.rect(screen, AMBER if index == self.selected else EDGE, card, 1)
-            self._origin_portrait(screen, origin.get("id"), card.left + 12, card.top + 12, scale)
+            draw_pixel_frame(pg, screen, card, fill=SELECTED if index == self.selected else CARD,
+                             edge=AMBER if index == self.selected else EDGE)
+            self._identity_portrait(screen, origin.get("id"), pg.Rect(card.left + 12, card.top + 12, portrait_width, portrait_height))
             self._paragraph(screen, origin.get("name", "Traveler"), card.left + portrait_width + 23, card.top + 12, header_width, PARCHMENT, font=self.bold_font)
             text_y = card.top + header_height + 20
             self._text(screen, f"Health {origin.get('max_hp', '?')}", card.left + 12, text_y, RED, font=self.small_font)
@@ -662,15 +751,15 @@ class PanelView:
         origin = origins[self.selected]
         x, width = body.left + 4, body.width - 18
         start_y = body.top - self.scroll
-        header_width = width - 76
-        header_height = max(48, len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height)
+        portrait_width, portrait_height = ORIGIN_PORTRAIT_SIZE
+        header_width = width - portrait_width - 36
+        header_height = max(portrait_height, len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height)
         stats = f"Health {origin.get('max_hp', '?')}  /  STR {origin.get('strength', '?')}  CUN {origin.get('cunning', '?')}  WILL {origin.get('will', '?')}"
         card_height = header_height + 32 + len(_wrap(stats, self.small_font, width - 24)) * (self.small_font.get_linesize() + 3)
         card = pg.Rect(x, start_y, width, card_height)
-        pg.draw.rect(screen, CARD, card)
-        pg.draw.rect(screen, AMBER, card, 1)
-        self._origin_portrait(screen, origin.get("id"), x + 12, start_y + 12, 2)
-        self._paragraph(screen, origin.get("name", "Traveler"), x + 64, start_y + 12, header_width, PARCHMENT, font=self.bold_font)
+        draw_pixel_frame(pg, screen, card, fill=CARD, edge=AMBER)
+        self._identity_portrait(screen, origin.get("id"), pg.Rect(x + 12, start_y + 12, portrait_width, portrait_height))
+        self._paragraph(screen, origin.get("name", "Traveler"), x + portrait_width + 23, start_y + 12, header_width, PARCHMENT, font=self.bold_font)
         self._paragraph(screen, stats, x + 12, start_y + header_height + 20, width - 24, TEAL, font=self.small_font)
         y = self._draw_background_details(screen, origin, x, start_y + card_height + 17, width)
         self.max_scroll = max(0, y - start_y + 8 - body.height)
@@ -722,9 +811,9 @@ class PanelView:
         for index, (item, height) in enumerate(zip(items, card_heights)):
             card = pg.Rect(pack_rect.left, y, pack_rect.width - 10, height)
             if card.colliderect(pack_rect):
-                pg.draw.rect(screen, (40, 51, 52) if index == self.selected else CARD, card)
-                pg.draw.rect(screen, AMBER if index == self.selected else EDGE, card, 1)
-                self._icon(screen, item.get("kind", "quest"), card.left + 13, card.top + 17, TEAL if item.get("kind") == "consumable" else AMBER)
+                draw_pixel_frame(pg, screen, card, fill=SELECTED if index == self.selected else CARD,
+                                 edge=AMBER if index == self.selected else EDGE)
+                self._item_icon(screen, item, card.left + 13, card.top + 17)
                 bottom = self._paragraph(screen, item.get("name", "Unnamed item"), card.left + 49, card.top + 12, card.width - 58, PARCHMENT, font=self.bold_font)
                 self._paragraph(screen, self._item_markers(item), card.left + 49, bottom + 5, card.width - 58, TEAL if item.get("equipped") else MUTED, font=self.small_font)
                 self.hit_targets.append((card.clip(pack_rect), "item", index))
@@ -732,7 +821,7 @@ class PanelView:
         if not items:
             self._paragraph(screen, "Your pack is empty." if self.tab == "all" else "Nothing in this category yet.", pack_rect.left + 12, pack_rect.top + 18, pack_rect.width - 30)
         screen.set_clip(self.detail_rect)
-        screen.fill(CARD, self.detail_rect)
+        draw_pixel_frame(pg, screen, self.detail_rect, fill=CARD)
         selected = self._selected_item()
         if selected:
             self.detail_body_rect = self.detail_rect.copy()
@@ -750,6 +839,7 @@ class PanelView:
         else:
             self.max_detail_scroll = self.detail_scroll = 0
             self._paragraph(screen, "Every object on the road has a story. Select an item to inspect it.", self.detail_rect.left + 18, self.detail_rect.top + 24, self.detail_rect.width - 36)
+        pg.draw.rect(screen, EDGE, self.detail_rect, 1)
         screen.set_clip(region)
         self._scrollbar(screen, pack_rect, self.scroll, self.max_scroll)
         self._scrollbar(screen, self.detail_body_rect, self.detail_scroll, self.max_detail_scroll, key="detail")
@@ -810,7 +900,7 @@ class PanelView:
         x, width = rect.left + 20, rect.width - 40
         compact = self.detail_body_rect.height < 180
         y = start_y + (14 if compact else 24)
-        self._icon(screen, item.get("kind", "quest"), x, y, TEAL if item.get("kind") == "consumable" else AMBER, 2 if compact else 3)
+        self._item_icon(screen, item, x, y, 2 if compact else 3)
         if compact:
             y = self._paragraph(screen, item.get("name", "Unnamed item"), x + 36, y, width - 36, PARCHMENT, font=self.bold_font) + 4
         else:
@@ -860,22 +950,24 @@ class PanelView:
     def _draw_character(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
         character = self.data.get("character", self.data)
-        # The traveler portrait and companion portraits share the exploration
-        # atlas, keeping the sheet visually connected to the playable world.
-        portrait_scale = 2 if self.content_rect.height < 330 else 4
-        portrait_width, portrait_height = 20 * portrait_scale + 14, 24 * portrait_scale + 12
+        # Show the authored face at an integer scale, keeping the smaller
+        # identity block when reading space is scarce.
+        compact = self.content_rect.height < 330
+        portrait_scale = 2 if self.content_rect.height >= 640 and width >= 760 else 1
+        portrait_padding = 4 if compact else 12
+        portrait_width, portrait_height = 64 * portrait_scale + portrait_padding, 80 * portrait_scale + portrait_padding
         header_x = x + portrait_width + 22 if width >= 500 else x
         if width >= 500:
-            self.pg.draw.rect(screen, CARD, (x, y, portrait_width, portrait_height))
-            self.pg.draw.rect(screen, EDGE, (x, y, portrait_width, portrait_height), 1)
-            self._origin_portrait(screen, character.get("origin"), x + 7, y + 6, portrait_scale)
+            portrait_rect = self.pg.Rect(x, y, portrait_width, portrait_height)
+            draw_pixel_frame(self.pg, screen, portrait_rect, fill=CARD, edge=TEAL)
+            self._identity_portrait(screen, character.get("origin"), portrait_rect.inflate(-portrait_padding, -portrait_padding))
         header_width = width - (header_x - x)
         header_top = y
         y = self._paragraph(screen, character.get("name", "Traveler"), header_x, y + 4, header_width, PARCHMENT, font=self.title_font) + 5
         origin = character.get("origin_label", character.get("origin_name", character.get("origin", "A traveler of the old roads")))
         origin_label = str(origin).replace("_", " ").title() if "_" in str(origin) else str(origin)
-        y = self._paragraph(screen, origin_label, header_x, y, header_width, TEAL) + 13
-        y = max(y + 18, header_top + portrait_height + 25 if width >= 500 else y + 18)
+        y = self._paragraph(screen, origin_label, header_x, y, header_width, TEAL) + (5 if compact else 13)
+        y = max(y + (5 if compact else 18), header_top + portrait_height + (2 if compact else 25) if width >= 500 else y + 18)
         if width >= 760:
             column_width = (width - 44) // 2
             condition_end = self._draw_character_condition(screen, character, x, y, column_width)
@@ -893,7 +985,7 @@ class PanelView:
         half = max(70, (width - 16) // 2)
         for column, (label, key, color) in enumerate((("HOPE", "hope", AMBER), ("CORRUPTION", "corruption", RED))):
             box = self.pg.Rect(x + column * (half + 16), y, half, 59)
-            self.pg.draw.rect(screen, CARD, box)
+            draw_pixel_frame(self.pg, screen, box, fill=CARD, edge=EDGE)
             self._text(screen, label, box.left + 12, box.top + 10, color, font=self.small_font)
             self._text(screen, character.get(key, 0), box.left + 12, box.top + 28, PARCHMENT, font=self.bold_font)
         y += 82
@@ -930,7 +1022,14 @@ class PanelView:
                 name = item.get("name", "None")
             else:
                 name = (str(item).replace("_", " ").title() if "_" in str(item) else str(item)) if item else ("Unarmed" if slot == "weapon" else "Travel clothes")
-            self._icon(screen, slot, x, y + 2, AMBER if slot == "weapon" else TEAL)
+            icon_item = item if isinstance(item, dict) else next((
+                other for other in self.data.get("items", [])
+                if isinstance(other, dict) and other.get("slot") == slot and other.get("equipped")
+            ), None)
+            if icon_item is not None:
+                self._item_icon(screen, icon_item, x + 3, y + 3)
+            else:
+                self._icon(screen, slot, x, y + 2, AMBER if slot == "weapon" else TEAL)
             y = self._paragraph(screen, f"{slot.capitalize()}: {name}", x + 38, y, width - 38, PARCHMENT) + 18
             bonus_key, bonus_label = ("weapon_attack", "attack") if slot == "weapon" else ("armor_defense", "armor")
             if _number(character.get(bonus_key)):
@@ -956,9 +1055,9 @@ class PanelView:
             name_height = len(_wrap(companion.get("name", "Companion"), self.bold_font, text_width)) * self.line_height
             status_height = len(_wrap(status_line, self.small_font, text_width)) * (self.small_font.get_linesize() + 3)
             height = max(88, name_height + status_height + 32)
-            self.pg.draw.rect(screen, CARD, (x, y, width, height))
+            draw_pixel_frame(self.pg, screen, (x, y, width, height), fill=CARD)
             if portrait_row is not None:
-                self._portrait(screen, portrait_row, x + 12, y + 15, 2)
+                self._companion_portrait(screen, companion.get("name"), x + 12, y + 15)
             y = self._paragraph(screen, companion.get("name", "Companion"), text_x, y + 12, text_width, PARCHMENT, font=self.bold_font) + 5
             y = self._paragraph(screen, status_line, text_x, y, text_width, TEAL if present and trust >= 0 else MUTED, font=self.small_font)
             y = max(y + 12, top + height + 10)
@@ -1224,8 +1323,8 @@ class PanelView:
             corrupt = slot.get("corrupt", False)
             title = "Damaged memory" if corrupt else "Empty campfire" if empty else slot.get("name", "Traveler")
             card = self.pg.Rect(x, y, width, height)
-            self.pg.draw.rect(screen, (40, 51, 52) if index == self.selected else CARD, card)
-            self.pg.draw.rect(screen, RED if corrupt else AMBER if index == self.selected else EDGE, card, 1)
+            draw_pixel_frame(self.pg, screen, card, fill=SELECTED if index == self.selected else CARD,
+                             edge=RED if corrupt else AMBER if index == self.selected else EDGE)
             label = f"CAMP {slot.get('slot', slot.get('id', index + 1))}"
             self._text(screen, label, x + 16, y + 11, AMBER, font=self.small_font)
             bottom = self._paragraph(screen, title, x + 16, y + 33, text_width, RED if corrupt else MUTED if empty else PARCHMENT, font=self.bold_font)

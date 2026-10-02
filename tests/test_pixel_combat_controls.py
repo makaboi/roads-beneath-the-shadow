@@ -17,7 +17,8 @@ from tests.test_pixel_battle import battle_snapshot
 @unittest.skipUnless(importlib.util.find_spec("pygame"), "pygame-ce is needed for desktop controls")
 class BattleLocationPreludeTests(unittest.TestCase):
     def check_actual_prelude(self, opening, subject, choices=None, *, scene="final_battle", backdrop=None, flags=None,
-                             size=(1200, 900), text_size="standard", fullscreen=False, check_bridge_footing=False):
+                             size=(1200, 900), text_size="standard", fullscreen=False, check_bridge_footing=False,
+                             check_open_floor=False):
         import random
         import tempfile
         import threading
@@ -94,21 +95,22 @@ class BattleLocationPreludeTests(unittest.TestCase):
                 else:
                     self.fail("The actual story prelude did not reach combat")
 
-                expected = backdrop or ("tavern-interior" if opening else subject)
+                expected = backdrop or ("tavern-battle" if opening else subject)
                 expected_image = pg.image.load(str(ASSET_DIR / f"{expected}.png")).convert()
                 self.assertEqual(window.scene_key, subject, "the prose illustration changed")
                 self.assertEqual(pg.image.tobytes(window.battle._scene_override, "RGB"), pg.image.tobytes(expected_image, "RGB"))
-                if check_bridge_footing:
+                if check_bridge_footing or check_open_floor:
                     crop = window.battle.backdrop_crop
                     self.assertIsNotNone(crop)
                     scaled_image = window.battle._scaled_backdrop[2]
                     scale_y = scaled_image.get_height() / expected_image.get_height()
-                    # The authored bridge's stone deck occupies native rows
-                    # 125–155; inspect the actual blit crop and actor anchors.
+                    # Read the actual cover crop and actor anchors, including
+                    # companion formation offsets, rather than a routing table.
+                    lower, upper = (125, 155) if check_bridge_footing else (155, 185)
                     for actor, position in window.battle.actor_positions.items():
                         foot_y = (crop.y + position[1] - window.battle._arena_rect.y) / scale_y
-                        self.assertGreaterEqual(foot_y, 125, (actor, foot_y, size, text_size))
-                        self.assertLessEqual(foot_y, 155, (actor, foot_y, size, text_size))
+                        self.assertGreaterEqual(foot_y, lower, (actor, foot_y, size, text_size))
+                        self.assertLessEqual(foot_y, upper, (actor, foot_y, size, text_size))
                 if not opening and not backdrop:
                     self.assertIs(window.battle._scene_override, window.scene)
                 state_before = game.state.to_dict()
@@ -130,7 +132,7 @@ class BattleLocationPreludeTests(unittest.TestCase):
                 pg.quit()
                 self.assertEqual(errors, [])
 
-    def test_pony_fights_keep_the_room_and_preserve_each_actual_subject_prelude(self):
+    def test_pony_fights_use_the_empty_room_and_preserve_each_actual_subject_prelude(self):
         for opening, subject, choices in (
             (1, "orc", {}),
             (2, "broken-key", {}),
@@ -141,29 +143,44 @@ class BattleLocationPreludeTests(unittest.TestCase):
             with self.subTest(opening=opening):
                 self.check_actual_prelude(opening, subject, choices)
 
-    def test_non_pony_battle_keeps_the_actual_ghorak_prelude_backdrop(self):
-        self.check_actual_prelude(None, "ghorak", {"THE FINAL BATTLE": 1})
+    def test_authored_location_floors_support_actual_combat_at_all_window_profiles(self):
+        cases = (
+            (1, "orc", "branch_fight", "tavern-battle", {}),
+            (None, "orc", "marsh_ambush", "marsh-battle", {}),
+            (None, "seal", "part2_pursuit", "dead-road-battle", {"HOW DO YOU BUY FOUR ROUNDS?": 1}),
+            (None, "troll", "part2_chain_troll", "sluice-battle", {"THE CHAINS ARE ARMOR AND LEASH": 1, "WHAT BECOMES OF THE DROWNED MILE?": 1}),
+            (None, "false-ranger-duel", "part2_teren", "seal-vault-battle", {"HOW DO YOU ANSWER TEREN?": 1, "IF TEREN YIELDS, WHAT FATE WILL FOLLOW?": 1}),
+        )
+        for size, text_size in (((760, 560), "larger"), ((1200, 900), "standard"), ((1920, 1080), "larger")):
+            for opening, subject, scene, backdrop, choices in cases:
+                with self.subTest(scene=scene, size=size, text_size=text_size):
+                    self.check_actual_prelude(opening, subject, choices, scene=scene, backdrop=backdrop,
+                                              size=size, text_size=text_size, check_open_floor=True,
+                                              flags={"part_two_mara_present": True, "part_two_tobin_present": True})
+
+    def test_ghorak_keeps_his_prose_illustration_and_uses_the_character_free_ruins(self):
+        self.check_actual_prelude(None, "ghorak", {"THE FINAL BATTLE": 1}, backdrop="marsh-battle")
 
     def test_seal_door_and_last_seal_fights_keep_their_indoor_locations(self):
         for scene, subject, choices in (
-            ("part2_teren", "ranger", {"HOW DO YOU ANSWER TEREN?": 1, "IF TEREN YIELDS, WHAT FATE WILL FOLLOW?": 1}),
+            ("part2_teren", "false-ranger-duel", {"HOW DO YOU ANSWER TEREN?": 1, "IF TEREN YIELDS, WHAT FATE WILL FOLLOW?": 1}),
             ("part2_final_battle", "rider", {"WHERE DO YOU STAND FOR SIX ROUNDS?": 1}),
         ):
             for present in (False, True):
                 with self.subTest(scene=scene, companions=present):
-                    self.check_actual_prelude(None, subject, choices, scene=scene, backdrop="seal", flags={
+                    self.check_actual_prelude(None, subject, choices, scene=scene, backdrop="seal-vault-battle", flags={
                         "part_two_mara_present": present,
                         "part_two_tobin_present": present,
                     })
 
-    def test_other_actual_combat_preludes_keep_their_existing_locations(self):
-        for scene, subject, choices in (
-            ("marsh_ambush", "orc", {}),
-            ("part2_pursuit", "seal", {"HOW DO YOU BUY FOUR ROUNDS?": 1}),
-            ("part2_chain_troll", "troll", {"THE CHAINS ARE ARMOR AND LEASH": 1, "WHAT BECOMES OF THE DROWNED MILE?": 1}),
+    def test_other_actual_combat_preludes_use_character_free_location_art(self):
+        for scene, subject, backdrop, choices in (
+            ("marsh_ambush", "orc", "marsh-battle", {}),
+            ("part2_pursuit", "seal", "dead-road-battle", {"HOW DO YOU BUY FOUR ROUNDS?": 1}),
+            ("part2_chain_troll", "troll", "sluice-battle", {"THE CHAINS ARE ARMOR AND LEASH": 1, "WHAT BECOMES OF THE DROWNED MILE?": 1}),
         ):
             with self.subTest(scene=scene):
-                self.check_actual_prelude(None, subject, choices, scene=scene)
+                self.check_actual_prelude(None, subject, choices, scene=scene, backdrop=backdrop)
 
     def test_echo_bridge_uses_its_gulf_backdrop_for_both_live_approaches_and_party_sizes(self):
         for present in (False, True):

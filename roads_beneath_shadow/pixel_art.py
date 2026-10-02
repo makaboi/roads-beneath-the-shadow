@@ -29,14 +29,12 @@ _SCENE_GROUPS: dict[str, tuple[str, ...]] = {
     "marsh": (
         "MIDGEWATER_RUINS_ART", "ROAD_FROM_BREE_ART",
         "DROWNED_WATCH_POST_ART", "NORTH_WAYHOUSE_ART",
-        "GHORAK_PRISONER_TRAIL_ART", "DROWNED_MILE_ART",
+        "GHORAK_PRISONER_TRAIL_ART",
         "LIVING_ROAD_ENDING_ART", "ROAD_IN_RUIN_ENDING_ART",
     ),
     "camp": (
-        "MIDGEWATER_CAMP_ART", "HEALERS_APPRENTICE_ORIGIN_ART",
+        "HEALERS_APPRENTICE_ORIGIN_ART",
         "CALENOR_LAST_LESSON_ART", "MARA_FIRE_CONFESSION_ART",
-        "CALENOR_BURNING_HOUSE_MEMORY_ART", "HOUSE_UNDER_ASH_ART",
-        "BURNING_HOUSE_MEMORY_FULL_ART",
     ),
     "rider": (
         "BLACK_RIDER_SPRITE", "BLACK_RIDER_DIM_SPRITE",
@@ -51,11 +49,9 @@ _SCENE_GROUPS: dict[str, tuple[str, ...]] = {
         "THIRD_STONE_DISCOVERY_ART", "ANCIENT_ROAD_DISCOVERY_ART",
         "WAYHOUSE_SHRINE_ART", "FALLING_SILVER_STAIR_ART",
         "SEVERED_SEAL_GATE_ART", "DEAD_ROAD_PANORAMA_ART",
-        "COMPANIONS_DESCENDING_ART", "HALL_EIGHT_WARDENS_ART",
-        "ERASED_EIGHTH_STATUE_ART", "WALL_NAMES_DIM_FRAME",
+        "COMPANIONS_DESCENDING_ART", "WALL_NAMES_DIM_FRAME",
         "WALL_NAMES_LIT_FRAME", "WALL_NAMES_AWAKENING_ART",
-        "FIRST_WARDEN_TESTIMONY_ART", "HIDDEN_WARDEN_STAIR_ART",
-        "ECHO_BRIDGE_ART", "FLOODGATE_WHEEL_ART",
+        "HIDDEN_WARDEN_STAIR_ART",
         "SECOND_WARDEN_TESTIMONY_ART", "THIRD_WARDEN_TESTIMONY_ART",
         "LAST_SEAL_VAULT_ART", "EIGHT_SPOKED_RITUAL_ART",
         "FINAL_SEAL_BATTLE_SPRITE", "FINAL_SEAL_BATTLE_ART",
@@ -79,8 +75,7 @@ _SCENE_GROUPS: dict[str, tuple[str, ...]] = {
         "CHAIN_TROLL_BATTLE_ART",
     ),
     "ranger": (
-        "NORTH_ROAD_SCOUT_ORIGIN_ART", "TEREN_REVEAL_ART",
-        "FALSE_RANGER_DUEL_SPRITE", "FALSE_RANGER_DUEL_ART",
+        "NORTH_ROAD_SCOUT_ORIGIN_ART",
         "CALENOR_REUNION_ART",
     ),
     "key": (
@@ -102,11 +97,25 @@ _SCENE_GROUPS: dict[str, tuple[str, ...]] = {
         "FORNOST_MAP_LIT_FRAME", "FORNOST_MAP_CLIFFHANGER_ART",
     ),
     "lantern": (
-        "BROKEN_LANTERN_ART", "LAST_LANTERN_ART",
+        "BROKEN_LANTERN_ART",
     ),
     "cages": (
-        "DROWNED_CARAVAN_ART", "MARA_SHACKLE_FORGE_ART",
-        "PRISONERS_IRON_CAGES_ART", "CALENOR_PRISON_ART",
+        "MARA_SHACKLE_FORGE_ART", "CALENOR_PRISON_ART",
+    ),
+    "midgewater-camp": ("MIDGEWATER_CAMP_ART",),
+    "hall-of-eight": (
+        "HALL_EIGHT_WARDENS_ART", "ERASED_EIGHTH_STATUE_ART", "FIRST_WARDEN_TESTIMONY_ART",
+    ),
+    "echo-bridge": ("ECHO_BRIDGE_ART",),
+    "drowned-mile": ("DROWNED_MILE_ART", "DROWNED_CARAVAN_ART"),
+    "sluice-prison": ("PRISONERS_IRON_CAGES_ART", "FLOODGATE_WHEEL_ART"),
+    "house-under-ash": ("HOUSE_UNDER_ASH_ART",),
+    "last-lantern-scene": ("LAST_LANTERN_ART",),
+    "burning-house-memory": (
+        "CALENOR_BURNING_HOUSE_MEMORY_ART", "BURNING_HOUSE_MEMORY_FULL_ART",
+    ),
+    "false-ranger-duel": (
+        "TEREN_REVEAL_ART", "FALSE_RANGER_DUEL_SPRITE", "FALSE_RANGER_DUEL_ART",
     ),
 }
 
@@ -117,12 +126,20 @@ _SCENE_BY_NAME = {
 # These rules cover descriptions of new scenes and dynamically created
 # nameplates. Character names take precedence over environmental words.
 _DESCRIPTION_RULES = (
+    (r"\bmidgewater camp\b|\bstanding stone\b.*\bember\b", "midgewater-camp"),
+    (r"\bhall of eight\b|\beight stone seats\b|\berased stone plinth\b", "hall-of-eight"),
+    (r"\becho bridge\b|\bbridge\b.*\b(bottomless gulf|three stone arches)\b", "echo-bridge"),
+    (r"\bdrowned mile\b|\bhalf.submerged road\b|\bbroken prison cart\b", "drowned-mile"),
+    (r"\b(two iron cages|floodgate wheel|sluice prison)\b", "sluice-prison"),
+    (r"\bhouse under ash\b|\bhouse\b.*\b(enormous roots|underground refuge)\b", "house-under-ash"),
+    (r"\b(sheltering arch|last lantern)\b|\bsingle lantern\b.*\blow stone arch\b", "last-lantern-scene"),
+    (r"\bburning (house|memory)\b", "burning-house-memory"),
     (r"\bghorak\b", "ghorak"),
     (r"\b(warg|wolf|wolves)\b", "warg"),
     (r"\btroll\b", "troll"),
     (r"\b(rider|mounted shadow)\b", "rider"),
     (r"\b(orcs?|sapper)\b", "orc"),
-    (r"\bfalse ranger\b|\bteren\b", "ranger"),
+    (r"\bfalse ranger\b|\bteren\b", "false-ranger-duel"),
     (r"\bbroken\b.*\b(star|key|pendant)\b", "broken-key"),
     (r"\b(key|pendant)\b|\bsilver (star|ray)\b", "key"),
     (r"\b(sword|blade|blades|armory)\b", "sword"),
