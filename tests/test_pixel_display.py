@@ -65,13 +65,16 @@ class PixelDisplayLifecycleTests(unittest.TestCase):
     def resize_event(self, size):
         self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, size=size, w=size[0], h=size[1]))
 
-    def test_repeated_fullscreen_restores_size_and_preserves_pending_name(self):
+    def test_repeated_fullscreen_restores_size_position_and_pending_name(self):
         self.start(lambda: self.ui.prompt("Traveler's name: "))
         self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Éowen"))
         request = self.window.request
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            for _ in range(3):
+            for requested_position in ((350, 250), (-100, 90), (220, 180)):
+                self.pg.display.set_window_position(requested_position)
+                self.settle()
+                original_position = self.pg.display.get_window_position()
                 original_size = self.window.screen.get_size()
                 self.key(self.pg.K_F11)
                 self.settle()
@@ -83,6 +86,7 @@ class PixelDisplayLifecycleTests(unittest.TestCase):
                 self.assertEqual(self.pg.display.get_window_size(), original_size)
                 self.assertEqual(self.window.screen.get_size(), original_size)
                 self.assertEqual(self.window.window_size, original_size)
+                self.assertEqual(self.pg.display.get_window_position(), original_position)
                 # A restoration acknowledgement followed by an old fullscreen
                 # event must still preserve the window and pending request.
                 self.resize_event(original_size)
@@ -90,6 +94,7 @@ class PixelDisplayLifecycleTests(unittest.TestCase):
                 self.window.render()
                 self.assertEqual(self.window.screen.get_size(), original_size)
                 self.assertEqual(self.window.window_size, original_size)
+                self.assertEqual(self.pg.display.get_window_position(), original_position)
                 self.assertIs(self.window.request, request)
                 self.assertEqual(self.window.entry, "Éowen")
                 self.assertTrue(self.worker.is_alive())
@@ -143,6 +148,43 @@ class PixelDisplayLifecycleTests(unittest.TestCase):
         self.settle()
         self.assertFalse(self.window.fullscreen)
         self.assertEqual(self.window.screen.get_size(), restore_size)
+
+    def test_unavailable_window_position_read_still_restores_pending_name(self):
+        self.start(lambda: self.ui.prompt("Traveler's name: "))
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Éowen"))
+        request = self.window.request
+        size = self.window.screen.get_size()
+        with patch.object(self.pg.display, "get_window_position", side_effect=self.pg.error("Unsupported driver")) as position_read:
+            self.key(self.pg.K_F11)
+            self.settle()
+        position_read.assert_called_once()
+        self.assertTrue(self.window.fullscreen)
+        self.key(self.pg.K_F11)
+        self.settle()
+        self.assertFalse(self.window.fullscreen)
+        self.assertEqual(self.window.screen.get_size(), size)
+        self.assertIs(self.window.request, request)
+        self.assertEqual(self.window.entry, "Éowen")
+        self.assertTrue(self.worker.is_alive())
+        self.assertEqual(self.answers, [])
+        self.assertFalse(self.ui.closed.is_set())
+
+    def test_unavailable_window_position_restore_keeps_pending_choice(self):
+        self.start(lambda: self.ui.choose_story("Which road?", ["Follow the lantern", "Wait"]))
+        request = self.window.request
+        size = self.window.screen.get_size()
+        self.key(self.pg.K_F11)
+        self.settle()
+        with patch.object(self.pg.display, "set_window_position", side_effect=self.pg.error("Unsupported driver")) as position_restore:
+            self.key(self.pg.K_F11)
+            self.settle()
+        position_restore.assert_called_once()
+        self.assertFalse(self.window.fullscreen)
+        self.assertEqual(self.window.screen.get_size(), size)
+        self.assertIs(self.window.request, request)
+        self.assertTrue(self.worker.is_alive())
+        self.assertEqual(self.answers, [])
+        self.assertFalse(self.ui.closed.is_set())
 
 
 if __name__ == "__main__":

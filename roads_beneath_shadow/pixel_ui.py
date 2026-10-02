@@ -335,6 +335,7 @@ class PixelWindow:
         self.menu_rect = pygame.Rect(0, 0, 0, 0)
         self.fullscreen = False
         self.window_size = size
+        self._windowed_position: tuple[int, int] | None = None
         self._restoring_window_size: tuple[int, int] | None = None
         self.finished = False
         self.error: str | None = None
@@ -784,8 +785,19 @@ class PixelWindow:
                         raise pg.error("The display did not leave fullscreen")
                 self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
                 self._restoring_window_size = self.window_size
+                if self._windowed_position is not None:
+                    try:
+                        pg.display.set_window_position(self._windowed_position)
+                    except pg.error:
+                        # Some drivers let the compositor choose placement.
+                        # Position support must not block restoring the size.
+                        pass
             else:
                 self.window_size = self.screen.get_size()
+                try:
+                    self._windowed_position = pg.display.get_window_position()
+                except pg.error:
+                    self._windowed_position = None
                 self.screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
                 self._restoring_window_size = None
             self.fullscreen = pg.display.is_fullscreen()

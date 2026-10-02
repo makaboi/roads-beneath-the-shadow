@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 — Keep the Window on the Road
+
+- Preserve the current window position as well as its size when returning from F11 fullscreen, including after moving the window between fullscreen visits.
+- Keep pending names and story choices intact when the display driver cannot read or restore window placement.
+
 ## 0.6.1 — Clearer Panels and Complete Downloads
 
 - Restore the latest narration behind Settings and other utility menus after closing a searched or scrolled story Archive, while keeping the Archive's place for reopening.
