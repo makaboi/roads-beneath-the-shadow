@@ -25,8 +25,8 @@ _CONTROLS = {'title': 'HOW TO PLAY',
                'text': "Read each enemy's intention before acting. Click an enemy or press [ "
                        'and ] to target it; Inspect and changing targets cost no turn. Attack '
                        'costs no Focus. Power attacks spend Focus, can interrupt marked '
-                       'intentions, and leave you Exposed. Defend halves every attack that '
-                       "round and restores 1 Focus. Your background's special ability can be "
+                       'intentions, and leave you Exposed. Defend halves incoming physical hits '
+                       "that round and restores 1 Focus; Bleeding and setup effects still resolve. Your background's special ability can be "
                        'used once per battle; companion commands offer other ways to protect '
                        'the party.'},
               {'heading': 'Keep your place on the road',

@@ -16,6 +16,67 @@ from tests.test_combat_turns import CombatViewUI
 
 
 class EngineOutcomeTests(unittest.TestCase):
+    def test_fellowship_copy_does_not_claim_tobin_descends_when_he_returns_with_ned(self):
+        output = []
+        game = Game(TerminalUI(color=False, fast=True, output_fn=output.append))
+        character = Character.from_origin("Arin", ORIGINS[0])
+        character.mara_trust = 1
+        character.tobin_trust = 1
+        game.state = GameState(character, scene="cliffhanger", flags={"ned_survived": True})
+
+        game._cliffhanger()
+
+        self.assertEqual(game.state.ending, "fellowship")
+        self.assertTrue(game.state.flags["tobin_returns_with_ned"])
+        self.assertFalse(game.state.flags["part_two_tobin_present"])
+        self.assertIn("see him home", " ".join(output))
+        self.assertNotIn("Tobin", game._ending_copy()[1])
+
+    def test_real_marsh_outcomes_keep_ned_and_the_recovered_shard_consistent(self):
+        for victory, stabilized in ((True, False), (False, True), (False, False)):
+            with self.subTest(victory=victory, stabilized=stabilized):
+                output = []
+                ui = TerminalUI(color=False, fast=True, output_fn=output.append)
+                action = "Attack" if victory else "Defend"
+                ui.choose = lambda _title, options, **_: next(i + 1 for i, option in enumerate(options) if option.startswith(action))
+                game = Game(ui, rng=random.Random(12), difficulty=CombatDifficulty.STORY if victory else CombatDifficulty.HARD)
+                character = Character.from_origin("Arin", ORIGINS[0])
+                character.hp = character.max_hp if victory else 1
+                # Trust disables aid, rather than removing either companion
+                # from this scene, so the battle outcome is deterministic.
+                character.mara_trust = character.tobin_trust = -1
+                character.add_item("silver_star")
+                game.state = GameState(character, scene="marsh_ambush", flags={"ned_stabilized": stabilized})
+                outcomes = []
+                run = game.combat.run
+
+                def combat(*args):
+                    outcomes.append(run(*args))
+                    return outcomes[-1]
+
+                game.combat.run = combat
+                self.assertTrue(game._marsh_ambush())
+                self.assertEqual(outcomes, [CombatResult.VICTORY if victory else CombatResult.DEFEAT])
+                self.assertEqual(game.state.scene, "wayhouse")
+                self.assertEqual(game.state.flags["ned_survived"], victory or stabilized)
+                self.assertEqual(character.inventory["star_key"], 1)
+                self.assertNotIn("silver_star", character.inventory)
+                prose = " ".join(" ".join(output).split())
+                if victory:
+                    self.assertIn("Ned cuts a silver point", prose)
+                    self.assertNotIn("a breath that does not come", prose)
+                elif stabilized:
+                    self.assertIn("The bindings you set have held", prose)
+                    self.assertIn("Ned opens his hand", prose)
+                    self.assertNotIn("a breath that does not come", prose)
+                else:
+                    self.assertIn("a breath that does not come", prose)
+                    self.assertIn("draws the missing silver ray from inside his friend's coat", prose)
+                    self.assertIn("Tobin keeps Ned's broken lantern", prose)
+                    self.assertNotIn("Ned opens his hand", prose)
+                    self.assertNotIn("Ned cuts a silver point", prose)
+                self.assertIn("Ned survived" if victory or stabilized else "Ned died", game.state.journal[-1])
+
     def test_defeat_and_counterattack_victory_report_the_round_that_finished(self):
         for action, hp, enemy_hp, phase in (
             ("attack", 1, 100, "defeat"),

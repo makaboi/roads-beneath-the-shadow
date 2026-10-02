@@ -196,7 +196,7 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(
             offered,
             (
-                "Defend (halve all attacks, recover 1 Focus)",
+                "Defend (halve physical hits, recover 1 Focus)",
                 "Use an item",
                 "Inspect enemy",
                 "Mara: Crossing Guard (-1 Focus, defend)",

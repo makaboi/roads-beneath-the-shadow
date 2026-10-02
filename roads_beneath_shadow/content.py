@@ -157,7 +157,7 @@ ENDING_TEXT = {
     "fellowship": (
         "BENEATH THE SHADOW",
         "The buried gate stands open. Beyond it, Calenor's trail descends under the Weather Hills—"
-        "and a Black Rider waits above while you, Mara, and Tobin have only one road left: down.",
+        "and a Black Rider waits above while you turn toward the only road left: down.",
     ),
     "hidden_road": (
         "THE HIDDEN ROAD",

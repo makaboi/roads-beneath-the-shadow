@@ -2,6 +2,14 @@ name: Publish Desktop Downloads
 
 on:
   workflow_dispatch:
+    inputs:
+      preview_only:
+        description: Build and test desktop archives without publishing a release
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -28,12 +36,13 @@ concurrency:
 jobs:
   plan:
     name: Check whether this version needs a release
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
       build: ${{ steps.release.outputs.build }}
+      publish: ${{ steps.release.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,13 +52,15 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/desktop_release.py plan
+        run: python scripts/desktop_release.py plan${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)) && ' --preview-only' || '' }}
 
   build:
     name: Build ${{ matrix.platform }}
     needs: plan
     if: needs.plan.outputs.build == 'true'
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +118,7 @@ jobs:
   publish:
     name: Publish all verified downloads together
     needs: [plan, build]
-    if: needs.plan.outputs.build == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.preview_only)
     runs-on: ubuntu-latest
     permissions:
       contents: write

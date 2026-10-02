@@ -27,7 +27,7 @@ ACHIEVEMENTS = {
     "fates_witnessed": "Fates Witnessed — Discover four different Part I endings.",
     "part_two": "The Dead Road — Complete Part II.",
     "names_remembered": "Names Remembered — Recover all three Warden testimonies.",
-    "none_forsaken": "None Forsaken — Rescue the prisoners and keep every available companion alive.",
+    "none_forsaken": "None Forsaken — Rescue the prisoners and keep Mara beside you through the Last Seal.",
     "no_name_for_shadow": "No Name for the Shadow — Reach the Living Road without accepting the star's power.",
 }
 

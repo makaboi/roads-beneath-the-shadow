@@ -18,7 +18,7 @@ from typing import Any
 
 from .lighting import Color
 from .narrative import NarrativeDirector
-from .combat_view import CombatCommand
+from .combat_view import CombatCommand, CombatTurnSummary
 from .pixel_battle import BattleView
 from .pixel_panels import PanelView
 from .pixel_theme import initial_window_size, load_font
@@ -26,6 +26,7 @@ from .pixel_transcript import TranscriptView
 from .pixel_world import WorldView
 from .player_view import player_snapshot
 from .soundscapes import SoundscapePlayer
+from .text_input import TextEntry
 from .ui import InputClosed, TerminalUI
 
 
@@ -75,6 +76,8 @@ class PixelUI(TerminalUI):
         self.sfx_volume = 0.6
         self.text_size = "standard"
         self.story_decision_token: str | None = None
+        self._creating_traveler = False
+        self._creation_source: Any = None
         self._state_reference: Any = None
         self._presentation_number = 0
 
@@ -98,6 +101,13 @@ class PixelUI(TerminalUI):
         if self.closed.is_set():
             raise InputClosed
         self._request_number += 1
+        if kind == "text" and label.strip() == "Traveler's name:":
+            source = self.state_provider()
+            self._creation_source = ref(source) if source is not None else None
+            self._creating_traveler = True
+        elif story or label == "MAIN MENU":
+            self._creating_traveler = False
+            self._creation_source = None
         hud = self._hud_snapshot()
         request_context = dict(context or {})
         if story:
@@ -119,6 +129,12 @@ class PixelUI(TerminalUI):
 
     def _hud_snapshot(self) -> dict[str, Any] | None:
         state = self.state_provider()
+        if self._creating_traveler:
+            source = self._creation_source() if self._creation_source is not None else None
+            if state is source:
+                return None
+            self._creating_traveler = False
+            self._creation_source = None
         snapshot = player_snapshot(state)
         if snapshot is not None:
             if self._state_reference is None or self._state_reference() is not state:
@@ -194,6 +210,10 @@ class PixelUI(TerminalUI):
         limit = 24 if label.strip() == "Traveler's name:" else 64
         return str(self._request("text", label, context={"max_length": limit})).strip()
 
+    def choose_name(self, label: str = "Traveler's name: ") -> str | None:
+        answer = self._request("text", label, allow_back=True, context={"max_length": 24})
+        return None if answer is None else str(answer).strip()
+
     def pause(self, message: str = "Press Return to continue...") -> None:
         self._request("pause", message)
 
@@ -266,8 +286,11 @@ class PixelWindow:
         self.choice_scroll = 0
         self._menu_focused = False
         self.history_scroll = 0
-        self.entry = ""
-        self.entry_selected = False
+        self._entry_editor = TextEntry()
+        self._entry_view_start = 0
+        self._entry_field = pygame.Rect(0, 0, 0, 0)
+        self._entry_text_x = 0
+        self.entry_composition = ""
         self.heading = "THE ROAD AWAITS"
         self.scene_caption = "An eight-pointed star above a winding road."
         self.hud: dict[str, Any] | None = None
@@ -310,7 +333,26 @@ class PixelWindow:
         self._battle_transition_hold = False
         self._local_help = False
         self._battle_log: list[tuple[str, Any, bool]] = []
+        self._turn_summary = CombatTurnSummary()
+        self._observation_session: tuple[Any, Any] | None = None
+        self._observed_details: set[tuple[str | None, str, str]] = set()
         self._load_scene("", "An eight-pointed star above a winding road.")
+
+    @property
+    def entry(self) -> str:
+        return self._entry_editor.text
+
+    @entry.setter
+    def entry(self, text: str) -> None:
+        self._entry_editor.set_text(text)
+
+    @property
+    def entry_selected(self) -> bool:
+        return self._entry_editor.has_selection
+
+    @entry_selected.setter
+    def entry_selected(self, selected: bool) -> None:
+        self._entry_editor.select_all() if selected else self._entry_editor.clear_selection()
 
     def _load_scene(self, text: str, alt_text: str | None) -> None:
         try:
@@ -367,12 +409,13 @@ class PixelWindow:
                 self.selected = 0
                 self.choice_scroll = 0
                 self._menu_focused = False
-                self.entry = ""
-                self.entry_selected = False
+                self._entry_editor = TextEntry(max_length=self.request.context.get("max_length", 64))
+                self._entry_view_start = 0
+                self.entry_composition = ""
                 self.pg.key.start_text_input() if self.request.kind == "text" else self.pg.key.stop_text_input()
                 if self.request.kind == "panel":
                     self.panels.open(self.request.context["kind"], self.request.context["data"])
-                    self.world.set_request(None)
+                    self.world.set_request(None, preserve_inspection=self._saved_narrative is not None)
                 else:
                     self.panels.close()
                     restored_narrative = False
@@ -410,6 +453,7 @@ class PixelWindow:
             elif event.kind == "combat_begin":
                 self.battle.set_snapshot(None)
                 self._battle_log = []
+                self._turn_summary = CombatTurnSummary()
                 self._combat_active = False
                 self._battle_transition_hold = False
             elif event.kind == "combat_snapshot":
@@ -423,6 +467,7 @@ class PixelWindow:
                     break
             elif event.kind == "combat_feedback":
                 feedback = data["feedback"]
+                self._turn_summary = self._turn_summary.append(feedback)
                 if feedback.kind == "notice":
                     self._toast(feedback.text)
                 if feedback.text:
@@ -533,10 +578,27 @@ class PixelWindow:
             self._page_reveal = self._visible_to_source(current.text, boundary - self._page_source_offset(current))
 
     def _sync_world(self) -> None:
-        self.world.set_request(self.request if not self.reading and not self.panels.active and not self.transcript_open else None)
+        request = self.request if not self.reading and not self.panels.active and not self.transcript_open else None
+        suspended = self._saved_narrative is not None or self.panels.active or self.transcript_open or self.reading
+        self.world.set_request(request, preserve_inspection=suspended)
+
+    def _record_world_inspection(self) -> None:
+        if not self.world.inspection_open:
+            return
+        hud = self.hud or {}
+        session = (hud.get("journey_id"), hud.get("presentation_id"))
+        if session != self._observation_session:
+            self._observed_details.clear()
+            self._observation_session = session
+        detail = (self.world.map_key, self.world.inspection_title, self.world.inspection_text)
+        if detail not in self._observed_details:
+            self.history.extend((("Look: " + detail[1], Color.YELLOW, True), (detail[2], None, False)))
+            self._observed_details.add(detail)
+            self.history_scroll = 0
 
     def _set_transcript(self, opened: bool, *, scroll: int | None = None) -> None:
         self._finish_narration()
+        self.entry_composition = ""
         self.transcript_open = opened
         if opened:
             self.archive.open(self.history, scroll=scroll)
@@ -581,10 +643,13 @@ class PixelWindow:
 
     def answer(self, answer: Any) -> None:
         if self.request is not None:
+            if self.request.kind == "text" and self.entry_composition and answer is not None:
+                return
             if self.reading:
                 return
             self._finish_narration()
-            if self.request.story and isinstance(answer, str) and answer in dict(STORY_COMMANDS):
+            utility = self.request.story and isinstance(answer, str) and answer in dict(STORY_COMMANDS)
+            if utility:
                 self._saved_narrative = self.narrative
                 self._saved_journey = self.hud.get("journey_id") if self.hud else None
                 self._saved_decision = self._decision_key(self.request, self.hud)
@@ -598,7 +663,7 @@ class PixelWindow:
             self.ui.submit(self.request, answer)
             self.request = None
             self.panels.close()
-            self.world.set_request(None)
+            self.world.set_request(None, preserve_inspection=utility or self._saved_narrative is not None)
             self.choice_hits = []
             self.utility_hits = []
             self.pg.key.stop_text_input()
@@ -624,6 +689,7 @@ class PixelWindow:
             self._toggle_fullscreen()
             return
         if event.type == getattr(pg, "WINDOWFOCUSLOST", -1):
+            self.entry_composition = ""
             self.world.stop_moving()
             self.battle.handle_event(event)
             if self.transcript_open:
@@ -635,6 +701,7 @@ class PixelWindow:
             from .controls import controls_snapshot
 
             self._local_help = True
+            self.entry_composition = ""
             self.panels.open("information", controls_snapshot())
             self.world.stop_moving()
             self._sync_world()
@@ -691,7 +758,11 @@ class PixelWindow:
             if self._menu_focused and not self.world.inspection_open and event.type == pg.KEYDOWN and event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE):
                 self._choose(self.selected + 1)
                 return
+            was_inspecting = self.world.inspection_open
             handled, answer = self.world.handle_event(event)
+            if self.world.inspection_open and not was_inspecting:
+                self._record_world_inspection()
+                self.soundscape.play_effect("interact")
             if answer is not None:
                 self.soundscape.play_effect("interact")
                 self.answer(answer)
@@ -721,7 +792,10 @@ class PixelWindow:
         if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             for rect, answer in self.choice_hits + self.utility_hits:
                 if rect.collidepoint(event.pos):
-                    self._choose(answer) if isinstance(answer, int) else self.answer(answer)
+                    if self.request and self.request.kind == "text" and answer is not None:
+                        self.answer(self.entry)
+                    else:
+                        self._choose(answer) if isinstance(answer, int) else self.answer(answer)
                     return
         request = self.request
         if request is None:
@@ -729,20 +803,42 @@ class PixelWindow:
                 self.ui.close()
             return
         if request.kind == "text":
-            if event.type == pg.TEXTINPUT:
-                if self.entry_selected:
-                    self.entry = ""
-                    self.entry_selected = False
-                limit = request.context.get("max_length", 64)
-                self.entry += "".join(character for character in event.text if character.isprintable())[:limit - len(self.entry)]
+            if event.type == pg.TEXTEDITING:
+                self.entry_composition = "".join(character for character in str(event.text) if character.isprintable())
+            elif event.type == pg.TEXTINPUT:
+                self._entry_editor.insert(event.text)
+                self.entry_composition = ""
+            elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1 and self._entry_field.collidepoint(event.pos):
+                if getattr(event, "clicks", 1) > 1:
+                    self._entry_editor.select_all()
+                else:
+                    positions = range(self._entry_view_start, len(self.entry) + 1)
+                    closest = min(positions, key=lambda index: abs(self._entry_text_x + self.font.size(self.entry[self._entry_view_start:index])[0] - event.pos[0]))
+                    self._entry_editor.move_to(closest, select=bool(pg.key.get_mods() & pg.KMOD_SHIFT))
             elif event.type == pg.KEYDOWN:
+                modifiers = getattr(event, "mod", 0)
+                command = bool(modifiers & (pg.KMOD_CTRL | pg.KMOD_GUI))
+                select = bool(modifiers & pg.KMOD_SHIFT)
+                if self.entry_composition and (event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_BACKSPACE, pg.K_DELETE, pg.K_LEFT, pg.K_RIGHT, pg.K_HOME, pg.K_END) or event.key == pg.K_a and command):
+                    return
                 if event.key in (pg.K_RETURN, pg.K_KP_ENTER):
                     self.answer(self.entry)
                 elif event.key == pg.K_BACKSPACE:
-                    self.entry = "" if self.entry_selected else self.entry[:-1]
-                    self.entry_selected = False
-                elif event.key == pg.K_a and getattr(event, "mod", 0) & (pg.KMOD_CTRL | pg.KMOD_GUI):
-                    self.entry_selected = True
+                    self._entry_editor.backspace(word=command)
+                elif event.key == pg.K_DELETE:
+                    self._entry_editor.delete(word=command)
+                elif event.key in (pg.K_LEFT, pg.K_RIGHT):
+                    self._entry_editor.navigate(-1 if event.key == pg.K_LEFT else 1, select=select, word=command)
+                elif event.key in (pg.K_HOME, pg.K_END):
+                    move = self._entry_editor.home if event.key == pg.K_HOME else self._entry_editor.end
+                    move(select=select)
+                elif event.key == pg.K_a and command:
+                    self._entry_editor.select_all()
+                elif event.key == pg.K_ESCAPE:
+                    if self.entry_composition:
+                        self.entry_composition = ""
+                    elif request.allow_back:
+                        self.answer(None)
             return
         if event.type != pg.KEYDOWN:
             return
@@ -783,6 +879,8 @@ class PixelWindow:
             if 0 < answer <= len(actions) and not actions[answer - 1].enabled:
                 self._toast(actions[answer - 1].disabled_reason or "That action is unavailable.")
                 return
+            if 0 < answer <= len(actions):
+                self._turn_summary = self._turn_summary.begin_action(actions[answer - 1])
         self.answer(answer)
 
     def _choice_dimensions(self) -> list[tuple[int, list[str]]]:
@@ -882,7 +980,7 @@ class PixelWindow:
         self._panel(self.art_rect)
         inner = self.art_rect.inflate(-8, -8)
         if self.world.active and not self.reading:
-            self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion)
+            self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion, text_size=self.ui.text_size)
         elif self._combat_active and not self.reading and self.battle.snapshot is not None:
             self.battle.set_scene(self.scene)
             self.battle.draw(self.screen, inner, now)
@@ -945,12 +1043,11 @@ class PixelWindow:
             self._render_choices()
         elif not self.reading and request is not None and request.kind == "text":
             field = pg.Rect(self.menu_rect.left + 4, self.menu_rect.top + 15, self.menu_rect.width - 8, 58)
-            self._panel(field, (29, 43, 49) if self.entry_selected else INK)
-            entry = self.entry
-            while self.font.size(entry + "_")[0] > field.width - 22:
-                entry = entry[1:]
-            self._text(entry + "_", (field.left + 11, field.top + 19))
+            self._render_name_entry(field)
             self._render_continue("Begin the road", field.bottom + 21)
+            limit = request.context.get("max_length", 64)
+            self._text(f"1–{limit} printable characters", (field.left + 3, field.bottom + 86), MUTED, self.small_font)
+            self._text("Ctrl/Cmd+A selects all", (field.left + 3, field.bottom + 105), MUTED, self.small_font)
         elif not self.reading and request is not None and request.kind == "pause":
             self._render_continue("Continue", self.menu_rect.top + 12)
         elif self.finished:
@@ -959,6 +1056,8 @@ class PixelWindow:
             self._text("Return or Esc to close", (self.menu_rect.left + 6, self.menu_rect.top + 95), MUTED, self.small_font)
         if self.reading:
             footer = "SPACE / ENTER Read   BACKSPACE Previous   TAB Archive   F1 Controls   F11 Fullscreen"
+        elif request is not None and request.kind == "text":
+            footer = "TYPE Name   ARROWS Cursor   ENTER Continue   TAB Archive   F1 Controls   F11 Fullscreen"
         elif self.world.active:
             footer = "WASD Walk   E Interact   F5 Save slots   TAB Archive   F1 Controls   F11 Fullscreen"
         elif self._combat_active:
@@ -987,10 +1086,10 @@ class PixelWindow:
             modal_rect = pg.Rect(margin + 8, 75, width - margin * 2 - 16, height - 113)
             if self.transcript_open:
                 self.archive.set_entries(self.history)
-                self.archive.draw(self.screen, modal_rect)
+                self.archive.draw(self.screen, modal_rect, text_size=self.ui.text_size)
                 self.history_scroll = self.archive.scroll
             else:
-                self.panels.draw(self.screen, modal_rect)
+                self.panels.draw(self.screen, modal_rect, text_size=self.ui.text_size)
         if not self.ui.color:
             self.screen.blit(pg.transform.grayscale(self.screen), (0, 0))
         pg.display.flip()
@@ -1040,14 +1139,14 @@ class PixelWindow:
             lines = [(line, color) for text, color, _ in entries for line in wrap_pixels(text, self.font, rect.width - 40)]
             rows = max(1, (rect.height - 49) // self.line_height)
             if rows <= 2:
-                text, color, _ = entries[-1]
-                latest = wrap_pixels(text, self.font, rect.width - 40)
-                lines = [(line, color) for line in latest[:rows]]
-                if len(latest) > rows:
-                    line, color = lines[-1]
-                    while line and self.font.size(line + "…")[0] > rect.width - 40:
-                        line = line[:-1]
-                    lines[-1] = (line + "…", color)
+                columns = max(8, (rect.width - 40) // max(1, self.small_font.size("M")[0]))
+                first, second = self._turn_summary.lines(snapshot, max_columns=columns)
+                incoming = any(event.kind in {"damage", "info"} and event.target_id == "player" and event.amount > 0 for event in self._turn_summary.feedback)
+                self.screen.set_clip(rect.inflate(-12, -12))
+                self._text(first, (rect.left + 16, rect.top + 29), PARCHMENT, self.small_font)
+                self._text(second, (rect.left + 16, rect.top + 29 + self.small_font.get_linesize() + 3), RED if incoming else TEAL, self.small_font)
+                self.screen.set_clip(None)
+                return
             self.screen.set_clip(rect.inflate(-12, -12))
             for index, (line, color) in enumerate(lines[-rows:]):
                 self._text(line, (rect.left + 16, rect.top + 29 + index * self.line_height), TEAL if color == Color.GREEN else PARCHMENT)
@@ -1167,6 +1266,43 @@ class PixelWindow:
         self._panel(rect, (39, 49, 50))
         self._text(label, (rect.left + 15, rect.top + 15), AMBER)
         self.choice_hits.append((rect, self.entry if self.request and self.request.kind == "text" else ""))
+
+    def _render_name_entry(self, field: Any) -> None:
+        pg = self.pg
+        self._entry_field = field
+        self._entry_text_x = field.left + 11
+        self._panel(field, INK)
+        pg.key.set_text_input_rect(field)
+        start, end = self._entry_editor.selection
+        text = self.entry
+        caret = self._entry_editor.cursor
+        if self.entry_composition:
+            text = text[:start] + self.entry_composition + text[end:]
+            caret = start + len(self.entry_composition)
+        self._entry_view_start = min(self._entry_view_start, caret)
+        available = max(1, field.width - 24)
+        while self._entry_view_start < caret and self.font.size(text[self._entry_view_start:caret] + " ")[0] > available:
+            self._entry_view_start += 1
+        visible_end = len(text)
+        while visible_end > self._entry_view_start and self.font.size(text[self._entry_view_start:visible_end])[0] > available:
+            visible_end -= 1
+        view_start = self._entry_view_start
+        x = self._entry_text_x
+        y = field.top + 19
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(field.inflate(-12, -8))
+        if self._entry_editor.has_selection and not self.entry_composition:
+            left = x + self.font.size(text[view_start:max(view_start, start)])[0]
+            right = x + self.font.size(text[view_start:max(view_start, end)])[0]
+            pg.draw.rect(self.screen, (42, 63, 66), (left, y - 2, right - left, self.font.get_linesize() + 3))
+        self._text(text[view_start:visible_end], (x, y))
+        caret_x = x + self.font.size(text[view_start:caret])[0]
+        if self.entry_composition:
+            left = x + self.font.size(text[view_start:max(view_start, start)])[0]
+            pg.draw.line(self.screen, TEAL, (left, y + self.font.get_linesize()), (caret_x, y + self.font.get_linesize()))
+        if self.entry_composition or (pg.time.get_ticks() // 500) % 2 == 0:
+            pg.draw.line(self.screen, AMBER, (caret_x, y), (caret_x, y + self.font.get_height()), 2)
+        self.screen.set_clip(previous_clip)
 
 
 def launch_pixel_game(game: Any, ui: PixelUI, *, screenshot: Path | None = None) -> None:

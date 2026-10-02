@@ -85,3 +85,33 @@ class CombatControlsTests(unittest.TestCase):
         self.assertEqual(self.window.selected, 1)
         self.assertFalse(self.window.panels.active)
         self.assertTrue(self.ui.responses.empty())
+
+    def test_compact_log_keeps_paid_mara_impact_and_incoming_damage_visible(self):
+        snapshot = replace(self.snapshot, actions=(*self.snapshot.actions,
+            CombatActionView("mara", "Mara: Crossing Blades (-1 Focus)", 1, True, "", "Strike and interrupt.")))
+        request = replace(self.request, options=tuple(action.label for action in snapshot.actions))
+        self.window.request = request
+        self.window.battle.set_snapshot(snapshot)
+        self.window._choose(len(snapshot.actions))
+        self.assertEqual(self.ui.responses.get_nowait(), (1, len(snapshot.actions)))
+        for feedback in (
+            CombatFeedback("damage", "mara", "enemy_0", 8, "Mara strikes."),
+            CombatFeedback("interrupt", "mara", "enemy_0", 0, "The captain's blow is interrupted."),
+            CombatFeedback("damage", "enemy_1", "player", 3, "The archer hits."),
+            CombatFeedback("damage", "player", "player", 1, "Bleeding costs 1 Health."),
+        ):
+            self.ui.events.put(UIEvent("combat_feedback", {"feedback": feedback}))
+        self.ui.events.put(UIEvent("request", {"request": replace(request, identifier=2), "hud": None}))
+        self.window.drain()
+        visible = []
+        draw = self.window._text
+
+        def record(text, position, *args):
+            if self.window.history_rect.collidepoint(position):
+                visible.append(text)
+            draw(text, position, *args)
+
+        self.window._text = record
+        self.window.render()
+        self.assertTrue(any("Mara" in line and "8" in line and "interrupt" in line for line in visible), visible)
+        self.assertTrue(any("3 Health" in line and "Bleeding" in line and "1" in line for line in visible), visible)

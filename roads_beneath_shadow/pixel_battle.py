@@ -409,12 +409,16 @@ class BattleView:
                 pg.draw.line(sprite, MUTED, (29, 15), (28, 37))
             else:
                 if kind == "player" and weapon == "staff":
-                    pg.draw.line(sprite, (129, 105, 68), (29, 39), (31 if pose else 29, 13), 2)
-                    pg.draw.line(sprite, BONE, (30, 13), (32, 13))
+                    staff_start = (18, 28) if pose > 1 else (29, 39)
+                    staff_tip = (38, 29) if pose > 1 else (33, 12) if pose else (29, 13)
+                    pg.draw.line(sprite, (129, 105, 68), staff_start, staff_tip, 2)
+                    pg.draw.line(sprite, BONE, staff_tip, (min(39, staff_tip[0] + 2), staff_tip[1]))
                 elif kind == "player" and weapon == "unarmed":
-                    pg.draw.rect(sprite, (193, 160, 119), (28, 27, 3, 3))
+                    fist_x = 33 if pose > 1 else 29 if pose else 28
+                    pg.draw.line(sprite, (193, 160, 119), (25, 27), (fist_x, 28), 2)
+                    pg.draw.rect(sprite, (193, 160, 119), (fist_x, 27, 3, 3))
                 else:
-                    tip = (34, 34) if pose > 1 else (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
+                    tip = (34, 34) if pose > 1 else (30, 21) if weapon == "knife" and pose else (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
                     pg.draw.line(sprite, BONE, (28, 29), tip, 1)
                     pg.draw.line(sprite, AMBER, (26, 30), (31, 30), 1)
                 if kind == "mara":
@@ -542,7 +546,7 @@ class BattleView:
         x, ground = anchor
         self.actor_positions[actor_id] = anchor
         effects = self._active_effects(actor_id)
-        outgoing = next((effect for effect in self._effects if 0 <= effect.age < 0.44 and effect.feedback.actor_id == actor_id and effect.feedback.kind in {"damage", "evade"} and effect.feedback.target_id != actor_id), None)
+        outgoing = next((effect for effect in self._effects if 0 <= effect.age < 0.30 and effect.feedback.actor_id == actor_id and effect.feedback.kind in {"damage", "evade"} and effect.feedback.target_id != actor_id), None)
         offset = 0
         bob = 0
         fall = self._fall_progress(actor_id, alive)
@@ -555,7 +559,10 @@ class BattleView:
                 if target is not None:
                     travel = target[0] - x
                     reach = max(0, abs(travel) - round(34 * scale)) * (1 if travel > 0 else -1)
-                    progress = outgoing.age / 0.18 if outgoing.age < 0.18 else max(0.0, 1 - (outgoing.age - 0.18) / 0.26)
+                    # Return before the formation's next impact. Longer
+                    # returns let a later attacker cover the previous target
+                    # and strike while the traveler is still across the arena.
+                    progress = outgoing.age / 0.18 if outgoing.age < 0.18 else max(0.0, 1 - (outgoing.age - 0.18) / 0.12)
                     offset = round(reach * (1 - (1 - min(1.0, progress)) ** 2))
             hit = next((effect for effect in reversed(effects) if effect.feedback.kind == "damage" and effect.feedback.amount > 0 and effect.age - effect.impact_time < 0.18), None)
             if hit is not None:
@@ -601,7 +608,12 @@ class BattleView:
         if standing:
             for effect in effects:
                 age = effect.age - (0 if self._reduced_motion else effect.impact_time)
-                if effect.feedback.kind in {"defend", "evade"} and age < 0.5:
+                if effect.feedback.kind == "phase" and age < 0.6 and not self._reduced_motion:
+                    spread = round(3 + age * 10)
+                    for dx, dy in ((-1, -1), (1, -1), (-1, 0), (1, 0)):
+                        spark = (sprite_rect.centerx + dx * (sprite_rect.w // 2 + spread), sprite_rect.centery + dy * (sprite_rect.h // 3 + spread))
+                        pg.draw.rect(surface, AMBER if age < 0.3 else RED, (*spark, 2, 3))
+                elif effect.feedback.kind in {"defend", "evade"} and age < 0.5:
                     guard = sprite_rect.inflate(10, 4).clip(self._arena_rect)
                     pg.draw.arc(surface, TEAL, guard, -math.pi / 2, math.pi / 2, 2)
                     pg.draw.line(surface, TEAL, (guard.centerx, guard.y), (guard.right - 2, guard.y + 3), 1)
@@ -616,7 +628,8 @@ class BattleView:
             self.sprite_hits.append((sprite_rect.inflate(12, 12).clip(self._arena_rect), actor_id))
             enemy = next((enemy for enemy in self.snapshot.enemies if enemy.id == actor_id), None) if self.snapshot else None
             if enemy is not None:
-                help_text = f"{enemy.name}\nHealth {enemy.hp}/{enemy.max_hp} · Armor {enemy.armor}\n" + (self._intent_help(enemy) if alive else "This foe has fallen.")
+                defense = "Cannot be wounded" if enemy.invulnerable else f"Health {enemy.hp}/{enemy.max_hp}"
+                help_text = f"{enemy.name}\n{defense} · Armor {enemy.armor}\n" + (self._intent_help(enemy) if alive else "This foe has fallen.")
                 self.tooltip_hits.append((self.sprite_hits[-1][0], help_text))
             if targeted and alive:
                 marker_x = sprite_rect.centerx
@@ -637,6 +650,11 @@ class BattleView:
             fill.w = max(1, round(rect.w * min(1, hp / maximum)))
             pg.draw.rect(surface, color, fill)
             pg.draw.line(surface, tuple(min(255, channel + 20) for channel in color), fill.topleft, (fill.right - 1, fill.y))
+
+    def _protected_meter(self, surface: Any, rect: Any) -> None:
+        self.pg.draw.rect(surface, (54, 47, 35), rect)
+        for x in range(rect.x + 2, rect.right - 1, 8):
+            self.pg.draw.line(surface, AMBER, (x, rect.y), (min(x + 2, rect.right - 1), rect.bottom - 1))
 
     def _status_line(self, surface: Any, statuses: Any, x: int, y: int, width: int, *, font: Any = None) -> int:
         text = "  ".join(f"{status.label} {status.remaining}" for status in statuses)
@@ -707,8 +725,11 @@ class BattleView:
     def _status_text(statuses: Any) -> str:
         return "  ".join(f"{status.label} {status.remaining}" for status in statuses)
 
-    @staticmethod
-    def _health_label(enemy: Any) -> str:
+    def _health_label(self, enemy: Any) -> str:
+        if enemy.invulnerable:
+            rounds = self.snapshot.max_rounds if self.snapshot else None
+            survival = f"\n{'HELD' if self.snapshot and self.snapshot.phase == 'victory' else 'SURVIVE'} {rounds} ROUNDS" if rounds else ""
+            return "CANNOT BE WOUNDED" + survival
         return f"{max(0, enemy.hp)} / {enemy.max_hp} HEALTH"
 
     @staticmethod
@@ -850,9 +871,13 @@ class BattleView:
         title_width = round(width * 0.44) if wide else width
         y = self._paragraph(surface, enemy.name, (x, y), title_width, BONE if alive else MUTED, font=title_font)
         y += 1 if compact else 4
-        y = self._paragraph(surface, self._health_label(enemy), (x, y), title_width, RED if alive else MUTED, font=body_font)
+        y = self._paragraph(surface, self._health_label(enemy), (x, y), title_width, AMBER if enemy.invulnerable else RED if alive else MUTED, font=body_font)
         y += 1 if compact else 4
-        self._health(surface, pg.Rect(x, y, title_width, 3 if compact else 5), enemy.hp, enemy.max_hp, actor_id=enemy.id)
+        meter = pg.Rect(x, y, title_width, 3 if compact else 5)
+        if enemy.invulnerable:
+            self._protected_meter(surface, meter)
+        else:
+            self._health(surface, meter, enemy.hp, enemy.max_hp, actor_id=enemy.id)
         y += 6 if compact else 11
         y = self._paragraph(surface, self._armor_label(enemy), (x, y), title_width, MUTED, font=body_font)
         y += 2 if compact else 6
@@ -917,6 +942,8 @@ class BattleView:
             return (f"−{feedback.amount}", RED) if feedback.amount else ("BLOCKED", TEAL)
         if feedback.kind == "heal":
             return (f"+{feedback.amount}" if feedback.amount else "REMEDY"), TEAL
+        if feedback.kind == "phase":
+            return "PHASE " + {2: "II", 3: "III"}.get(feedback.amount, str(feedback.amount)), RED
         return {"defend": "GUARDED", "evade": "EVADED", "interrupt": "INTERRUPTED", "fallen": "FALLEN", "escape": "ESCAPED"}.get(feedback.kind, feedback.kind.upper()), AMBER
 
     def _draw_feedback(self, surface: Any) -> None:
@@ -937,7 +964,7 @@ class BattleView:
         for actor_id, effects in grouped.items():
             entries = [(self._feedback_label(effect.feedback), effect.feedback.kind in {"damage", "heal"}) for effect in effects[-2:]]
             if len(effects) > 2:
-                outcome = next((effect for effect in reversed(effects) if effect.feedback.kind in {"interrupt", "fallen", "evade", "defend", "escape"} and effect.age - (0 if self._reduced_motion else effect.impact_time) < 0.9), None)
+                outcome = next((effect for effect in reversed(effects) if effect.feedback.kind in {"interrupt", "fallen", "evade", "defend", "escape", "phase"} and effect.age - (0 if self._reduced_motion else effect.impact_time) < 0.9), None)
                 previous = effects[:-1]
                 damage = [effect.feedback.amount for effect in previous if effect.feedback.kind == "damage"]
                 healing = [effect.feedback.amount for effect in previous if effect.feedback.kind == "heal"]
@@ -1116,7 +1143,11 @@ class BattleView:
             enemy_x, _ = enemy_anchors[index]
             self._draw_actor(surface, enemy.id, self._kind(enemy.archetype + " " + enemy.name), (enemy_x, ground), actor_scale, facing_left=True, alive=enemy.hp > 0, targeted=enemy.id == snapshot.target_id, now_ms=now_ms)
             if enemy.hp > 0:
-                self._health(surface, pg.Rect(enemy_x - 23, ground + 5, 46, 3), enemy.hp, enemy.max_hp, actor_id=enemy.id)
+                meter = pg.Rect(enemy_x - 23, ground + 5, 46, 3)
+                if enemy.invulnerable:
+                    self._protected_meter(surface, meter)
+                else:
+                    self._health(surface, meter, enemy.hp, enemy.max_hp, actor_id=enemy.id)
                 number = str(index + 1)
                 number_pos = (enemy_x - 34, ground + 1) if compact else (enemy_x - 3, ground + 10)
                 self._text(surface, number, number_pos, AMBER if enemy.id == snapshot.target_id else MUTED, font=self.mini_font if compact else self.small_font)

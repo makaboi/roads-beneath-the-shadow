@@ -14,6 +14,7 @@ from unicodedata import combining, normalize
 
 from .lighting import Color
 from .pixel_theme import load_font, wrap_text
+from .text_input import TextEntry
 
 
 INK = (16, 21, 27)
@@ -65,9 +66,8 @@ class TranscriptView:
         self.scroll = 0
         self.maximum_scroll = 0
         self.rows = 1
-        self.query = ""
+        self._query_editor = TextEntry(max_length=64)
         self.searching = False
-        self._query_selected = False
         self._composition = ""
         self.matches: list[int] = []
         self.match_index = 0
@@ -90,8 +90,27 @@ class TranscriptView:
         self._scrollbar = pg.Rect(0, 0, 0, 0)
         self._thumb = pg.Rect(0, 0, 0, 0)
         self._dragging: int | None = None
+        self._selecting_query = False
+        self._query_view_start = 0
+        self._query_text_x = 0
         self._hits: list[tuple[Any, str]] = []
         self._fonts(17)
+
+    @property
+    def query(self) -> str:
+        return self._query_editor.text
+
+    @query.setter
+    def query(self, text: str) -> None:
+        self._query_editor.set_text(text)
+
+    @property
+    def _query_selected(self) -> bool:
+        return self._query_editor.has_selection
+
+    @_query_selected.setter
+    def _query_selected(self, selected: bool) -> None:
+        self._query_editor.select_all() if selected else self._query_editor.clear_selection()
 
     def _fonts(self, size: int) -> None:
         if size == self._font_size:
@@ -136,6 +155,7 @@ class TranscriptView:
         self._query_selected = False
         self._composition = ""
         self._dragging = None
+        self._selecting_query = False
         self.pg.key.stop_text_input()
 
     def _start_search(self, *, select: bool = True) -> None:
@@ -145,6 +165,22 @@ class TranscriptView:
         self.pg.key.start_text_input()
         if self._search_field.width:
             self.pg.key.set_text_input_rect(self._search_field)
+
+    def _query_changed(self) -> None:
+        self._composition = ""
+        self.match_index = 0
+        self._find_matches()
+        self._show_match()
+
+    def _place_query_caret(self, pointer_x: int, *, select: bool = False) -> None:
+        position = self._query_view_start
+        for index in range(self._query_view_start, len(self.query)):
+            before = self.small_font.size(self.query[self._query_view_start:index])[0]
+            after = self.small_font.size(self.query[self._query_view_start:index + 1])[0]
+            if pointer_x < self._query_text_x + (before + after) / 2:
+                break
+            position = index + 1
+        self._query_editor.move_to(position, select=select)
 
     def _find_matches(self) -> None:
         previous = self._match_positions[self.match_index] if self._match_positions else None
@@ -207,6 +243,7 @@ class TranscriptView:
         pg = self.pg
         if event.type == getattr(pg, "WINDOWFOCUSLOST", -1):
             self._dragging = None
+            self._selecting_query = False
             self._composition = ""
         elif event.type == pg.MOUSEWHEEL:
             self._set_scroll(self.scroll + event.y * 3)
@@ -221,7 +258,11 @@ class TranscriptView:
                         self.close()
                         return True
                     if action == "search":
-                        self._start_search(select=getattr(event, "clicks", 1) > 1)
+                        select_all = getattr(event, "clicks", 1) > 1
+                        self._start_search(select=select_all)
+                        if not select_all:
+                            self._place_query_caret(event.pos[0])
+                            self._selecting_query = True
                     elif action == "next":
                         self._next_match()
                     elif action == "previous":
@@ -237,24 +278,23 @@ class TranscriptView:
                     break
         elif event.type == pg.MOUSEMOTION and self._dragging is not None:
             self._drag(event.pos[1])
+        elif event.type == pg.MOUSEMOTION and self._selecting_query:
+            self._place_query_caret(event.pos[0], select=True)
         elif event.type == pg.MOUSEBUTTONUP and getattr(event, "button", None) == 1:
             self._dragging = None
+            self._selecting_query = False
         elif event.type == pg.TEXTEDITING and self.searching:
             self._composition = "".join(character for character in str(event.text) if character.isprintable())
         elif event.type == pg.TEXTINPUT and self.searching:
-            if self._query_selected:
-                self.query = ""
-                self._query_selected = False
-            self.query += "".join(char for char in event.text if char.isprintable())[:max(0, 64 - len(self.query))]
             self._composition = ""
-            self.match_index = 0
-            self._find_matches()
-            self._show_match()
+            if self._query_editor.insert(event.text):
+                self._query_changed()
         elif event.type == pg.KEYDOWN:
             key = event.key
             mod = getattr(event, "mod", 0)
             command = bool(mod & (pg.KMOD_CTRL | pg.KMOD_GUI))
-            if self.searching and self._composition and key in {pg.K_RETURN, pg.K_KP_ENTER, pg.K_BACKSPACE, pg.K_DELETE}:
+            editing_key = key in {pg.K_RETURN, pg.K_KP_ENTER, pg.K_BACKSPACE, pg.K_DELETE, pg.K_LEFT, pg.K_RIGHT, pg.K_UP, pg.K_DOWN, pg.K_HOME, pg.K_END} or (command and key == pg.K_a)
+            if self.searching and self._composition and editing_key:
                 # SDL's following text events commit or edit the composition.
                 # The same key must not erase the saved query or cycle results.
                 return False
@@ -276,12 +316,14 @@ class TranscriptView:
             elif self.searching and key == pg.K_a and command:
                 self._query_selected = True
             elif self.searching and key in {pg.K_BACKSPACE, pg.K_DELETE}:
-                self.query = "" if self._query_selected or key == pg.K_DELETE else self.query[:-1]
-                self._query_selected = False
-                self._composition = ""
-                self.match_index = 0
-                self._find_matches()
-                self._show_match()
+                edit = self._query_editor.backspace if key == pg.K_BACKSPACE else self._query_editor.delete
+                if edit(word=command):
+                    self._query_changed()
+            elif self.searching and key in {pg.K_LEFT, pg.K_RIGHT}:
+                self._query_editor.navigate(-1 if key == pg.K_LEFT else 1, select=bool(mod & pg.KMOD_SHIFT), word=command)
+            elif self.searching and key in {pg.K_HOME, pg.K_END}:
+                move = self._query_editor.home if key == pg.K_HOME else self._query_editor.end
+                move(select=bool(mod & pg.KMOD_SHIFT))
             elif self.searching and key in {pg.K_RETURN, pg.K_KP_ENTER}:
                 self._next_match(-1 if mod & pg.KMOD_SHIFT else 1)
             elif key in {pg.K_UP, pg.K_PAGEUP}:
@@ -349,14 +391,15 @@ class TranscriptView:
             controls = "Ctrl+F: search  Arrows / wheel / PgUp / PgDn: read"
         return position, controls
 
-    def draw(self, surface: Any, rect: Any) -> None:
+    def draw(self, surface: Any, rect: Any, *, text_size: str = "standard") -> None:
         pg = self.pg
         rect = pg.Rect(rect)
         if rect.width < 260 or rect.height < 220:
             return
         old_anchor = self._pending_anchor or self.reading_anchor
         was_at_bottom = self.scroll == 0
-        self._fonts(21 if rect.width >= 1700 else 19 if rect.width >= 1300 else 17)
+        preference = {"standard": 0, "large": 3, "larger": 6}.get(text_size, 0)
+        self._fonts((21 if rect.width >= 1700 else 19 if rect.width >= 1300 else 17) + preference)
         old_clip = surface.get_clip()
         surface.set_clip(rect.clip(old_clip))
         self._hits = []
@@ -364,44 +407,84 @@ class TranscriptView:
         pg.draw.rect(surface, EDGE, rect, 1)
         pg.draw.line(surface, AMBER, (rect.left + 22, rect.top), (rect.left + 194, rect.top), 2)
         self._text(surface, "THE ROAD REMEMBERS", (rect.x + 22, rect.y + 18), AMBER, font=self.title_font)
-        self._text(surface, "Your story, choices, and battle record.", (rect.x + 22, rect.y + 53), MUTED, font=self.small_font)
-        field = pg.Rect(rect.x + 22, rect.y + 83, rect.width - 44, 36)
+        subtitle_y = rect.y + 18 + self.title_font.get_linesize() + 7
+        self._text(surface, "Your story, choices, and battle record.", (rect.x + 22, subtitle_y), MUTED, font=self.small_font)
+        field = pg.Rect(rect.x + 22, subtitle_y + self.small_font.get_linesize() + 16, rect.width - 44, max(36, self.small_font.get_linesize() + 14))
         controls_width = 111
         self._search_field = pg.Rect(field.x, field.y, max(1, field.width - controls_width), field.height)
         pg.draw.rect(surface, INK, self._search_field)
         pg.draw.rect(surface, AMBER if self.searching else EDGE, self._search_field, 1)
         self._hits.append((self._search_field, "search"))
         prefix = "Search: " if self.searching or self.query else ""
-        displayed_query = "" if self._query_selected and self._composition else self.query
-        text = displayed_query + self._composition + ("_" if self.searching else "") if prefix else "Ctrl+F or click to search"
-        available = max(1, self._search_field.width - 20 - self.small_font.size(prefix)[0])
-        clipped = False
-        while text and self.small_font.size(text)[0] > available:
-            text = text[1:]
-            clipped = True
-        if clipped:
-            text = "…" + text[1:]
         text_x = self._search_field.x + 10
-        if self._query_selected:
-            pg.draw.rect(surface, (49, 69, 68), (text_x + self.small_font.size(prefix)[0], field.y + 6, self.small_font.size(text)[0], field.height - 12))
-        self._text(surface, prefix + text, (text_x, field.y + 9), PARCHMENT, font=self.small_font)
+        self._text(surface, prefix, (text_x, field.y + 9), PARCHMENT, font=self.small_font)
+        query_x = text_x + self.small_font.size(prefix)[0]
+        available = max(1, self._search_field.right - query_x - 10)
+        selection_start, selection_end = self._query_editor.selection
+        displayed = self.query
+        caret = self._query_editor.cursor if self.searching else len(displayed)
+        if self._composition:
+            displayed = self.query[:selection_start] + self._composition + self.query[selection_end:]
+            caret = selection_start + len(self._composition)
+        start = 0
+        while start < caret and self.small_font.size(displayed[start:caret])[0] > available - 10:
+            start += 1
+        while start < caret and combining(displayed[start]):
+            start += 1
+        if start:
+            self._text(surface, "…", (query_x, field.y + 9), MUTED, font=self.small_font)
+            query_x += self.small_font.size("…")[0]
+            available -= self.small_font.size("…")[0]
+        end = start
+        while end < len(displayed) and self.small_font.size(displayed[start:end + 1])[0] <= available:
+            end += 1
+        visible = displayed[start:end]
+        self._query_view_start, self._query_text_x = start, query_x
+        query_clip = surface.get_clip()
+        surface.set_clip(self._search_field.inflate(-8, -4).clip(query_clip))
+        if self._query_selected and not self._composition:
+            begin = max(start, selection_start)
+            stop = min(end, selection_end)
+            if stop > begin:
+                selection_x = query_x + self.small_font.size(displayed[start:begin])[0]
+                pg.draw.rect(surface, (49, 69, 68), (selection_x, field.y + 6, self.small_font.size(displayed[begin:stop])[0], field.height - 12))
+        self._text(surface, visible if prefix else "Ctrl+F or click to search", (query_x, field.y + 9), PARCHMENT, font=self.small_font)
+        if self._composition:
+            begin = max(start, selection_start)
+            stop = min(end, caret)
+            if stop > begin:
+                left = query_x + self.small_font.size(displayed[start:begin])[0]
+                pg.draw.line(surface, TEAL, (left, field.bottom - 6), (left + self.small_font.size(displayed[begin:stop])[0], field.bottom - 6))
+        if self.searching:
+            caret_x = query_x + self.small_font.size(displayed[start:caret])[0]
+            pg.draw.line(surface, AMBER, (caret_x, field.y + 7), (caret_x, field.bottom - 7))
+        surface.set_clip(query_clip)
         button_x = self._search_field.right + 6
         self._button(surface, pg.Rect(button_x, field.y, 30, 36), "<", "previous", enabled=bool(self.matches))
         self._button(surface, pg.Rect(button_x + 35, field.y, 30, 36), ">", "next", enabled=bool(self.matches))
         self._button(surface, pg.Rect(button_x + 70, field.y, 35, 36), "×", "clear", enabled=bool(self.query or self._composition))
         if self.searching:
             pg.key.set_text_input_rect(self._search_field)
-        footer_height = max(72, self.small_font.get_linesize() * 3 + 14)
-        footer_y = rect.bottom - footer_height
         content_width = max(1, min(1100, rect.width - 76))
-        self._content = pg.Rect(rect.centerx - content_width // 2, field.bottom + 17, content_width, max(1, footer_y - field.bottom - 27))
-        self.rows = max(1, self._content.height // self.line_height)
         key = (self._version, content_width, self._font_size)
-        viewport = (key, self.rows)
-        reflowed = self._layout_key != key or self._viewport_key != viewport
-        if self._layout_key != key:
+        layout_changed = self._layout_key != key
+        if layout_changed:
             self._measure(max(1, content_width - 18))
             self._layout_key = key
+        return_label = "Return [Tab]" if self.searching else "Return [Tab/Esc]"
+        return_width = self.small_font.size(return_label)[0] + 26
+        text_width = max(1, rect.width - return_width - 66)
+        line_count = len(self._lines)
+        status = f"Lines {line_count}–{line_count} of {line_count}"
+        if self.query.strip():
+            status = f"Match {len(self.matches)} of {len(self.matches)}  /  {status}"
+        footer_rows = sum(len(wrap_text(text, self.small_font, text_width)) for text in (status, self.footer_lines()[1]))
+        footer_height = max(72, footer_rows * (self.small_font.get_linesize() + 2) + 18)
+        footer_y = rect.bottom - footer_height
+        self._content = pg.Rect(rect.centerx - content_width // 2, field.bottom + 17, content_width, max(1, footer_y - field.bottom - 27))
+        self.rows = max(1, self._content.height // self.line_height)
+        viewport = (key, self.rows)
+        reflowed = layout_changed or self._viewport_key != viewport
         self.maximum_scroll = max(0, len(self._lines) - self.rows)
         if self._pending_scroll is not None:
             self.scroll = min(self.maximum_scroll, self._pending_scroll)
@@ -439,10 +522,7 @@ class TranscriptView:
             pg.draw.rect(surface, TEAL, self._thumb)
             self._hits.append((self._scrollbar.inflate(10, 0), "scrollbar"))
         pg.draw.line(surface, EDGE, (rect.left + 22, footer_y), (rect.right - 22, footer_y))
-        return_label = "Return [Tab]" if self.searching else "Return [Tab/Esc]"
-        return_width = self.small_font.size(return_label)[0] + 26
-        self._button(surface, pg.Rect(rect.right - 22 - return_width, footer_y + 17, return_width, 33), return_label, "close")
-        text_width = max(1, rect.width - return_width - 66)
+        self._button(surface, pg.Rect(rect.right - 22 - return_width, footer_y + 17, return_width, max(33, self.small_font.get_linesize() + 10)), return_label, "close")
         y = footer_y + 9
         for text in self.footer_lines():
             for line in wrap_text(text, self.small_font, text_width):

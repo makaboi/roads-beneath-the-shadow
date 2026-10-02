@@ -351,11 +351,13 @@ class WorldSDLTests(unittest.TestCase):
                     self.assertIsNone(answer)
                     self.assertEqual(self.world._inspected_look, look)
                     self.assertIn(look.text, self.world.inspection_text)
+                    self.assertEqual(self.world.inspection_title, look.name)
                     self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480))
                     handled, answer = self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_ESCAPE))
                     self.assertTrue(handled)
                     self.assertIsNone(answer)
                     self.assertIsNone(self.world._inspected_look)
+                    self.assertEqual(self.world.inspection_title, "")
 
     def test_inspection_stops_a_held_walk_key_until_the_player_moves_again(self):
         self.world.set_request(request_for("bree", identifier=2))
@@ -374,6 +376,56 @@ class WorldSDLTests(unittest.TestCase):
         self.step()
         self.assertIsNone(self.world._inspected_look)
         self.assertNotEqual(self.world.player_position, before)
+
+    def test_read_only_suspensions_restore_only_the_same_world_inspection(self):
+        request = request_for("hall", identifier=2)
+        request.context = {"journey_id": "same-journey", "presentation_id": 1}
+        look = WORLD_MAPS["hall"].looks[1]
+
+        def inspect():
+            self.world.set_request(request)
+            self.assertTrue(self.world.walk_to(look.tile, point=look))
+            self.step(120)
+            self.world._clicked_point = "look:" + look.key
+            self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e))
+            self.assertEqual(self.world.inspection_title, look.name)
+
+        inspect()
+        position = self.world.player_position
+        self.world.set_request(None, preserve_inspection=True)
+        self.assertEqual(self.world.inspection_title, "")
+        self.world.set_request(None, preserve_inspection=True)
+        self.world.set_request(request)
+        self.assertEqual(self.world.inspection_title, look.name)
+        self.assertEqual(self.world.player_position, position)
+
+        self.world.set_request(None, preserve_inspection=True)
+        request.identifier = 3  # An engine utility issues a fresh request.
+        self.world.set_request(request)
+        self.assertEqual(self.world.inspection_title, look.name)
+
+        self.world.set_request(None, preserve_inspection=True)
+        request.context["presentation_id"] = 2  # Earlier save, same journey.
+        self.world.set_request(request)
+        self.assertFalse(self.world.inspection_open)
+
+        inspect()
+        self.world.set_request(None, preserve_inspection=True)
+        request.options = request.options[1:]
+        request.identifier = 4
+        self.world.set_request(request)
+        self.assertFalse(self.world.inspection_open)
+
+        inspect()
+        self.world.set_request(None, preserve_inspection=True)
+        self.world.set_request(None)  # A real story answer clears the latch.
+        self.world.set_request(request)
+        self.assertFalse(self.world.inspection_open)
+
+        inspect()
+        self.world.set_request(None, preserve_inspection=True)
+        self.world.set_request(request_for("bree", identifier=5))
+        self.assertFalse(self.world.inspection_open)
 
     def test_reduced_motion_freezes_ambient_art_but_still_allows_walking(self):
         self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)

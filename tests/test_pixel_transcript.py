@@ -107,6 +107,73 @@ class TranscriptTests(unittest.TestCase):
         self.assertFalse(self.view.searching)
         self.assertTrue(self.key(self.pg.K_ESCAPE))
 
+    def test_focused_search_caret_and_selection_edit_the_query_without_scrolling(self):
+        self.view.open([(f"Memory {index}: the silver star and the silver moon.", None, False) for index in range(40)])
+        self.draw()
+        self.search("silver star")
+        place = self.view.reading_anchor
+        self.key(self.pg.K_HOME)
+        self.assertEqual(self.view.reading_anchor, place)
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="the "))
+        self.assertEqual(self.view.query, "the silver star")
+        self.assertEqual(len(self.view.matches), 40)
+        self.key(self.pg.K_LEFT, mod=self.pg.KMOD_CTRL | self.pg.KMOD_SHIFT)
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="a "))
+        self.assertEqual(self.view.query, "a silver star")
+        self.key(self.pg.K_END)
+        self.key(self.pg.K_LEFT, mod=self.pg.KMOD_CTRL)
+        self.key(self.pg.K_DELETE)
+        self.assertEqual(self.view.query, "a silver tar")
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="s"))
+        self.assertEqual(self.view.query, "a silver star")
+        self.key(self.pg.K_LEFT)
+        self.key(self.pg.K_END, mod=self.pg.KMOD_SHIFT)
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="moon"))
+        self.assertEqual(self.view.query, "a silver moon")
+        self.key(self.pg.K_ESCAPE)
+        self.draw()
+        self.key(self.pg.K_HOME)
+        self.assertEqual(self.view.scroll, self.view.maximum_scroll)
+
+    def test_query_pointer_caret_and_selected_paste_preserve_word_boundaries(self):
+        self.view.open([("the silver bright star remembers", None, False)])
+        self.draw()
+        self.search("silver star")
+        position = (self.view._query_text_x + self.view.small_font.size("silver ")[0], self.view._search_field.centery)
+        self.view.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=position))
+        self.view.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONUP, button=1, pos=position))
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="bright "))
+        self.assertEqual(self.view.query, "silver bright star")
+        self.assertEqual(self.view.matches, [0])
+        self.key(self.pg.K_a, mod=self.pg.KMOD_CTRL)
+        self.view.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="silver\nbright\tstar"))
+        self.assertEqual(self.view.query, "silver bright star")
+        self.assertEqual(self.view.matches, [0])
+
+    def test_enlarged_search_footer_and_close_button_fit_the_minimum_view(self):
+        self.view.open([(f"A remembered trail {index} leads through the rain.", None, False) for index in range(500)])
+        self.draw()
+        self.search("remembered trail")
+        self.view.match_index = 499
+        self.view._show_match()
+        drawn = []
+        original_text = self.view._text
+
+        def record_text(surface, text, position, *args, **kwargs):
+            font = kwargs.get("font", self.view.font)
+            drawn.append((text, position, font.get_linesize()))
+            return original_text(surface, text, position, *args, **kwargs)
+
+        self.view._text = record_text
+        self.view.draw(self.screen, self.rect, text_size="larger")
+        close = next(hit for hit, action in self.view._hits if action == "close")
+        self.assertTrue(self.rect.contains(close))
+        footer = [(text, position, height) for text, position, height in drawn if position[1] > self.view._content.bottom]
+        self.assertTrue(footer)
+        self.assertTrue(all(position[1] + height <= self.rect.bottom for _, position, height in footer))
+        self.assertIn("remembered trail", " ".join(line[0] for line in self.visible_lines()))
+        self.assertTrue(self.view.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=close.center)))
+
     def test_resize_and_new_entries_keep_the_source_line_being_read(self):
         entries = [(f"Memory {index}: " + "Old roads remember every footstep. " * 8, None, False) for index in range(60)]
         self.view.open(entries)
@@ -293,6 +360,32 @@ class TranscriptWindowTests(unittest.TestCase):
         self.key(self.pg.K_RETURN)
         self.worker.join(1)
         self.assertEqual(self.results, ["Miraé"])
+
+    def test_composition_navigation_keeps_the_query_insertion_point_and_live_request(self):
+        source = "The silver bright star remembers the road."
+        self.ui.write(source)
+        self.start(lambda: self.game._story_choice("A QUIET STOP", ("Stay", "Continue")))
+        request = self.window.request
+        state = self.game.state.to_dict()
+        history = tuple(self.window.history)
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.key(self.pg.K_f, mod=self.pg.KMOD_CTRL)
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="silver star"))
+        self.key(self.pg.K_HOME)
+        self.key(self.pg.K_RIGHT, mod=self.pg.KMOD_CTRL)
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTEDITING, text="bright ", start=0, length=7))
+        for key, mod in ((self.pg.K_HOME, 0), (self.pg.K_LEFT, 0), (self.pg.K_END, 0), (self.pg.K_a, self.pg.KMOD_CTRL)):
+            self.key(key, mod=mod)
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="bright "))
+        self.window.render()
+        self.assertEqual(self.window.archive.query, "silver bright star")
+        self.assertTrue(self.window.archive.matches)
+        self.assertIn(source, [entry[0] for entry in self.window.archive.entries])
+        self.assertIs(self.window.request, request)
+        self.assertEqual(tuple(self.window.history), history)
+        self.assertEqual(self.game.state.to_dict(), state)
+        self.assertEqual(self.results, [])
 
 
 if __name__ == "__main__":

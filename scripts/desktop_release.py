@@ -141,19 +141,23 @@ def verify_existing_tag(tag: str) -> None:
     raise ValueError(f"{tag} does not resolve to a commit")
 
 
-def plan_release() -> None:
+def plan_release(*, preview_only: bool = False) -> None:
     version = project_version()
     tag = f"v{version}"
-    existing = release_for_tag(tag)
-    build = existing is None or existing["draft"]
-    if build:
+    # A preview is an artifact-only build of the checked-out ref. It never
+    # looks up or verifies a published tag, so an existing version is reusable.
+    existing = None if preview_only else release_for_tag(tag)
+    build = preview_only or existing is None or existing["draft"]
+    if build and not preview_only:
         verify_existing_tag(tag)
     output = os.environ.get("GITHUB_OUTPUT")
     if not output:
         raise ValueError("GITHUB_OUTPUT is required to plan an Actions release")
     with Path(output).open("a", encoding="utf-8") as target:
-        target.write(f"version={version}\ntag={tag}\nbuild={str(build).lower()}\n")
-    if build:
+        target.write(f"version={version}\ntag={tag}\nbuild={str(build).lower()}\npublish={str(build and not preview_only).lower()}\n")
+    if preview_only:
+        print(f"Build and test desktop preview archives for {tag}; publication is disabled.")
+    elif build:
         print(f"Build verified desktop downloads for {tag}.")
     else:
         print(f"{tag} is already published; leaving its downloads unchanged.")
@@ -586,7 +590,8 @@ def publish_release(version: str, output: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("plan", help="skip a version that already has a published release")
+    plan = commands.add_parser("plan", help="plan a release or an artifact-only desktop preview")
+    plan.add_argument("--preview-only", action="store_true", help="build the checked-out version without release or tag lookups")
     package = commands.add_parser("package", help="smoke-test and archive a frozen executable")
     package.add_argument("--platform", choices=PLATFORMS, required=True)
     package.add_argument("--version", required=True)
@@ -600,7 +605,7 @@ def main() -> None:
     publish.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "plan":
-        plan_release()
+        plan_release(preview_only=args.preview_only)
     elif args.command == "package":
         package_release(args.platform, args.version, args.output_dir)
     elif args.command == "verify-archive":

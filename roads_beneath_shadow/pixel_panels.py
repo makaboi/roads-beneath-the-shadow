@@ -442,14 +442,15 @@ class PanelView:
         self._scrollbars[key] = (track, thumb, maximum)
         self.hit_targets.append((hit, "scrollbar", key))
 
-    def draw(self, screen: Any, rect: Any) -> None:
+    def draw(self, screen: Any, rect: Any, *, text_size: str = "standard") -> None:
         if not self.active:
             return
         pg = self.pg
         rect = pg.Rect(rect)
         if rect.width < 260 or rect.height < 220:
             return
-        self._fonts(14 if rect.width < 900 else 18 if rect.width >= 1400 else 16)
+        preference = {"standard": 0, "large": 3, "larger": 6}.get(text_size, 0)
+        self._fonts((14 if rect.width < 900 else 18 if rect.width >= 1400 else 16) + preference)
         old_clip = screen.get_clip()
         screen.set_clip(rect)
         screen.fill(INK, rect)
@@ -477,15 +478,20 @@ class PanelView:
         self._icon(screen, "quest", left, title_y + 2, AMBER)
         title_bottom = self._paragraph(screen, title, left + 36, title_y, width - 36, PARCHMENT, font=self.title_font)
         subtitle_bottom = self._paragraph(screen, subtitle, left, title_bottom + 5, width, MUTED, font=self.small_font)
-        footer_height = 72 if width < 600 else 60
-        footer_y = frame.bottom - footer_height
-        pg.draw.line(screen, EDGE, (left, footer_y), (left + width, footer_y))
         return_label = "Return to the main menu  [Esc]" if self.kind in {"chronicle", "background"} else "Return to the road  [Esc]"
         if self.kind in {"information", "saves"}:
             return_label = str(self.data.get("return_label", "Back  [Esc]"))
         if self.kind == "background" and width < 500:
             return_label = "Back [Esc]"
         button_width = min(width, self.bold_font.size(return_label)[0] + 26)
+        footer_height = 72 if width < 600 or preference else 60
+        notice = str(self.data.get("notice") or "").strip() if self.kind == "inventory" else ""
+        notice_width = width - button_width - 20
+        if notice and notice_width >= 180:
+            notice_height = len(_wrap(notice, self.small_font, notice_width)) * (self.small_font.get_linesize() + 3)
+            footer_height = max(footer_height, notice_height + 20)
+        footer_y = frame.bottom - footer_height
+        pg.draw.line(screen, EDGE, (left, footer_y), (left + width, footer_y))
         self._button(screen, pg.Rect(left + width - button_width, footer_y + 12, button_width, 34), return_label, "close")
         hint = "Tab: categories   Arrows: browse"
         if self.kind == "inventory":
@@ -498,15 +504,14 @@ class PanelView:
             hint = "Tab: sections   Scroll: read"
         elif self.kind not in _TABS:
             hint = "Scroll to read   Enter: return"
-        notice = str(self.data.get("notice", "")).strip() if self.kind == "inventory" else ""
-        notice_width = width - button_width - 20
         if notice and notice_width >= 180:
             notice_bottom = self._paragraph(screen, notice, left, footer_y + 9, notice_width, TEAL, font=self.small_font)
             if notice_bottom + self.small_font.get_linesize() + 4 < frame.bottom and self.small_font.size(hint)[0] <= notice_width:
                 self._text(screen, hint, left, notice_bottom + 3, MUTED, font=self.small_font)
         elif self.kind == "background":
-            choose_label = "Choose background [Enter]" if width >= 500 else "Choose [Enter]"
-            action_width = min(width - button_width - 14, self.bold_font.size(choose_label)[0] + 26)
+            action_space = width - button_width - 14
+            choose_label = "Choose background [Enter]" if self.bold_font.size("Choose background [Enter]")[0] + 26 <= action_space else "Choose [Enter]"
+            action_width = min(action_space, self.bold_font.size(choose_label)[0] + 26)
             self._button(screen, pg.Rect(left, footer_y + 12, max(1, action_width), 34), choose_label, "origin_action", primary=True, enabled=bool(self.data.get("origins")))
             if footer_height > 60:
                 self._text(screen, "Left / Right: compare", left, footer_y + 51, MUTED, font=self.small_font)
@@ -534,7 +539,13 @@ class PanelView:
         if self.kind == "inventory":
             self._draw_inventory(screen)
         elif self.kind == "background":
+            previous_scroll = self.scroll
             self._draw_background(screen)
+            if self.scroll != previous_scroll:
+                screen.set_clip(self.content_rect)
+                screen.fill(PANEL, self.content_rect)
+                self.hit_targets = [target for target in self.hit_targets if not self.content_rect.colliderect(target[0])]
+                self._draw_background(screen)
         else:
             screen.set_clip(self.content_rect.clip(rect))
             render = {
@@ -586,6 +597,9 @@ class PanelView:
             self._paragraph(screen, "No backgrounds are available.", region.left, region.top, region.width)
             return
         self.selected = max(0, min(self.selected, len(origins) - 1))
+        if self._font_size > 16 and region.height < 440:
+            self._draw_background_compact(screen)
+            return
         screen.set_clip(region)
         columns = len(origins) if region.width >= 540 else 1
         gap = 12
@@ -624,7 +638,48 @@ class PanelView:
         origin = origins[self.selected]
         x, width = body.left + 4, body.width - 18
         start_y = body.top - self.scroll
-        y = self._paragraph(screen, origin.get("description", ""), x, start_y, width, PARCHMENT) + 16
+        y = self._draw_background_details(screen, origin, x, start_y, width)
+        self.max_scroll = max(0, y - start_y + 8 - body.height)
+        self.scroll = min(self.scroll, self.max_scroll)
+        screen.set_clip(region)
+        self._scrollbar(screen, body, self.scroll, self.max_scroll)
+
+    def _draw_background_compact(self, screen: Any) -> None:
+        """Keep enlarged origin prose scrollable above the fixed choice dock."""
+        pg = self.pg
+        region = self.content_rect
+        origins = self.data["origins"]
+        screen.set_clip(region)
+        selector_width = (region.width - 10) // len(origins)
+        short_names = {"bree_wayfarer": "Wayfarer", "north_road_scout": "Scout", "healers_apprentice": "Healer"}
+        selector_height = max(30, self.bold_font.get_linesize() + 8)
+        for index, origin in enumerate(origins):
+            label = f"{index + 1} {short_names.get(origin.get('id'), '')}".strip()
+            self._button(screen, pg.Rect(region.left + selector_width * index, region.top, selector_width - 6, selector_height), label, "origin", index, primary=index == self.selected)
+        body = pg.Rect(region.left, region.top + selector_height + 12, region.width, max(1, region.height - selector_height - 12))
+        self.detail_rect = self.detail_body_rect = body
+        screen.set_clip(body)
+        origin = origins[self.selected]
+        x, width = body.left + 4, body.width - 18
+        start_y = body.top - self.scroll
+        header_width = width - 76
+        header_height = max(48, len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height)
+        stats = f"Health {origin.get('max_hp', '?')}  /  STR {origin.get('strength', '?')}  CUN {origin.get('cunning', '?')}  WILL {origin.get('will', '?')}"
+        card_height = header_height + 32 + len(_wrap(stats, self.small_font, width - 24)) * (self.small_font.get_linesize() + 3)
+        card = pg.Rect(x, start_y, width, card_height)
+        pg.draw.rect(screen, CARD, card)
+        pg.draw.rect(screen, AMBER, card, 1)
+        self._origin_portrait(screen, origin.get("id"), x + 12, start_y + 12, 2)
+        self._paragraph(screen, origin.get("name", "Traveler"), x + 64, start_y + 12, header_width, PARCHMENT, font=self.bold_font)
+        self._paragraph(screen, stats, x + 12, start_y + header_height + 20, width - 24, TEAL, font=self.small_font)
+        y = self._draw_background_details(screen, origin, x, start_y + card_height + 17, width)
+        self.max_scroll = max(0, y - start_y + 8 - body.height)
+        self.scroll = min(self.scroll, self.max_scroll)
+        screen.set_clip(region)
+        self._scrollbar(screen, body, self.scroll, self.max_scroll)
+
+    def _draw_background_details(self, screen: Any, origin: dict[str, Any], x: int, y: int, width: int) -> int:
+        y = self._paragraph(screen, origin.get("description", ""), x, y, width, PARCHMENT) + 16
         y = self._paragraph(screen, origin.get("ability_name", ""), x, y, width, TEAL, font=self.bold_font) + 5
         if origin.get("ability_rules"):
             y = self._paragraph(screen, origin["ability_rules"], x, y, width, AMBER, font=self.small_font) + 5
@@ -635,10 +690,7 @@ class PanelView:
         y += 12
         y = self._paragraph(screen, f"Weapon: {origin.get('weapon_name', 'Unarmed')}   Armor: {origin.get('armor_name', 'Travel clothes')}", x, y, width) + 18
         y = self._paragraph(screen, "Strength adds to strikes and counters. Cunning helps Flanking Strike and escape attempts. Will strengthens Field Remedy.", x, y, width, MUTED, font=self.small_font)
-        self.max_scroll = max(0, y - start_y + 8 - body.height)
-        self.scroll = min(self.scroll, self.max_scroll)
-        screen.set_clip(region)
-        self._scrollbar(screen, body, self.scroll, self.max_scroll)
+        return y
 
     def _draw_inventory(self, screen: Any) -> None:
         pg = self.pg
@@ -684,7 +736,7 @@ class PanelView:
         selected = self._selected_item()
         if selected:
             self.detail_body_rect = self.detail_rect.copy()
-            self.detail_body_rect.height = max(50, self.detail_rect.height - 80)
+            self.detail_body_rect.height = max(1, self.detail_rect.height - self._item_dock_height(selected) - 3)
             screen.set_clip(self.detail_body_rect)
             previous_scroll = self.detail_scroll
             detail_height = self._draw_item_detail(screen, selected)
@@ -709,12 +761,7 @@ class PanelView:
             markers.append("EQUIPPED")
         return "  /  ".join(markers)
 
-    def _draw_item_action_dock(self, screen: Any, item: dict[str, Any]) -> None:
-        rect = self.detail_rect
-        x, width = rect.left + 18, rect.width - 36
-        top = rect.bottom - 77
-        self.pg.draw.rect(screen, CARD, (rect.left, top, rect.width, 77))
-        self.pg.draw.line(screen, EDGE, (x, top), (x + width, top))
+    def _item_action_details(self, item: dict[str, Any]) -> tuple[str, str, Any, Any]:
         action = self._item_action()
         label, summary, color = "Keepsake", "Kept for the journey", MUTED
         if item.get("slot"):
@@ -733,28 +780,44 @@ class PanelView:
             color = TEAL if recovered else MUTED
         elif item.get("kind") == "consumable":
             label, summary = "Story item", "Use when a story choice offers it"
-        summary_font = self.small_font
-        lines = _wrap(summary, summary_font, width)
-        # The dock remains legible at the minimum window size: the summary
-        # can occupy two measured lines while the action stays fully visible.
+        return label, summary, color, action
+
+    def _item_dock_height(self, item: dict[str, Any]) -> int:
+        _, summary, _, _ = self._item_action_details(item)
+        summary_height = len(_wrap(summary, self.small_font, max(1, self.detail_rect.width - 36))) * (self.small_font.get_linesize() + 1)
+        return max(77, summary_height + max(32, self.bold_font.get_linesize() + 8) + 23)
+
+    def _draw_item_action_dock(self, screen: Any, item: dict[str, Any]) -> None:
+        rect = self.detail_rect
+        x, width = rect.left + 18, rect.width - 36
+        height = self._item_dock_height(item)
+        top = rect.bottom - height
+        self.pg.draw.rect(screen, CARD, (rect.left, top, rect.width, height))
+        self.pg.draw.line(screen, EDGE, (x, top), (x + width, top))
+        label, summary, color, action = self._item_action_details(item)
+        lines = _wrap(summary, self.small_font, width)
         summary_y = top + 7
-        for line in lines[:2]:
-            self._text(screen, line, x, summary_y, color, font=summary_font)
-            summary_y += summary_font.get_linesize() + 1
-        button_y = rect.bottom - 39
-        self._button(screen, self.pg.Rect(x, button_y, width, 32), label, "item_action", primary=bool(action), enabled=bool(action))
+        for line in lines:
+            self._text(screen, line, x, summary_y, color, font=self.small_font)
+            summary_y += self.small_font.get_linesize() + 1
+        button_height = max(32, self.bold_font.get_linesize() + 8)
+        self._button(screen, self.pg.Rect(x, rect.bottom - button_height - 7, width, button_height), label, "item_action", primary=bool(action), enabled=bool(action))
 
     def _draw_item_detail(self, screen: Any, item: dict[str, Any]) -> int:
         pg = self.pg
         rect = self.detail_rect
         start_y = rect.top - self.detail_scroll
-        x, y, width = rect.left + 20, start_y + 24, rect.width - 40
-        self._icon(screen, item.get("kind", "quest"), x, y, TEAL if item.get("kind") == "consumable" else AMBER, 3)
-        y += 49
-        y = self._paragraph(screen, item.get("name", "Unnamed item"), x, y, width, PARCHMENT, font=self.title_font) + 8
+        x, width = rect.left + 20, rect.width - 40
+        compact = self.detail_body_rect.height < 180
+        y = start_y + (14 if compact else 24)
+        self._icon(screen, item.get("kind", "quest"), x, y, TEAL if item.get("kind") == "consumable" else AMBER, 2 if compact else 3)
+        if compact:
+            y = self._paragraph(screen, item.get("name", "Unnamed item"), x + 36, y, width - 36, PARCHMENT, font=self.bold_font) + 4
+        else:
+            y = self._paragraph(screen, item.get("name", "Unnamed item"), x, y + 49, width, PARCHMENT, font=self.title_font) + 8
         label = "Currently equipped" if item.get("equipped") else str(item.get("kind", "item")).capitalize()
         self._text(screen, label, x, y, TEAL if item.get("equipped") else AMBER, font=self.small_font)
-        y += 33
+        y += self.small_font.get_linesize() + (9 if compact else 17)
         y = self._paragraph(screen, item.get("description", ""), x, y, width) + 23
         for key, label, color in (("attack", "Attack", AMBER), ("defense", "Armor", TEAL), ("healing", "Healing capacity", TEAL)):
             amount = _number(item.get(key))
@@ -1034,7 +1097,7 @@ class PanelView:
 
     def _draw_chronicle(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
-        notice = str(self.data.get("notice", "")).strip()
+        notice = str(self.data.get("notice") or "").strip()
         if notice:
             y = self._paragraph(screen, notice, x, y, width, AMBER, font=self.small_font) + 18
         if self.tab == "all":
@@ -1118,9 +1181,8 @@ class PanelView:
         place = str(slot.get("location", ""))
         episode = f"Part {part}{' complete' if slot.get('ending') else ''}"
         lines = [(f"{episode} / {place}" if place else episode, TEAL, self.font)]
-        minutes = max(0, _number(slot.get("play_minutes", 0)))
-        health = f"Health {_number(slot['hp'])}/{_number(slot.get('max_hp'))} / " if "hp" in slot and "max_hp" in slot else ""
-        lines.append((f"{health}Play time {minutes // 60}h {minutes % 60:02d}m", MUTED, self.small_font))
+        if "hp" in slot and "max_hp" in slot:
+            lines.append((f"Health {_number(slot['hp'])}/{_number(slot.get('max_hp'))}", MUTED, self.small_font))
         saved_at = slot.get("saved_at")
         if isinstance(saved_at, str) and saved_at != "unknown":
             try:

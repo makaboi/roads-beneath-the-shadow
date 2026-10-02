@@ -587,6 +587,8 @@ class WorldView:
         self._hovered: BoundPoint | None = None
         self._hovered_look: WorldLook | None = None
         self._inspected_look: WorldLook | None = None
+        self._world_fingerprint: tuple[Any, ...] | None = None
+        self._inspection_resume: tuple[tuple[Any, ...], str] | None = None
         self._blocked_until = 0.0
         self._rect = pygame.Rect(0, 0, 0, 0)
         self._backgrounds: dict[str, Any] = {}
@@ -637,7 +639,15 @@ class WorldView:
             return "wood"
         return {",": "grass", ";": "mud"}.get(glyph, "stone")
 
-    def set_request(self, request: Any | None) -> bool:
+    def set_request(self, request: Any | None, *, preserve_inspection: bool = False) -> bool:
+        """Suspend an inspection only for an explicitly read-only interruption.
+
+        Returning utilities may create a new request identifier. The same
+        presentation, map and complete option list must still match before
+        the opened look is restored. A normal answer clears the suspension.
+        """
+        if preserve_inspection and self._inspected_look and self._world_fingerprint:
+            self._inspection_resume = (self._world_fingerprint, self._inspected_look.key)
         if self.spec:
             self._positions[self.spec.key] = self._position
             self._directions[self.spec.key] = self._direction
@@ -656,6 +666,8 @@ class WorldView:
             self._follower_positions.clear()
             self._trail_maps.clear()
             self._revealed_details.clear()
+            self._inspection_resume = None
+            self._world_fingerprint = None
             # Reloading an earlier save creates a new presentation of the
             # same journey. Physical positions must not leak from its future.
             # Utilities keep the same state and therefore the same session.
@@ -688,7 +700,8 @@ class WorldView:
                 navigation_grid[y][x] = "N"
             self._navigation_spec = replace(spec, grid=_freeze(navigation_grid))
         identifier = getattr(request, "identifier", None)
-        if identifier != self._request_identifier:
+        fingerprint = (self._session_identifier, spec.key, tuple(request.options)) if spec else None
+        if identifier != self._request_identifier or (spec and fingerprint != self._world_fingerprint):
             self._path.clear()
             self._held.clear()
             self._clicked_point = None
@@ -698,6 +711,18 @@ class WorldView:
             self._blocked_until = 0.0
             self._walking = False
         self._request_identifier = identifier
+        if spec is None:
+            self.stop_moving()
+            self._inspected_look = None
+            if not preserve_inspection:
+                self._inspection_resume = None
+        else:
+            if self._inspection_resume:
+                saved_fingerprint, look_key = self._inspection_resume
+                if saved_fingerprint == fingerprint:
+                    self._inspected_look = next((look for look in spec.looks if look.key == look_key), None)
+                self._inspection_resume = None
+            self._world_fingerprint = fingerprint
         self._followers = []
         self._trail.clear()
         if spec:
@@ -902,6 +927,11 @@ class WorldView:
     @property
     def inspection_open(self) -> bool:
         return self._inspected_look is not None
+
+    @property
+    def inspection_title(self) -> str:
+        """Only an opened discovery has a title for the read-only transcript."""
+        return self._inspected_look.name if self._inspected_look else ""
 
     def _tile(self, position: tuple[float, float] | None = None) -> tuple[int, int]:
         x, y = position or self._position

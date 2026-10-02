@@ -436,16 +436,6 @@ class PartTwoEpisode:
         self.ui.narrate(
             "We were wardens, not kings, says the dust. A road is kept by those who return."
         )
-        self.ui.art(
-            artwork.FIRST_WARDEN_TESTIMONY_ART,
-            Color.SILVER,
-            alt_text="A ghostly Warden raises an open hand above a stone seal.",
-        )
-        self.ui.art(
-            artwork.HIDDEN_WARDEN_STAIR_ART,
-            Color.YELLOW,
-            alt_text="A narrow hidden stair opens beneath a split crown emblem.",
-        )
         chambers = (
             (
                 "archive",
@@ -494,6 +484,12 @@ class PartTwoEpisode:
                 prose = (
                     "The empty seat gives back only your last footstep. Without the road-name, "
                     "the testimony remains unanswered."
+                )
+            elif key == "testimony":
+                self.ui.art(
+                    artwork.FIRST_WARDEN_TESTIMONY_ART,
+                    Color.SILVER,
+                    alt_text="A ghostly Warden raises an open hand above a stone seal.",
                 )
             self.ui.narrate(prose)
             if key == "archive":
@@ -563,6 +559,11 @@ class PartTwoEpisode:
             state.add_quest(QUEST_NAMES_LOST)
             state.add_journal(
                 "A silver oath beneath Echo Bridge carried the first Warden testimony: it belongs to anyone who returns by the road."
+            )
+            self.ui.art(
+                artwork.HIDDEN_WARDEN_STAIR_ART,
+                Color.YELLOW,
+                alt_text="A narrow hidden stair opens beneath a split crown emblem.",
             )
             self.ui.narrate(
                 "The hidden stair passes a silver oath cut beneath the bridge. Its first testimony "

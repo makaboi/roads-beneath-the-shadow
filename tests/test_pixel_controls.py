@@ -58,6 +58,18 @@ class JourneyControlsTests(unittest.TestCase):
         self.worker.start()
         self.await_request(lambda request: request.story)
 
+    def start_name_prompt(self):
+        def run():
+            try:
+                self.results.append(self.ui.prompt("Traveler's name: "))
+            except InputClosed:
+                pass
+            except Exception as error:
+                self.errors.append(error)
+        self.worker = threading.Thread(target=run)
+        self.worker.start()
+        return self.await_request(lambda request: request.kind == "text")
+
     def await_request(self, predicate):
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:
@@ -276,3 +288,167 @@ class JourneyControlsTests(unittest.TestCase):
         self.assertFalse(self.game.state.flags.get("later_progress", False))
         self.assertIn("EARLY source", " ".join(beat.text for beat in self.window.narrative.beats))
         self.assertNotIn("LATE source", " ".join(beat.text for beat in self.window.narrative.beats))
+
+    def test_name_composition_return_waits_for_committed_text(self):
+        request = self.start_name_prompt()
+        self.assertIsNone(self.window.hud)
+        self.assertEqual(self.game.state.character.name, "Mira")
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Old name"))
+        self.window.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_a, mod=self.pg.KMOD_CTRL, unicode=""))
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTEDITING, text="Éowen", start=0, length=5))
+        self.window.render()
+        self.key(self.pg.K_RETURN)
+        self.key(self.pg.K_BACKSPACE)
+        self.assertIs(self.window.request, request)
+        self.assertEqual(self.window.entry, "Old name")
+        self.assertTrue(self.ui.responses.empty())
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Éowen"))
+        self.key(self.pg.K_RETURN)
+        self.worker.join(1)
+        self.assertEqual(self.results, ["Éowen"])
+
+    def test_name_editing_inserts_at_home_and_replaces_a_selected_suffix(self):
+        self.start_name_prompt()
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Silver Star"))
+        self.key(self.pg.K_HOME)
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Mira "))
+        self.key(self.pg.K_END)
+        for _ in range(4):
+            self.window.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_LEFT, mod=self.pg.KMOD_SHIFT, unicode=""))
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Road"))
+        self.key(self.pg.K_HOME)
+        self.key(self.pg.K_DELETE)
+        self.assertEqual(self.window.entry, "ira Silver Road")
+        self.key(self.pg.K_RETURN)
+        self.worker.join(1)
+        self.assertEqual(self.results, ["ira Silver Road"])
+
+    def test_native_composition_navigation_does_not_move_the_committed_name_caret(self):
+        self.start_name_prompt()
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Mira "))
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTEDITING, text="Éowen", start=0, length=5))
+        self.key(self.pg.K_HOME)
+        self.key(self.pg.K_LEFT)
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Éowen"))
+        self.assertEqual(self.window.entry, "Mira Éowen")
+        self.key(self.pg.K_RETURN)
+        self.worker.join(1)
+        self.assertEqual(self.results, ["Mira Éowen"])
+
+    def test_clicking_begin_after_text_input_in_the_same_frame_uses_current_name(self):
+        self.start_name_prompt()
+        button = self.window.choice_hits[0][0]
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Éowen"))
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=button.center))
+        self.worker.join(1)
+        self.assertEqual(self.results, ["Éowen"])
+
+    def test_canceling_name_entry_restores_previous_traveler_on_the_main_menu(self):
+        previous = self.game.state
+        before = previous.to_dict()
+
+        def run():
+            try:
+                self.results.append(self.game._new_journey())
+                self.ui.choose("MAIN MENU", ["Continue the current journey"])
+            except InputClosed:
+                pass
+            except Exception as error:
+                self.errors.append(error)
+
+        self.worker = threading.Thread(target=run)
+        self.worker.start()
+        self.await_request(lambda request: request.label.startswith("Discard"))
+        self.key(self.pg.K_2, "2")
+        request = self.await_request(lambda request: request.kind == "text")
+        while self.window.reading:
+            self.key(self.pg.K_RETURN)
+            self.window.render()
+        self.assertTrue(request.allow_back)
+        self.assertIsNone(self.window.hud)
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=self.window.utility_hits[0][0].center))
+        self.await_request(lambda request: request.label == "MAIN MENU")
+        self.assertEqual(self.results, [False])
+        self.assertIs(self.game.state, previous)
+        self.assertEqual(self.game.state.to_dict(), before)
+        self.assertEqual(self.window.hud["name"], "Mira")
+
+    def test_confirmed_new_traveler_has_their_own_hud_for_lesson_and_opening(self):
+        previous = self.game.state
+
+        def run():
+            try:
+                self.results.append(self.game._new_journey())
+                self.ui.pause("The opening begins")
+            except InputClosed:
+                pass
+            except Exception as error:
+                self.errors.append(error)
+
+        self.worker = threading.Thread(target=run)
+        self.worker.start()
+        self.await_request(lambda request: request.label.startswith("Discard"))
+        self.key(self.pg.K_2, "2")
+        self.await_request(lambda request: request.kind == "text")
+        while self.window.reading:
+            self.key(self.pg.K_RETURN)
+            self.window.render()
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="Aerin"))
+        self.key(self.pg.K_RETURN)
+        self.await_request(lambda request: request.kind == "panel")
+        self.key(self.pg.K_1, "1")
+        self.key(self.pg.K_RETURN)
+        self.await_request(lambda request: request.label == "Accept this background?")
+        self.key(self.pg.K_1, "1")
+        self.await_request(lambda request: request.label.startswith("What lesson"))
+        self.assertIsNot(self.game.state, previous)
+        self.assertEqual(self.window.hud["name"], "Aerin")
+        self.assertEqual(self.window.hud["hp"], self.game.state.character.hp)
+        self.key(self.pg.K_1, "1")
+        self.await_request(lambda request: request.kind == "pause")
+        self.assertEqual(self.results, [True])
+        self.assertEqual(self.window.hud["name"], "Aerin")
+
+    def test_discovery_is_archived_once_and_survives_read_only_overlays(self):
+        self.start()
+        before = self.game.state.to_dict()
+        look = next(look for look in WORLD_MAPS["bree"].looks if look.key == "pony_sign")
+        rect = self.window.world._rect
+        position = (rect.left + round(look.position[0] * rect.width / 320), rect.top + round(look.position[1] * rect.height / 240))
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=position))
+        for _ in range(150):
+            self.window.world.update(0.05)
+        self.key(self.pg.K_e, "e")
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.assertEqual(sum(text == look.text for text, _, _ in self.window.history), 1)
+        standing = self.window.world.player_position
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.window.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_f, mod=self.pg.KMOD_CTRL, unicode=""))
+        self.window.handle_event(self.pg.event.Event(self.pg.TEXTINPUT, text="horse sign"))
+        self.window.render()
+        self.assertTrue(self.window.archive.matches)
+        self.key(self.pg.K_TAB)
+        self.window.render()
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.key(self.pg.K_F1)
+        self.key(self.pg.K_ESCAPE)
+        self.window.render()
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.key(self.pg.K_i, "i")
+        self.await_request(lambda request: request.kind == "panel")
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.story)
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.assertEqual(self.window.world.player_position, standing)
+        self.key(self.pg.K_p, "p")
+        self.await_request(lambda request: request.label == "JOURNEY PAUSED")
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.story)
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.key(self.pg.K_e, "e")
+        self.key(self.pg.K_e, "e")
+        self.assertEqual(self.window.world.inspection_title, look.name)
+        self.assertEqual(sum(text == look.text for text, _, _ in self.window.history), 1)
+        self.assertEqual(self.game.state.to_dict(), before)
+        self.assertEqual(self.results, [])

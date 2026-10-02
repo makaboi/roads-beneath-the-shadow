@@ -529,6 +529,70 @@ class PixelPanelTests(unittest.TestCase):
         self.assertEqual(self.key(self.pg.K_RETURN), (True, None))
         self.assertFalse(any(target == "origin_action" for _, target, _ in self.panel.hit_targets))
 
+    def test_largest_text_keeps_inventory_and_background_buttons_readable_and_actionable(self):
+        original_button = self.panel._button
+
+        def readable_button(screen, rect, label, *args, **kwargs):
+            rendered = self.panel.bold_font.render(label, False, (255, 255, 255))
+            self.assertTrue(rect.contains(rendered.get_rect(center=rect.center)), label)
+            return original_button(screen, rect, label, *args, **kwargs)
+
+        self.panel._button = readable_button
+        for size in ((760, 560), (1920, 1080)):
+            screen = self.pg.Surface(size)
+            rect = self.pg.Rect(23, 75, size[0] - 46, size[1] - 113)
+            self.panel.open("inventory", SNAPSHOT)
+            self.panel.selected = 1
+            self.panel.draw(screen, rect, text_size="larger")
+            action = next(hit for hit, target, _ in self.panel.hit_targets if target == "item_action")
+            self.assertTrue(rect.contains(action))
+            self.assertFalse(action.colliderect(self.panel.detail_body_rect))
+            self.assertEqual(self.click("item_action"), (True, {"action": "equip", "item_id": "cleaver"}))
+            self.panel.open("background", background_snapshot())
+            self.panel.draw(screen, rect, text_size="larger")
+            self.assertEqual(self.click("origin", 2), (True, None))
+            self.panel.draw(screen, rect, text_size="larger")
+            self.assertEqual(self.click("origin_action"), (True, {"action": "choose_origin", "origin_id": "healers_apprentice"}))
+
+    def test_enlarged_background_prose_can_be_read_to_its_end_without_choosing(self):
+        self.panel.open("background", background_snapshot())
+        self.panel.selected = 2
+        self.screen = self.pg.Surface((760, 560))
+        self.rect = self.pg.Rect(23, 75, 714, 447)
+        self.panel.draw(self.screen, self.rect, text_size="larger")
+        self.assertGreater(self.panel.max_scroll, 0)
+        self.key(self.pg.K_END)
+        visible = []
+        original_text = self.panel._text
+
+        def record_visible(screen, text, x, y, *args, **kwargs):
+            if self.panel.detail_body_rect.collidepoint(x, y):
+                visible.append(str(text))
+            return original_text(screen, text, x, y, *args, **kwargs)
+
+        self.panel._text = record_visible
+        self.panel.draw(self.screen, self.rect, text_size="larger")
+        self.assertIn("Will strengthens Field Remedy.", " ".join(visible))
+        self.assertEqual(self.panel.scroll, self.panel.max_scroll)
+        self.assertTrue(self.panel.active)
+        self.assertEqual(self.panel.selected, 2)
+
+    def test_absent_feedback_does_not_show_a_none_message(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["notice"] = None
+        drawn = []
+        original_text = self.panel._text
+
+        def record_text(screen, text, *args, **kwargs):
+            drawn.append(str(text))
+            return original_text(screen, text, *args, **kwargs)
+
+        self.panel._text = record_text
+        for kind in ("inventory", "chronicle"):
+            self.panel.open(kind, supplied)
+            self.draw()
+            self.assertNotIn("None", drawn)
+
 
 if __name__ == "__main__":
     unittest.main()

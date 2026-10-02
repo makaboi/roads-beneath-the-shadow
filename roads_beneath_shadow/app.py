@@ -211,7 +211,11 @@ class Game:
             "finds you, choose the name by which Middle-earth will remember you."
         )
         while True:
-            name = self.ui.prompt("Traveler's name: ").strip()
+            name_prompt = getattr(self.ui, "choose_name", self.ui.prompt)
+            name = name_prompt("Traveler's name: ")
+            if name is None:
+                return False
+            name = name.strip()
             if 1 <= len(name) <= 24 and name.isprintable():
                 break
             self.ui.write("Enter a printable name from 1 to 24 characters.", color=Color.RED)
@@ -1508,6 +1512,18 @@ class Game:
                 "takes you completely, but Ghorak's tracker escapes east with a horn-call. When you "
                 "wake, the wayhouse knows you are coming."
             )
+            if self.state.flags["ned_survived"]:
+                self.ui.narrate(
+                    "Tobin drags Ned clear of the reeds. The bindings you set have held; his breath "
+                    "is thin, but steady. Ned opens his hand, and the missing silver ray answers your "
+                    "pendant. The star joins with a sound like winter ice cracking."
+                )
+            else:
+                self.ui.narrate(
+                    "Tobin kneels beside Ned and waits for a breath that does not come. At last he "
+                    "draws the missing silver ray from inside his friend's coat. It answers your "
+                    "pendant and locks into place. Tobin keeps Ned's broken lantern."
+                )
         else:
             self.state.flags["won_marsh_fight"] = True
             self.state.flags["ned_survived"] = True
@@ -2473,8 +2489,8 @@ class Game:
         self.ui.write("Combat", color=Color.YELLOW, bold=True)
         self.ui.narrate(
             "Enemies announce their next intent before you act. Attack is dependable. Power attacks "
-            "spend Focus, interrupt dangerous moves, and leave you Exposed. Defending halves every "
-            "incoming attack that round and restores Focus. Each background has a unique ability, "
+            "spend Focus, interrupt marked moves, and leave you Exposed. Defending halves incoming "
+            "physical hits that round and restores Focus; Bleeding and setup effects still resolve. Each background has a unique ability, "
             "while companions can disrupt or weaken a chosen enemy."
         )
         self.ui.write("Choices and consequences", color=Color.YELLOW, bold=True)

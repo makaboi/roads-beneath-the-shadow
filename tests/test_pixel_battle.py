@@ -33,7 +33,7 @@ def battle_snapshot(count=3):
     )
     actions = (CombatActionView("attack", "Attack", 0, True, "", "Strike the target."),
                CombatActionView("power", "Power Attack", 1, True, "", "Disrupt the target."),
-               CombatActionView("defend", "Defend", 0, True, "", "Halve incoming weapon damage."),
+               CombatActionView("defend", "Defend", 0, True, "", "Halve incoming physical hits."),
                CombatActionView("mara", "Mara: Crossing Blades", 1, True, "", "Disrupt the target."))
     return CombatSnapshot(2, "active", "Ranger", player, enemies, "enemy_0", actions,
                           (CombatCompanionView("mara", "Mara", 3, True), CombatCompanionView("tobin", "Tobin", 2, True)),
@@ -204,6 +204,16 @@ class BattleSDLTests(unittest.TestCase):
         self.view.draw(self.surface, self.canvas, 0)
         self.assertEqual(self.view.actor_rects["player"].centerx, start)
 
+    def test_attacker_returns_before_the_next_incoming_impact(self):
+        self.view.draw(self.surface, self.canvas, 0)
+        start = self.view.actor_rects["player"].centerx
+        self.view.queue_feedback(CombatFeedback("damage", "player", "enemy_0", 6, "Attack"))
+        self.view.queue_feedback(CombatFeedback("damage", "enemy_0", "player", 3, "Retaliation"))
+        self.view.update(0.37)
+        self.view.draw(self.surface, self.canvas, 0)
+        self.assertLessEqual(abs(self.view.actor_rects["player"].centerx - start), 5, "only hit recoil should displace the traveler when retaliation lands")
+        self.assertTrue(any(actor_id == "player" and label == "−3" for actor_id, label, _ in self.view.feedback_labels))
+
     def test_combat_sound_cues_land_once_at_the_visible_impact(self):
         self.view.queue_feedback(CombatFeedback("damage", "mara", "enemy_0", 8, "Mara strikes."))
         self.view.queue_feedback(CombatFeedback("interrupt", "player", "enemy_0", 0, "Intent interrupted"))
@@ -331,6 +341,27 @@ class BattleSDLTests(unittest.TestCase):
         self.view.draw(self.surface, self.canvas, 0)
         self.assertIn("YOU HELD THE LINE", rendered)
         self.assertEqual(self.view.snapshot.enemies[0].hp, 12)
+
+    def test_invulnerable_rider_shows_survival_instead_of_sentinel_health(self):
+        rider = replace(self.snapshot.enemies[0], name="Black Rider Echo", hp=999, max_hp=999, invulnerable=True)
+        self.view.set_snapshot(replace(self.snapshot, enemies=(rider,), defensive_objective=True, max_rounds=6))
+        with patch.object(self.view, "_text", wraps=self.view._text) as draw_text:
+            self.view.draw(self.surface, self.pg.Rect(14, 14, 419, 324))
+        labels = " ".join(call.args[1] for call in draw_text.call_args_list)
+        self.assertIn("CANNOT BE WOUNDED", labels)
+        self.assertIn("SURVIVE 6 ROUNDS", labels)
+        self.assertNotIn("999", labels)
+        self.assertTrue(any("Cannot be wounded" in help_text for _, help_text in self.view.tooltip_hits))
+        self.assertFalse(any("999" in help_text for _, help_text in self.view.tooltip_hits))
+
+    def test_timed_survival_keeps_exact_health_for_killable_enemies(self):
+        ghorak = replace(self.snapshot.enemies[0], name="Ghorak Ash-Hand", hp=34, max_hp=50)
+        rider = replace(self.snapshot.enemies[1], name="Black Rider Echo", hp=999, max_hp=999, invulnerable=True)
+        self.view.set_snapshot(replace(self.snapshot, enemies=(ghorak, rider), max_rounds=6))
+        self.assertEqual(self.view._health_label(ghorak), "34 / 50 HEALTH")
+        self.assertIn("CANNOT BE WOUNDED", self.view._health_label(rider))
+        self.view.set_snapshot(replace(self.view.snapshot, phase="victory", round_number=6))
+        self.assertIn("HELD 6 ROUNDS", self.view._health_label(rider))
 
     def test_intent_disruption_help_uses_enabled_commands_only(self):
         actions = tuple(replace(action, enabled=False, disabled_reason="Not enough Focus.") if action.id in {"power", "mara"} else action for action in self.snapshot.actions)
@@ -582,6 +613,30 @@ class BattleSDLTests(unittest.TestCase):
                 if kind != "warg":
                     follow_through = self.view._sprite(kind, True, pose=2)
                     self.assertNotEqual(self.pg.image.tobytes(follow_through, "RGBA"), self.pg.image.tobytes(attack, "RGBA"))
+
+    def test_every_equipped_weapon_has_an_attack_and_follow_through(self):
+        for weapon in ("sword", "knife", "staff", None):
+            with self.subTest(weapon=weapon):
+                self.view.set_snapshot(replace(self.snapshot, player=replace(self.snapshot.player, weapon_id=weapon)))
+                poses = [self.view._sprite("player", False, pose=pose) for pose in range(3)]
+                self.assertEqual(len({self.pg.image.tobytes(sprite, "RGBA") for sprite in poses}), 3)
+
+    def test_boss_phase_result_is_bounded_and_reduced_motion_is_stable(self):
+        for reduced in (False, True):
+            with self.subTest(reduced_motion=reduced):
+                self.view.set_snapshot(None)
+                self.view.set_snapshot(self.snapshot)
+                self.view.update(0, reduced_motion=reduced)
+                self.view.queue_feedback(CombatFeedback("phase", "enemy_0", "enemy_0", 2, "Phase II"))
+                self.view.update(0.12, reduced_motion=reduced)
+                self.view.draw(self.surface, self.pg.Rect(14, 14, 419, 324), 20)
+                self.assertTrue(any(actor_id == "enemy_0" and label == "PHASE II" for actor_id, label, _ in self.view.feedback_labels))
+                self.assertTrue(all(self.view._arena_rect.contains(rect) for rect in self.view.feedback_rects))
+                first = self.pg.image.tobytes(self.surface, "RGB")
+                self.view.draw(self.surface, self.pg.Rect(14, 14, 419, 324), 1900)
+                if reduced:
+                    self.assertEqual(first, self.pg.image.tobytes(self.surface, "RGB"))
+                self.assertEqual(self.view.snapshot, self.snapshot)
 
     def test_draw_restores_the_callers_clip_and_never_paints_outside_canvas(self):
         sentinel = (222, 6, 203)

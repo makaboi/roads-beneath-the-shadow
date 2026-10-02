@@ -88,14 +88,14 @@ INTENTS: dict[str, IntentSpec] = {
     "strike": IntentSpec("Strike", "a direct weapon attack", "damage"),
     "quick": IntentSpec("Quick Cut", "a fast but lighter attack", "damage", damage_bonus=-1),
     "aim": IntentSpec("Take Aim", "prepares a stronger next attack", "aim", interruptible=True),
-    "guard": IntentSpec("Iron Guard", "raises Armor until struck", "guard", interruptible=True),
+    "guard": IntentSpec("Iron Guard", "raises Armor until your next weapon hit", "guard", interruptible=True),
     "command": IntentSpec("War Cry", "empowers the other enemies", "command", interruptible=True),
     "heavy": IntentSpec("Heavy Blow", "a crushing attack; Defend or interrupt it", "damage", 2, True),
     "prowl": IntentSpec("Prowl", "lines up a vicious pounce", "aim", interruptible=True),
     "pounce": IntentSpec("Pounce", "a heavy leap that causes Bleeding", "damage", 2, True, True),
     "maul": IntentSpec("Maul", "teeth and claws that cause Bleeding", "damage", 0, False, True),
     "cleave": IntentSpec("Ash Cleave", "a broad, punishing sweep", "damage", 1),
-    "brace": IntentSpec("Ashen Brace", "fortifies Armor for the next hit", "guard", interruptible=True),
+    "brace": IntentSpec("Ashen Brace", "fortifies Armor until your next weapon hit", "guard", interruptible=True),
     "menace": IntentSpec("Shadow Mark", "drains Focus and leaves you Exposed", "menace", interruptible=True),
     "execution": IntentSpec("Ash-Hand Execution", "a devastating blow; interrupt it now", "damage", 4, True),
 }
@@ -195,12 +195,12 @@ class CombatEngine:
                 prepare_round = False
             if not active.alive:
                 active = next(enemy for enemy in enemies if enemy.alive)
-            self._show_status(state, enemies, round_number, active)
+            self._show_status(state, enemies, round_number, active, defensive_objective=defensive_objective)
 
             if defensive_objective:
                 actions = ["defend", "item", "inspect"]
                 options = [
-                    "Defend (halve all attacks, recover 1 Focus)",
+                    "Defend (halve physical hits, recover 1 Focus)",
                     "Use an item",
                     "Inspect enemy",
                 ]
@@ -209,7 +209,7 @@ class CombatEngine:
                 options = [
                     "Attack",
                     f"Power attack (-{self._profile.power_focus_cost} Focus, become Exposed)",
-                    "Defend (halve all attacks, recover 1 Focus)",
+                    "Defend (halve physical hits, recover 1 Focus)",
                     "Use an item",
                     "Inspect enemy",
                 ]
@@ -298,7 +298,7 @@ class CombatEngine:
                 defended = True
                 restored = 1 if character.focus < character.max_focus else 0
                 character.focus = min(character.max_focus, character.focus + restored)
-                message = "You set your feet. Every incoming attack will be halved."
+                message = "You set your feet. Every incoming physical hit will be halved."
                 if restored:
                     message += " You recover 1 Focus."
                 self.ui.write(message, color=Color.CYAN)
@@ -308,7 +308,7 @@ class CombatEngine:
                 if not consumes_turn:
                     continue
             elif action == "inspect":
-                self._inspect(active)
+                self._inspect(active, defensive_objective=defensive_objective)
                 consumes_turn = False
             elif action == "target":
                 living = [enemy for enemy in enemies if enemy.alive]
@@ -438,6 +438,24 @@ class CombatEngine:
             if remaining > 0
         )
 
+    @staticmethod
+    def _intent_presentation(enemy: Enemy, *, defensive_objective: bool = False) -> tuple[IntentSpec, str, bool]:
+        """Describe the current tools without changing the enemy's intent.
+
+        The Rider survival encounters prohibit offensive actions, so their
+        ordinary interrupt advice would offer the player an impossible move.
+        Resolution still uses the original intent specification.
+        """
+
+        spec = INTENTS.get(enemy.current_intent, INTENTS["strike"])
+        telegraph = spec.telegraph
+        if defensive_objective:
+            telegraph = {
+                "heavy": "a crushing attack; guard the blow",
+                "execution": "a devastating blow; guard the blow",
+            }.get(enemy.current_intent, telegraph)
+        return spec, telegraph, spec.interruptible and not defensive_objective
+
     def _publish_snapshot(
         self,
         state: GameState,
@@ -477,7 +495,9 @@ class CombatEngine:
         forecast_player = dict(self._player_statuses)
         forecast_empowered = {id(enemy): bool(enemy.statuses.get("empowered")) for enemy in enemies}
         for enemy in enemies:
-            spec = INTENTS.get(enemy.current_intent, INTENTS["strike"])
+            spec, telegraph, interruptible = self._intent_presentation(
+                enemy, defensive_objective=config.objective_enemy_invulnerable,
+            )
             minimum = maximum = 0
             interrupted = enemy.statuses.get("staggered") and spec.interruptible
             if enemy.alive and not interrupted:
@@ -517,9 +537,10 @@ class CombatEngine:
                 hp=enemy.hp, max_hp=enemy.max_hp,
                 armor=enemy.armor + (2 if enemy.statuses.get("guarded") else 0),
                 phase=enemy.phase, intent_id=enemy.current_intent, intent_label=spec.label,
-                telegraph=spec.telegraph, interruptible=spec.interruptible,
+                telegraph=telegraph, interruptible=interruptible,
                 damage_min=minimum, damage_max=maximum, threat=threat,
                 statuses=self._status_views(enemy.statuses), targeted=enemy is target and enemy.alive,
+                invulnerable=config.objective_enemy_invulnerable,
             ))
         action_views: list[CombatActionView] = []
         for action, label in zip(actions or (), options or ()):
@@ -588,7 +609,7 @@ class CombatEngine:
                     color=Color.RED,
                     bold=True,
                 )
-                self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} enters Phase II.")
+                self._feedback("phase", self._enemy_id(enemy), self._enemy_id(enemy), enemy.phase, f"{enemy.name} enters Phase II.")
 
     def _plan_intents(self, enemies: list[Enemy]) -> None:
         for enemy in enemies:
@@ -642,22 +663,22 @@ class CombatEngine:
         if spec.kind == "aim":
             enemy.statuses["aimed"] = 1
             self.ui.write(f"{enemy.name} circles and takes aim. Its next attack will hit harder.", color=Color.YELLOW)
-            self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} takes aim: +2 damage on its next attack.")
+            self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} takes aim: +2 attack strength on its next landed physical hit.")
         elif spec.kind == "guard":
             enemy.statuses["guarded"] = 1
-            self.ui.write(f"{enemy.name} braces behind iron: +2 Armor until struck.", color=Color.YELLOW)
-            self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} gains +2 Armor until struck.")
+            self.ui.write(f"{enemy.name} braces behind iron: +2 Armor until your next weapon hit.", color=Color.YELLOW)
+            self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} gains +2 Armor until your next weapon hit.")
         elif spec.kind == "command":
             allies = [ally for ally in enemies if ally is not enemy and ally.alive]
             for ally in allies:
                 ally.statuses["empowered"] = max(1, ally.statuses.get("empowered", 0))
             if allies:
                 self.ui.write(f"{enemy.name}'s war cry empowers its allies' next attacks.", color=Color.RED)
-                self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} empowers its allies: +1 damage on their next attacks.")
+                self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} empowers its allies: +1 attack strength on their next landed physical hits.")
             else:
                 enemy.statuses["empowered"] = 1
                 self.ui.write(f"{enemy.name}'s war cry steels its own next attack.", color=Color.RED)
-                self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} empowers its next attack: +1 damage.")
+                self._feedback("info", self._enemy_id(enemy), self._enemy_id(enemy), 0, f"{enemy.name} empowers its next landed physical hit: +1 attack strength.")
         elif spec.kind == "menace":
             lost = 1 if state.character.focus > 0 else 0
             state.character.focus = max(0, state.character.focus - 1)
@@ -883,26 +904,33 @@ class CombatEngine:
         self._feedback("heal", "player", "player", healed, message)
         return True
 
-    def _inspect(self, enemy: Enemy) -> None:
-        intent = INTENTS.get(enemy.current_intent, INTENTS["strike"])
+    def _inspect(self, enemy: Enemy, *, defensive_objective: bool = False) -> None:
+        intent, telegraph, interruptible = self._intent_presentation(enemy, defensive_objective=defensive_objective)
         effective_armor = enemy.armor + (2 if enemy.statuses.get("guarded") else 0)
+        health = "Cannot be wounded here" if defensive_objective else f"{enemy.hp}/{enemy.max_hp} Health"
         self.ui.write(
-            f"{enemy.name}: {enemy.hp}/{enemy.max_hp} Health, {effective_armor} Armor, Phase {enemy.phase}",
+            f"{enemy.name}: {health}, {effective_armor} Armor, Phase {enemy.phase}",
             color=Color.CYAN,
         )
-        self.ui.write(f"Intent — {intent.label}: {intent.telegraph}.", color=Color.YELLOW)
+        self.ui.write(f"Intent — {intent.label}: {telegraph}.", color=Color.YELLOW)
         if enemy.description:
             self.ui.narrate(enemy.description, color=Color.DIM)
         summary = (
-            f"{enemy.name}: {enemy.hp}/{enemy.max_hp} Health, {effective_armor} Armor, Phase {enemy.phase}. "
-            f"Intent — {intent.label}: {intent.telegraph}."
+            f"{enemy.name}: {health}, {effective_armor} Armor, Phase {enemy.phase}. "
+            f"Intent — {intent.label}: {telegraph}."
         )
         self._feedback("inspect", "player", self._enemy_id(enemy), 0, summary)
         panel = getattr(self.ui, "show_panel", None)
         if callable(panel):
+            advice = (
+                "Guard physical hits while the objective is completed. Setup effects still resolve."
+                if defensive_objective else
+                "This intent can be interrupted." if interruptible else
+                "This intent cannot be interrupted; disruption still reduces its damage."
+            )
             sections = [
-                {"heading": "Defenses", "text": f"Health {enemy.hp}/{enemy.max_hp}. Armor {effective_armor}. Phase {enemy.phase}."},
-                {"heading": f"Intent — {intent.label}", "text": intent.telegraph.capitalize() + ". " + ("This intent can be interrupted." if intent.interruptible else "This intent cannot be interrupted; disruption still reduces its damage.")},
+                {"heading": "Defenses", "text": f"{health}. Armor {effective_armor}. Phase {enemy.phase}."},
+                {"heading": f"Intent — {intent.label}", "text": telegraph.capitalize() + ". " + advice},
             ]
             if enemy.description:
                 sections.append({"heading": "Field notes", "text": enemy.description})
@@ -912,7 +940,7 @@ class CombatEngine:
                     sections.append({"heading": "Current effects", "text": "\n\n".join(effects)})
             panel("information", {"title": enemy.name, "subtitle": "Enemy inspection / no turn spent", "sections": sections})
 
-    def _show_status(self, state: GameState, enemies: list[Enemy], round_number: int, target: Enemy) -> None:
+    def _show_status(self, state: GameState, enemies: list[Enemy], round_number: int, target: Enemy, *, defensive_objective: bool = False) -> None:
         character = state.character
         self.ui.write()
         self.ui.write(f"-- Round {round_number} --", color=Color.YELLOW, bold=True)
@@ -927,14 +955,17 @@ class CombatEngine:
             reader = self.ui.screen_reader
             label = enemy.name if reader else enemy.name[:7]
             marker = (" (targeted)" if reader else " < TARGET") if enemy is target else ""
-            self.ui.write(self.ui.meter(label, enemy.hp, enemy.max_hp, color=Color.RED) + marker)
-            intent = INTENTS.get(enemy.current_intent, INTENTS["strike"])
-            if reader:
-                warning = " (can be interrupted)" if intent.interruptible else ""
-                self.ui.write(f"Intent: {intent.label}{warning}: {intent.telegraph}", color=Color.YELLOW)
+            if defensive_objective:
+                self.ui.write(f"{enemy.name}: Cannot be wounded here" + marker, color=Color.RED)
             else:
-                warning = " !" if intent.interruptible else ""
-                self.ui.write(f"  -> {intent.label}{warning}: {intent.telegraph}", color=Color.YELLOW)
+                self.ui.write(self.ui.meter(label, enemy.hp, enemy.max_hp, color=Color.RED) + marker)
+            intent, telegraph, interruptible = self._intent_presentation(enemy, defensive_objective=defensive_objective)
+            if reader:
+                warning = " (can be interrupted)" if interruptible else ""
+                self.ui.write(f"Intent: {intent.label}{warning}: {telegraph}", color=Color.YELLOW)
+            else:
+                warning = " !" if interruptible else ""
+                self.ui.write(f"  -> {intent.label}{warning}: {telegraph}", color=Color.YELLOW)
             effects = [name.title() for name, turns in enemy.statuses.items() if turns]
             if effects:
                 self.ui.write("     " + ", ".join(effects), color=Color.DIM)
