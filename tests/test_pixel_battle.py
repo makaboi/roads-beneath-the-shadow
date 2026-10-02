@@ -378,7 +378,11 @@ class BattleSDLTests(unittest.TestCase):
             self.assertEqual(native, sprite_bytes, "resizing must not add a native sprite for each size")
             image = self.view._scaled_backdrop[2]
             veil = self.view._backdrop_veil
-            retained = native + image.get_pitch() * image.get_height() + veil.get_pitch() * veil.get_height()
+            shadows = sum(shadow.get_pitch() * shadow.get_height() for shadow in self.view._ground_shadows.values())
+            atlases = sum(atlas.get_pitch() * atlas.get_height() for atlas in
+                          (self.view._character_atlas, self.view._motion_atlas, self.view._battle_cast_atlas,
+                           self.view._battle_enemy_atlas, self.view._ranger_sprite) if atlas is not None)
+            retained = native + shadows + atlases + image.get_pitch() * image.get_height() + veil.get_pitch() * veil.get_height()
             self.assertLessEqual(retained, 32 * 1024 * 1024)
             self.assertEqual(veil.get_size(), self.view._arena_rect.size)
             self.assertLessEqual(len(self.view._font_sets), 4)
@@ -1020,6 +1024,51 @@ class BattleSDLTests(unittest.TestCase):
             self.assertEqual(fitted.size(text), glyph.get_size())
             self.assertGreaterEqual(fitted.get_linesize(), glyph.get_height())
 
+    def test_compact_card_fitting_uses_native_hinted_glyphs_and_reuses_sizes(self):
+        from roads_beneath_shadow.pixel_theme import load_font
+        from roads_beneath_shadow.pixel_battle import _ScaledFont
+        self.view._configure_layout(self.pg.Rect(14, 14, 418, 322), "larger")
+        fitted = self.view._fitted_font(self.view.mini_font, 0.84)
+        self.assertNotIsInstance(fitted, _ScaledFont)
+        expected = load_font(self.pg, 11)  # Larger: round(10×1.3)×0.84 →11.
+        for text in ("STRIKE", "1–5 DAMAGE", "Empowered 1 Aimed 1", "Éowen"):
+            actual_glyph = fitted.render(text, True, (239, 225, 188))
+            expected_glyph = expected.render(text, True, (239, 225, 188))
+            self.assertEqual(fitted.size(text), actual_glyph.get_size())
+            self.assertEqual(self.pg.image.tobytes(actual_glyph, "RGBA"), self.pg.image.tobytes(expected_glyph, "RGBA"))
+        self.assertIs(fitted, self.view._fitted_font(self.view.mini_font, 0.86), "equivalent integer sizes should reuse one native font")
+
+    def test_compact_committed_card_preserves_all_statuses_and_target_identity(self):
+        statuses = (CombatStatusView("empowered", "Empowered", 1, "Next landed physical hit gains attack strength."),
+                    CombatStatusView("aimed", "Aimed", 1, "Next landed physical hit gains attack strength."))
+        enemies = tuple(replace(enemy, name=("Ash-Hand Sapper", "Ash-Hand Commander", "Ash-Hand Archer")[index],
+                               interruptible=False, intent_label="Quick Cut", telegraph="a fast but lighter attack",
+                               statuses=statuses) for index, enemy in enumerate(self.snapshot.enemies))
+        snapshot = replace(self.snapshot, enemies=enemies)
+        self.view.set_snapshot(snapshot)
+        self.view.update(0, reduced_motion=True)
+        with patch.object(self.view, "_text", wraps=self.view._text) as drawn:
+            self.view.draw(self.surface, (14, 14, 418, 322), text_size="larger")
+        cards = [rect for rect, _ in self.view.enemy_hits]
+        card_text = []
+        for call in drawn.call_args_list:
+            text, position = call.args[1:3]
+            card = next((rect for rect in cards if rect.collidepoint(position)), None)
+            if card is None:
+                continue
+            font = call.kwargs.get("font") or self.view.font
+            glyph = font.render(text, True, call.args[3])
+            self.assertTrue(card.contains(self.pg.Rect(*position, glyph.get_width(), max(glyph.get_height(), font.get_linesize()))))
+            card_text.append(text)
+        text = " ".join(card_text)
+        for field in ("HEALTH", "ARMOR", "QUICK CUT", "DAMAGE", "Empowered 1", "Aimed 1", "◇ COMMITTED"):
+            self.assertIn(field, text)
+        self.assertNotIn("COMMITTED INTENT", text)
+        for rect, target_id in self.view.enemy_hits:
+            self.assertEqual(self.click(rect.center), (True, target_id))
+        self.assertIs(self.view.snapshot, snapshot)
+        self.assertIn("cannot be interrupted", self.view._intent_help(enemies[-1]))
+
     def test_animation_frames_reuse_measured_card_typography(self):
         self.view.mini_font = self.pg.font.SysFont("dejavusansmono,courier,monospace", 17)
         enemy = self.snapshot.enemies[0]
@@ -1039,6 +1088,173 @@ class BattleSDLTests(unittest.TestCase):
         self.assertEqual(len({self.pg.image.tobytes(sprite, "RGBA") for sprite in sprites}), 8)
         self.assertTrue(all(sprite.get_flags() & self.pg.SRCALPHA for sprite in sprites))
 
+    def test_authored_cast_keeps_boot_pixels_planted_during_upper_body_poses(self):
+        for origin in ("bree_wayfarer", "north_road_scout", "healers_apprentice"):
+            self.view.set_snapshot(replace(self.snapshot, player=replace(self.snapshot.player, origin=origin)))
+            for kind in ("player", "mara", "tobin"):
+                with self.subTest(origin=origin, actor=kind):
+                    idle = self.view._sprite(kind, False)
+                    self.assertIsNotNone(self.view._battle_cast_atlas, "packaged cast art was not decoded")
+                    boots = self.pg.image.tobytes(idle.subsurface((0, 42, 40, 6)), "RGBA")
+                    for stance in ("idle", "guard", "hurt"):
+                        for frame in range(8):
+                            sprite = self.view._sprite(kind, False, animation_frame=frame, stance=stance)
+                            self.assertEqual(sprite.get_size(), (40, 48))
+                            self.assertEqual(self.pg.image.tobytes(sprite.subsurface((0, 42, 40, 6)), "RGBA"), boots,
+                                             "idle or recoil lifted the actor's feet from the contact shadow")
+                    breathing = self.view._sprite(kind, False, animation_frame=3)
+                    self.assertNotEqual(self.pg.image.tobytes(idle, "RGBA"), self.pg.image.tobytes(breathing, "RGBA"))
+
+    def test_idle_enemy_motion_keeps_click_geometry_and_ground_position_stable(self):
+        self.view.update(0, reduced_motion=False)
+        self.view.draw(self.surface, self.canvas, 0)
+        rects = {actor: rect.copy() for actor, rect in self.view.actor_rects.items()}
+        targets = [(rect.copy(), actor) for rect, actor in self.view.sprite_hits]
+        for clock in (625, 1875, 3125, 4375):
+            self.view.draw(self.surface, self.canvas, clock)
+            self.assertEqual(self.view.actor_rects, rects, "idle must move cloth rather than the grounded actor box")
+            self.assertEqual(self.view.sprite_hits, targets)
+            for rect, enemy_id in targets:
+                self.assertEqual(self.click(rect.center), (True, enemy_id))
+
+    def test_authored_enemy_poses_preserve_boots_and_source_art(self):
+        kinds = ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider", "ranger")
+        self.view._sprite("orc", False)
+        enemy_source = self.pg.image.tobytes(self.view._battle_enemy_atlas, "RGBA")
+        ranger_source = self.pg.image.tobytes(self.view._ranger_sprite, "RGBA")
+        for kind in kinds:
+            for facing_left in (False, True):
+                with self.subTest(actor=kind, facing_left=facing_left):
+                    idle = self.view._sprite(kind, facing_left)
+                    boots = self.pg.image.tobytes(idle.subsurface((0, 42, 40, 6)), "RGBA")
+                    for pose, stance in ((1, "walk"), (2, "walk"), (0, "hurt"), (0, "guard")):
+                        sprite = self.view._sprite(kind, facing_left, pose=pose, stance=stance)
+                        self.assertEqual(self.pg.image.tobytes(sprite.subsurface((0, 42, 40, 6)), "RGBA"), boots)
+                    self.view.update(0, reduced_motion=True)
+                    stable = self.pg.image.tobytes(self.view._sprite(kind, facing_left, animation_frame=0), "RGBA")
+                    for frame in range(1, 8):
+                        self.assertEqual(self.pg.image.tobytes(self.view._sprite(kind, facing_left, animation_frame=frame), "RGBA"), stable)
+                    self.view.update(0, reduced_motion=False)
+        self.assertEqual(self.pg.image.tobytes(self.view._battle_enemy_atlas, "RGBA"), enemy_source)
+        self.assertEqual(self.pg.image.tobytes(self.view._ranger_sprite, "RGBA"), ranger_source)
+
+    def test_mounted_rider_and_troll_gain_mass_without_lifting_feet_or_moving_targets(self):
+        self.surface = self.pg.Surface((3840, 2160))
+        for kind, name in (("rider", "Black Rider"), ("troll", "Chain Troll")):
+            for canvas in ((24, 100, 419, 290), (24, 100, 418, 322), (24, 100, 680, 496),
+                           (24, 100, 1104, 614), (24, 100, 2256, 1310)):
+                for preference in ("standard", "larger"):
+                    with self.subTest(kind=kind, canvas=canvas, preference=preference):
+                        enemy = replace(self.snapshot.enemies[0], name=name, archetype=kind, invulnerable=kind == "rider")
+                        snapshot = replace(self.snapshot, enemies=(enemy,), max_rounds=4 if kind == "rider" else None,
+                                           defensive_objective=kind == "rider")
+                        self.view.set_snapshot(snapshot)
+                        self.view.update(0, reduced_motion=True)
+                        with patch.object(self.view, "_actor_zoom", side_effect=lambda kind, scale, ground: scale):
+                            self.view.draw(self.surface, canvas, text_size=preference)
+                        previous = {actor: rect.copy() for actor, rect in self.view.actor_rects.items()}
+                        anchors = dict(self.view.actor_positions)
+                        cards = [(rect.copy(), target) for rect, target in self.view.enemy_hits]
+                        native = self.view._sprite(kind, True)
+                        old_ink = self.pg.transform.scale(native, previous[enemy.id].size).get_bounding_rect().move(previous[enemy.id].topleft)
+                        self.view.draw(self.surface, canvas, text_size=preference)
+                        current = self.view.actor_rects[enemy.id]
+                        new_ink = self.pg.transform.scale(native, current.size).get_bounding_rect().move(current.topleft)
+                        self.assertGreater(current.height, previous[enemy.id].height)
+                        self.assertLessEqual(current.height, previous[enemy.id].height * 1.3)
+                        self.assertEqual(new_ink.bottom, old_ink.bottom, "enlargement lifted the visible boot baseline")
+                        self.assertTrue(self.view._arena_rect.contains(new_ink))
+                        self.assertFalse(any(new_ink.colliderect(previous[actor]) for actor in ("player", "mara", "tobin")))
+                        self.assertEqual(self.view.actor_positions, anchors)
+                        self.assertEqual(self.view.enemy_hits, cards)
+                        for actor in ("player", "mara", "tobin"):
+                            self.assertEqual(self.view.actor_rects[actor], previous[actor], "a human actor was resized")
+                        hit, target = self.view.sprite_hits[0]
+                        self.assertEqual(self.click(hit.center), (True, target))
+                        self.assertTrue(self.view._arena_rect.contains(self.view.target_marker_rect))
+                        self.assertIs(self.view.snapshot, snapshot)
+                        first = self.pg.image.tobytes(self.surface, "RGB")
+                        self.view.draw(self.surface, canvas, 3100, text_size=preference)
+                        self.assertEqual(first, self.pg.image.tobytes(self.surface, "RGB"))
+
+    def test_threat_zoom_uses_available_headroom_and_leaves_other_roles_unchanged(self):
+        self.view._arena_rect = self.pg.Rect(20, 100, 417, 69)
+        for kind in ("player", "mara", "tobin", "orc", "captain", "warg", "ghorak", "ranger"):
+            self.assertEqual(self.view._actor_zoom(kind, 0.75, 153), 0.75)
+        for kind in ("rider", "troll"):
+            self.assertEqual(self.view._actor_zoom(kind, 0.75, 153), 0.9375)
+            self.assertEqual(self.view._actor_zoom(kind, 1, 151), 51 / 48)
+            self.assertEqual(self.view._actor_zoom(kind, 1, 120), 1, "limited headroom must retain the existing scale")
+
+    def test_ground_shadows_are_translucent_and_bound_retained_resize_memory(self):
+        for kind in ("player", "warg", "troll"):
+            for scale in (0.5, 0.75, 1, 1.5, 2, 3, 4):
+                shadow = self.view._ground_shadow(kind, scale)
+                self.assertIs(self.view._ground_shadow(kind, scale), shadow)
+                alpha = {shadow.get_at((x, y)).a for y in range(shadow.get_height()) for x in range(shadow.get_width())}
+                self.assertIn(0, alpha)
+                self.assertGreaterEqual(len(alpha), 4)
+                self.assertLessEqual(max(alpha), 112, "a contact shadow must not paint an opaque black oval")
+        for scale in range(1, 26):
+            self.view._ground_shadow("warg", scale / 5)
+        self.assertLessEqual(len(self.view._ground_shadows), 16)
+        retained = sum(surface.get_pitch() * surface.get_height() for surface in self.view._ground_shadows.values())
+        self.assertLess(retained, 1024 * 1024)
+
+    def test_battle_cast_asset_failure_preserves_origin_and_equipment_fallbacks(self):
+        load = self.pg.image.load
+        def without_battle_cast(path, *args, **kwargs):
+            if str(path).endswith("world-battle-cast.png"):
+                raise self.pg.error("missing optional battle cast")
+            return load(path, *args, **kwargs)
+        with patch.object(self.pg.image, "load", side_effect=without_battle_cast):
+            fallback = BattleView(self.pg)
+            images = []
+            for origin in ("bree_wayfarer", "north_road_scout", "healers_apprentice"):
+                fallback.set_snapshot(replace(self.snapshot, player=replace(self.snapshot.player, origin=origin)))
+                images.append(self.pg.image.tobytes(fallback._sprite("player", False), "RGBA"))
+            self.assertIsNone(fallback._battle_cast_atlas)
+            self.assertEqual(len(set(images)), 3)
+            fallback.draw(self.surface, self.canvas)
+            self.assertEqual({enemy_id for _, enemy_id in fallback.sprite_hits}, {enemy.id for enemy in self.snapshot.enemies})
+            fallback = None
+
+    def test_optional_enemy_sheet_failure_retains_distinct_fallback_roles(self):
+        load = self.pg.image.load
+        def without_enemy_sheet(path, *args, **kwargs):
+            if str(path).endswith(("world-battle-enemies.png", "world-battle-teren.png")):
+                raise self.pg.error("missing optional battle enemy art")
+            return load(path, *args, **kwargs)
+        with patch.object(self.pg.image, "load", side_effect=without_enemy_sheet):
+            fallback = BattleView(self.pg)
+            fallback.set_snapshot(self.snapshot)
+            kinds = ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider", "ranger")
+            images = [self.pg.image.tobytes(fallback._sprite(kind, True), "RGBA") for kind in kinds]
+            self.assertEqual(len(set(images)), len(kinds))
+            self.assertIsNone(fallback._battle_enemy_atlas)
+            self.assertIsNone(fallback._ranger_sprite)
+            fallback.update(0, reduced_motion=True)
+            fallback.draw(self.surface, (14, 14, 418, 322), text_size="larger")
+            for rect, target in fallback.enemy_hits:
+                self.assertEqual(fallback.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=rect.center)), (True, target))
+            self.assertIs(fallback.snapshot, self.snapshot)
+            fallback = None
+
+    def test_heterogeneous_origins_weapons_and_poses_bound_native_actor_cache(self):
+        kinds = ("player", "mara", "tobin", "orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider", "ranger")
+        for index in range(840):
+            origin = ("bree_wayfarer", "north_road_scout", "healers_apprentice")[(index // 5) % 3]
+            weapon = (None, "knife", "ash_staff", "rusty_sword", "orc_cleaver")[index % 5]
+            self.view.set_snapshot(replace(self.snapshot, player=replace(self.snapshot.player, origin=origin, weapon_id=weapon)))
+            self.view.set_scene("seal" if index >= 720 else "marsh")
+            self.view.update(0, reduced_motion=index >= 720)
+            self.view._sprite("player" if index < 720 else kinds[index % len(kinds)], bool((index // 15) % 2),
+                              pose=(index // 30) % 3, animation_frame=3 if (index // 360) % 2 else 0,
+                              stance=("idle", "guard", "hurt", "walk")[(index // 90) % 4])
+        self.assertEqual(len(self.view._sprites), 384, "the scenario matrix should exercise real cache eviction")
+        self.assertLessEqual(sum(sprite.get_pitch() * sprite.get_height() for sprite in self.view._sprites.values()), 3 * 1024 * 1024)
+        self.assertTrue(all(sprite.get_size() == (40, 48) for sprite in self.view._sprites.values()))
+
     def test_creature_attacks_change_their_pose_before_the_hit(self):
         for kind in ("warg", "troll", "sapper"):
             with self.subTest(kind=kind):
@@ -1050,6 +1266,29 @@ class BattleSDLTests(unittest.TestCase):
                 if kind != "warg":
                     follow_through = self.view._sprite(kind, True, pose=2)
                     self.assertNotEqual(self.pg.image.tobytes(follow_through, "RGBA"), self.pg.image.tobytes(attack, "RGBA"))
+
+    def test_troll_sewn_lid_follows_the_face_without_editing_other_cast_cells(self):
+        self.view._sprite("troll", False)
+        atlas = self.view._battle_enemy_atlas
+        self.assertIsNotNone(atlas)
+        original = self.pg.image.tobytes(atlas, "RGBA")
+        kinds = ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider")
+        for index, kind in enumerate(kinds):
+            cell = atlas.subsurface(self.pg.Rect((index % 4) * 40, (index // 4) * 48, 40, 48)).copy()
+            before = cell.copy()
+            self.view._cast_story_detail(cell, kind)
+            changed = {(x, y) for y in range(48) for x in range(40) if cell.get_at((x, y)) != before.get_at((x, y))}
+            self.assertEqual(changed, {(27, 15), (28, 15), (29, 15), (28, 14), (28, 16)} if kind == "troll" else set())
+            self.assertEqual(self.pg.mask.from_surface(cell).count(), self.pg.mask.from_surface(before).count())
+        self.assertEqual(self.pg.image.tobytes(atlas, "RGBA"), original, "rendering changed the packaged sheet")
+        right = self.view._sprite("troll", False, pose=1)
+        left = self.view._sprite("troll", True, pose=1)
+        # Light is applied after facing, so compare the silhouette instead of
+        # requiring a mirrored scene-light direction.
+        right_mask = self.pg.mask.from_surface(self.pg.transform.flip(right, True, False))
+        left_mask = self.pg.mask.from_surface(left)
+        self.assertEqual(right_mask.count(), left_mask.count())
+        self.assertEqual(right_mask.overlap_area(left_mask, (0, 0)), left_mask.count())
 
     def test_every_equipped_weapon_has_an_attack_and_follow_through(self):
         for weapon in ("sword", "knife", "staff", None):

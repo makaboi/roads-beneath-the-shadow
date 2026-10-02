@@ -33,7 +33,12 @@
   "art_direction": "Gothic dark fantasy: charcoal, sepia, bone, amber and muted teal",
   "source_atlases": "Generated with OpenAI image generation; original atlases retained outside the package.",
   "battle_backgrounds": [
-    "echo-bridge-battle"
+    "echo-bridge-battle",
+    "marsh-battle",
+    "seal-vault-battle",
+    "dead-road-battle",
+    "sluice-battle",
+    "tavern-battle"
   ],
   "battle_background_sources": {
     "echo-bridge-battle": {
@@ -53,6 +58,997 @@
         "dither": "none"
       },
       "native_sha256": "eb92891e7b91cb97faf75a752632e4262e40963f62a06017aa217f0803fcf407"
+    },
+    "marsh-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-8b021dde-1a09-4faa-bd04-cd7cee7fc884.png",
+      "source_sha256": "50592df52b919d51b0b66b7832360e4b473de8f8081c56c61e6a604d75194b4e",
+      "source_dimensions": [
+        2051,
+        767
+      ],
+      "source_crop": [
+        0,
+        40,
+        684,
+        553
+      ],
+      "native_dimensions": [
+        320,
+        240
+      ],
+      "ground_y": 170,
+      "conversion": {
+        "script": "scripts/build_battle_locations.py",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "aspect": "crop to 4:3"
+      },
+      "native_sha256": "277754cb41e5fc542190bcdf5c8e24a87d7f65646df32ce7e8b7a598d3887624",
+      "generated_on": "2026-10-02"
+    },
+    "seal-vault-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-8b021dde-1a09-4faa-bd04-cd7cee7fc884.png",
+      "source_sha256": "50592df52b919d51b0b66b7832360e4b473de8f8081c56c61e6a604d75194b4e",
+      "source_dimensions": [
+        2051,
+        767
+      ],
+      "source_crop": [
+        684,
+        40,
+        1367,
+        552
+      ],
+      "native_dimensions": [
+        320,
+        240
+      ],
+      "ground_y": 170,
+      "conversion": {
+        "script": "scripts/build_battle_locations.py",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "aspect": "crop to 4:3"
+      },
+      "native_sha256": "f2de90e9ef2e98e2e5394181fb32ce6ebd47410f4d25b8abc3b1efcc8a467032",
+      "generated_on": "2026-10-02"
+    },
+    "dead-road-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-8b021dde-1a09-4faa-bd04-cd7cee7fc884.png",
+      "source_sha256": "50592df52b919d51b0b66b7832360e4b473de8f8081c56c61e6a604d75194b4e",
+      "source_dimensions": [
+        2051,
+        767
+      ],
+      "source_crop": [
+        1367,
+        40,
+        2051,
+        553
+      ],
+      "native_dimensions": [
+        320,
+        240
+      ],
+      "ground_y": 170,
+      "conversion": {
+        "script": "scripts/build_battle_locations.py",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "aspect": "crop to 4:3"
+      },
+      "native_sha256": "8f1a4402ff41594602238f7748d02b58c3c10ee4bb50e2ffc6fc7b269403c38b",
+      "generated_on": "2026-10-02"
+    },
+    "sluice-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-19162d22-2b8a-417b-82b0-ee481a2ce261.png",
+      "source_sha256": "a69d688c44dc3f1c2393488899c7c7321e5280786f771d539f7e3b49179a5b78",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "resize": "nearest-neighbor",
+        "palette": "median-cut",
+        "colors": 32,
+        "dither": "none"
+      },
+      "native_sha256": "06a84361ae67be093a5255c9544847404c8d57e14deeea70ffb130ddd6c5741e",
+      "ground_y": 170
+    },
+    "tavern-battle": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-62aa8cb0-5b3c-4b58-850a-4ff891d32ed9.png",
+      "source_sha256": "f7f7dc9767f0528bf9143a88ae31a71dfe1a77166f01cb6401784d34208415bb",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_story_scene.py",
+        "resize": "nearest-neighbor",
+        "native_size": [
+          320,
+          240
+        ],
+        "colors": 32,
+        "dither": "none"
+      },
+      "native_sha256": "40f185366b10e782b4e9863a2732cddd5daba4a1b281ed952f50149ec508796e",
+      "ground_y": 170
     }
-  }
+  },
+  "additional_scenes": [
+    "midgewater-camp",
+    "hall-of-eight",
+    "echo-bridge",
+    "drowned-mile",
+    "sluice-prison",
+    "house-under-ash",
+    "last-lantern-scene",
+    "burning-house-memory",
+    "false-ranger-duel"
+  ],
+  "scene_sources": {
+    "title": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 0,
+      "native_sha256": "8aefb73b4666057fb5deba1c26b600c751960543e12335b0065bf069605557d8"
+    },
+    "tavern": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 1,
+      "native_sha256": "ef4d5c82cd77104e0374465621433d5e1fa0935c5252db36dd5f77a6c6426246"
+    },
+    "marsh": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 2,
+      "native_sha256": "24347e1637e28d6c07c12aecc949ff349c5934d86ccccf996e76c074eb199a84"
+    },
+    "camp": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 3,
+      "native_sha256": "b40c873d9e0175a3087622daa87f7fc8a3d005fd72f4e09aa95af9b42b87d211"
+    },
+    "rider": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 4,
+      "native_sha256": "e842294e919f9b9958cee71c78282e350918e56dd5af8624d62a2911627fabe1"
+    },
+    "seal": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+      "source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 5,
+      "native_sha256": "fe21c39c7e61d2cd2178ee60385636e7c4c303a478bb227d53a486391ccb1871"
+    },
+    "orc": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-6c4c150a-c119-412b-8e0c-18d094bed2c7.png",
+      "source_sha256": "b63402ba0e006a694f28430202a3bde1028abcc6d2e2475ad9b2f7584a5fb029",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 0,
+      "native_sha256": "6b08d5c713b8efe119c3f437f9e0fad742b2d2f244c2888538909d0f08848500"
+    },
+    "warg": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-6c4c150a-c119-412b-8e0c-18d094bed2c7.png",
+      "source_sha256": "b63402ba0e006a694f28430202a3bde1028abcc6d2e2475ad9b2f7584a5fb029",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 1,
+      "native_sha256": "51078da7c8e84f032a8aa7baf37a4d13f2dde88cd1613b72d6ef511f48685b88"
+    },
+    "ghorak": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-6c4c150a-c119-412b-8e0c-18d094bed2c7.png",
+      "source_sha256": "b63402ba0e006a694f28430202a3bde1028abcc6d2e2475ad9b2f7584a5fb029",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 2,
+      "native_sha256": "02dedeb4c69d5917c57d456a74239b9ca8ca0d3be025b1c3f48729284d4cbb50"
+    },
+    "ranger": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-6c4c150a-c119-412b-8e0c-18d094bed2c7.png",
+      "source_sha256": "b63402ba0e006a694f28430202a3bde1028abcc6d2e2475ad9b2f7584a5fb029",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 4,
+      "native_sha256": "5e01f870e9e62fafdea07f27acfb2204db4d7b6fb2bfa3ea989d0a8b73f29a07"
+    },
+    "tavern-interior": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-6c4c150a-c119-412b-8e0c-18d094bed2c7.png",
+      "source_sha256": "b63402ba0e006a694f28430202a3bde1028abcc6d2e2475ad9b2f7584a5fb029",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "native_size": [
+          320,
+          240
+        ],
+        "palette_colors": 32,
+        "dither": "none",
+        "resize": "nearest-neighbor",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 5,
+      "native_sha256": "218d5eec4dc355e84fd054c92daa1809efcc7395c7b77c9c4f5ddc9deba574e6"
+    },
+    "midgewater-camp": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-81e3f52b-d7c1-4668-9433-74a3fd7e1ad5.png",
+      "source_sha256": "62c74391a9a6827f775a44f181fe6d90e2d2138e69d6f30edae77133bb6673be",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_story_scene.py",
+        "resize": "nearest-neighbor",
+        "native_size": [
+          320,
+          240
+        ],
+        "colors": 32,
+        "dither": "none",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "native_sha256": "cc4f304aac56c2d1696472ff1bffaf3a7a20c5f6f952b93779153c1d288926d6"
+    },
+    "burning-house-memory": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-c6087585-d910-470b-8496-4d0a17c0114d.png",
+      "source_sha256": "6bca2504926e1b044fd171484a7a228c7658977c9b6165bcbea46a66e1fba45e",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_story_scene.py",
+        "resize": "nearest-neighbor",
+        "native_size": [
+          320,
+          240
+        ],
+        "colors": 32,
+        "dither": "none",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "native_sha256": "e7357edf446789f8970134d98bd21ffd7c63cae77a5a3718d28c94f2efc4b187"
+    },
+    "false-ranger-duel": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-21ccae33-2304-49e4-ab4c-6ebc86a57428.png",
+      "source_sha256": "4b5d213a684002163548e58b3262d305ce0937346f7e10bab81d023de834b87e",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_story_scene.py",
+        "resize": "nearest-neighbor",
+        "native_size": [
+          320,
+          240
+        ],
+        "colors": 32,
+        "dither": "none",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "native_sha256": "decc0fc8b55c32f963c13cf11cbf92c0c0163db9d83933179fd02d327ff3803f"
+    },
+    "troll": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-49dfefe3-ea7b-4ff5-9160-163702c9f5b6.png",
+      "source_sha256": "af6b66863d3af00c74545ee5a87a613f4984140dff1a66d22618b4057a77d25e",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_story_scene.py",
+        "resize": "nearest-neighbor",
+        "native_size": [
+          320,
+          240
+        ],
+        "colors": 32,
+        "dither": "none",
+        "palette_source_name": "exec-e14c1a34-19c8-4002-8c4e-ef2c7ea6f064.png",
+        "palette_source_sha256": "0d4ec936fcd709a08b5cd5fadcc121ea293b66c00dd0dc95dcaaa3f5f01b4eab"
+      },
+      "native_sha256": "0982f0f202db3df2d2fdeea52812b792da4844af82ef1134b2268700872f2af4"
+    },
+    "echo-bridge": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d186225e-f49c-4450-b843-b3696f264eca.png",
+      "source_sha256": "3c3f374693c46ff145f2264156a9f0f4591bc06656c0fcc21c3386a5d0bbdfd2",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "columns": 3,
+        "rows": 2,
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 1,
+      "native_sha256": "7e01dffe69cd14406749acc6929b55bdc3df5b8c45e4252d0f83b51fb0b9efde"
+    },
+    "drowned-mile": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d186225e-f49c-4450-b843-b3696f264eca.png",
+      "source_sha256": "3c3f374693c46ff145f2264156a9f0f4591bc06656c0fcc21c3386a5d0bbdfd2",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "columns": 3,
+        "rows": 2,
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 2,
+      "native_sha256": "2b7ee3e60d732eb1ab41c41325d72d09cc7f59f0df98bfc530aa4ef70594152b"
+    },
+    "sluice-prison": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d186225e-f49c-4450-b843-b3696f264eca.png",
+      "source_sha256": "3c3f374693c46ff145f2264156a9f0f4591bc06656c0fcc21c3386a5d0bbdfd2",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "columns": 3,
+        "rows": 2,
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 3,
+      "native_sha256": "b0eb822369c9da2715453514b8546075bcebb749eb41cb9a4ce9b3b5b2f2e262"
+    },
+    "house-under-ash": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d186225e-f49c-4450-b843-b3696f264eca.png",
+      "source_sha256": "3c3f374693c46ff145f2264156a9f0f4591bc06656c0fcc21c3386a5d0bbdfd2",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "columns": 3,
+        "rows": 2,
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 4,
+      "native_sha256": "802e8651b8c73f2e63899419777d8e5262385041961ffaac74329663a29388da"
+    },
+    "last-lantern-scene": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d186225e-f49c-4450-b843-b3696f264eca.png",
+      "source_sha256": "3c3f374693c46ff145f2264156a9f0f4591bc06656c0fcc21c3386a5d0bbdfd2",
+      "source_dimensions": [
+        1774,
+        887
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "function": "slice_atlas",
+        "columns": 3,
+        "rows": 2,
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none"
+      },
+      "atlas_columns": 3,
+      "atlas_rows": 2,
+      "panel_index": 5,
+      "native_sha256": "7d3ec2aa84b3de00c96494cd71457aa7fd182cbf596bc6bd445ebe2b8e1a4de8"
+    },
+    "hall-of-eight": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-c7f6ac75-9f58-4f28-b253-32d353ad2e68.png",
+      "source_sha256": "2fd2247b818fd56537a4d2b633f79298ae3b4e393229e4d00a064a41f2fb73dc",
+      "source_dimensions": [
+        1448,
+        1086
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/generate_pixel_assets.py",
+        "resize": "nearest-neighbor",
+        "palette": "median-cut",
+        "colors": 32,
+        "dither": "none"
+      },
+      "native_sha256": "8f7f6b96a705a44aff976fae5e2057ba0e0dd5d58f7730791806fb2aa41cf903"
+    }
+  },
+  "sprite_sheets": {
+    "world-origin-portraits": [
+      192,
+      80
+    ],
+    "world-battle-cast": [
+      120,
+      96
+    ],
+    "world-battle-enemies": [
+      160,
+      96
+    ],
+    "world-battle-teren": [
+      40,
+      48
+    ]
+  },
+  "sprite_sheet_sources": {
+    "world-origin-portraits": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-1b682992-c6f0-4437-8458-f20b58fc8229.png",
+      "source_sha256": "41414e5581e8895905b69eedf838881ef1337f3877fa4dd9d3e9a23afd6e5629",
+      "source_dimensions": [
+        1942,
+        809
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_origin_portraits.py",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "alpha": "binary"
+      },
+      "native_dimensions": [
+        192,
+        80
+      ],
+      "cell_dimensions": [
+        64,
+        80
+      ],
+      "portraits": [
+        "wayfarer",
+        "scout",
+        "healer"
+      ],
+      "native_sha256": "c2a6c832241ee8df1ad11bea8ebeb434e7c2b1594f7412fa20234f328aac9d67"
+    },
+    "world-battle-cast": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-aff61a1b-e6ab-40e3-8f3f-114efc3830e7.png",
+      "source_sha256": "8b2081206e1038fbb64ce41b69999336a54fe9863376e8e0881d2ac30d2a1257",
+      "source_dimensions": [
+        1402,
+        1122
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_battle_cast.py",
+        "resize": "nearest-neighbor",
+        "scale": "shared across all actors",
+        "colors": 32,
+        "dither": "none",
+        "alpha": "binary"
+      },
+      "native_dimensions": [
+        120,
+        96
+      ],
+      "cell_dimensions": [
+        40,
+        48
+      ],
+      "cast": [
+        "wayfarer",
+        "scout",
+        "healer",
+        "mara",
+        "tobin",
+        "calenor"
+      ],
+      "feet_baseline": 44,
+      "source_silhouette_bounds": [
+        [
+          189,
+          52,
+          479,
+          548
+        ],
+        [
+          554,
+          55,
+          834,
+          548
+        ],
+        [
+          935,
+          66,
+          1188,
+          548
+        ],
+        [
+          177,
+          581,
+          457,
+          1070
+        ],
+        [
+          554,
+          577,
+          833,
+          1072
+        ],
+        [
+          927,
+          576,
+          1223,
+          1072
+        ]
+      ],
+      "native_sha256": "b907170b8db2663ecb576592f6bd5b0ffcaf2a957065a07e13563cb62392db09"
+    },
+    "world-battle-enemies": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-8f1fd1e9-7a57-4d27-ad15-478afb1b2bae.png",
+      "source_sha256": "9dc4bd472f87b42aa3eeea6a08c2c06891865a2943c5f547bf977988a1f02e15",
+      "source_dimensions": [
+        1619,
+        971
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_battle_enemies.py",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "alpha": "binary"
+      },
+      "native_dimensions": [
+        160,
+        96
+      ],
+      "cell_dimensions": [
+        40,
+        48
+      ],
+      "baseline": 44,
+      "cells": {
+        "orc-scout": {
+          "index": 0,
+          "source_bounds": [
+            58,
+            110,
+            326,
+            485
+          ],
+          "native_bounds": [
+            5,
+            3,
+            35,
+            45
+          ],
+          "native_size": [
+            30,
+            42
+          ]
+        },
+        "orc-captain": {
+          "index": 1,
+          "source_bounds": [
+            397,
+            72,
+            765,
+            485
+          ],
+          "native_bounds": [
+            1,
+            3,
+            38,
+            45
+          ],
+          "native_size": [
+            37,
+            42
+          ]
+        },
+        "orc-archer": {
+          "index": 2,
+          "source_bounds": [
+            827,
+            118,
+            1108,
+            485
+          ],
+          "native_bounds": [
+            4,
+            3,
+            36,
+            45
+          ],
+          "native_size": [
+            32,
+            42
+          ]
+        },
+        "orc-sapper": {
+          "index": 3,
+          "source_bounds": [
+            1247,
+            122,
+            1523,
+            485
+          ],
+          "native_bounds": [
+            4,
+            3,
+            36,
+            45
+          ],
+          "native_size": [
+            32,
+            42
+          ]
+        },
+        "warg": {
+          "index": 4,
+          "source_bounds": [
+            20,
+            658,
+            419,
+            917
+          ],
+          "native_bounds": [
+            2,
+            22,
+            38,
+            45
+          ],
+          "native_size": [
+            36,
+            23
+          ]
+        },
+        "ghorak": {
+          "index": 5,
+          "source_bounds": [
+            419,
+            501,
+            762,
+            918
+          ],
+          "native_bounds": [
+            2,
+            3,
+            37,
+            45
+          ],
+          "native_size": [
+            35,
+            42
+          ]
+        },
+        "troll": {
+          "index": 6,
+          "source_bounds": [
+            827,
+            516,
+            1214,
+            918
+          ],
+          "native_bounds": [
+            2,
+            8,
+            38,
+            45
+          ],
+          "native_size": [
+            36,
+            37
+          ]
+        },
+        "rider": {
+          "index": 7,
+          "source_bounds": [
+            1207,
+            506,
+            1600,
+            918
+          ],
+          "native_bounds": [
+            2,
+            7,
+            38,
+            45
+          ],
+          "native_size": [
+            36,
+            38
+          ]
+        }
+      },
+      "native_sha256": "505d4c512736badd576d3ed85e96d92705c23afd2cb7989685642dac1b8a2321"
+    },
+    "world-battle-teren": {
+      "generator": "OpenAI image generation",
+      "source_name": "exec-d6281135-23df-4690-bcf9-4a71150263c1.png",
+      "source_sha256": "9f0b441905cb2034f67c74523db17f144df93c42e57226a47cb0147a4d6f84bf",
+      "source_dimensions": [
+        1145,
+        1374
+      ],
+      "generated_on": "2026-10-02",
+      "conversion": {
+        "script": "scripts/build_battle_cast.py",
+        "option": "--teren",
+        "resize": "nearest-neighbor",
+        "colors": 32,
+        "dither": "none",
+        "alpha": "binary"
+      },
+      "native_dimensions": [
+        40,
+        48
+      ],
+      "cast": [
+        "teren"
+      ],
+      "feet_baseline": 44,
+      "source_silhouette_bounds": [
+        230,
+        136,
+        923,
+        1317
+      ],
+      "native_sha256": "b3f347bf42ae3ad6725add2eafacf03cff80c28077c2e51910baf022e2cbe2a5"
+    }
+  },
+  "visual_revision": "0.6.0"
 }

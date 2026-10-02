@@ -13,7 +13,7 @@ from typing import Any
 from unicodedata import combining, normalize
 
 from .lighting import Color
-from .pixel_theme import load_font, wrap_text
+from .pixel_theme import draw_pixel_frame, load_font, wrap_text
 from .text_input import TextEntry
 
 
@@ -433,8 +433,7 @@ class TranscriptView:
         old_clip = surface.get_clip()
         surface.set_clip(rect.clip(old_clip))
         self._hits = []
-        pg.draw.rect(surface, PANEL, rect)
-        pg.draw.rect(surface, EDGE, rect, 1)
+        draw_pixel_frame(pg, surface, rect, fill=PANEL, edge=EDGE, accent=AMBER, ornate=True)
         pg.draw.line(surface, AMBER, (rect.left + 22, rect.top), (rect.left + 194, rect.top), 2)
         self._text(surface, "THE ROAD REMEMBERS", (rect.x + 22, rect.y + 18), AMBER, font=self.title_font)
         subtitle_y = rect.y + 18 + self.title_font.get_linesize() + 7

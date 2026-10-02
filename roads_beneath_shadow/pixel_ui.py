@@ -21,7 +21,7 @@ from .narrative import NarrativeDirector
 from .combat_view import CombatCommand, CombatTurnSummary
 from .pixel_battle import BattleView
 from .pixel_panels import PanelView
-from .pixel_theme import initial_window_size, load_font
+from .pixel_theme import draw_pixel_frame, initial_window_size, load_font
 from .pixel_transcript import TranscriptView
 from .pixel_world import WorldView
 from .player_view import player_snapshot
@@ -39,16 +39,20 @@ MUTED = (159, 161, 150)
 RED = (219, 132, 113)
 SCENE_CACHE_BYTES = 64 * 1024 * 1024
 BATTLE_BACKDROPS = {
-    "branch_fight": "tavern-interior",
-    "branch_hide": "tavern-interior",
-    "branch_search": "tavern-interior",
-    "branch_escape": "tavern-interior",
-    "branch_question": "tavern-interior",
-    "part2_teren": "seal",
-    "part2_final_battle": "seal",
+    "branch_fight": "tavern-battle",
+    "branch_hide": "tavern-battle",
+    "branch_search": "tavern-battle",
+    "branch_escape": "tavern-battle",
+    "branch_question": "tavern-battle",
+    "marsh_ambush": "marsh-battle",
+    "final_battle": "marsh-battle",
+    "part2_pursuit": "dead-road-battle",
+    "part2_chain_troll": "sluice-battle",
+    "part2_teren": "seal-vault-battle",
+    "part2_final_battle": "seal-vault-battle",
     "part2_echo_bridge": "echo-bridge-battle",
 }
-BATTLE_GROUND_Y = {"echo-bridge-battle": 135.0}
+BATTLE_GROUND_Y = {"echo-bridge-battle": 135.0, "tavern-battle": 170.0, "marsh-battle": 170.0, "dead-road-battle": 170.0, "sluice-battle": 170.0, "seal-vault-battle": 170.0}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 STORY_COMMANDS = (("i", "Inventory"), ("c", "Character"), ("j", "Journal"), ("s", "Save"), ("r", "Road map"), ("m", "Main menu"), ("p", "Pause"), ("h", "Controls"))
 UTILITY_COMMANDS = tuple(command for command in STORY_COMMANDS if command[0] in {"i", "c", "j", "s", "r", "p"})
@@ -1032,11 +1036,8 @@ class PixelWindow:
     def _text(self, text: str, position: tuple[int, int], color: Any = PARCHMENT, font: Any = None) -> None:
         self.screen.blit((font or self.font).render(text, False, color), position)
 
-    def _panel(self, rect: Any, color: Any = PANEL) -> None:
-        self.pg.draw.rect(self.screen, color, rect)
-        self.pg.draw.rect(self.screen, TEAL, rect, 1)
-        for x, y in ((rect.left, rect.top), (rect.right - 5, rect.top), (rect.left, rect.bottom - 5), (rect.right - 5, rect.bottom - 5)):
-            self.pg.draw.rect(self.screen, AMBER, (x, y, 5, 5))
+    def _panel(self, rect: Any, color: Any = PANEL, *, ornate: bool = False) -> None:
+        draw_pixel_frame(self.pg, self.screen, rect, fill=color, edge=TEAL, accent=AMBER, ornate=ornate)
 
     def _sync_fonts(self, width: int) -> None:
         extra = 7 if width >= 2500 else 4 if width >= 1800 else 2 if width >= 1400 else 0
@@ -1119,7 +1120,7 @@ class PixelWindow:
         if self._combat_active and not self.reading:
             art_height = min(available - (96 if height < 700 else 130), max(art_height, 420))
         self.art_rect = pg.Rect(margin, top, left_width, art_height)
-        self._panel(self.art_rect)
+        self._panel(self.art_rect, ornate=True)
         inner = self.art_rect.inflate(-8, -8)
         if self.world.active and not self.reading:
             self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion, text_size=self.ui.text_size)
@@ -1154,10 +1155,10 @@ class PixelWindow:
         else:
             self._fallback_star(inner)
         self.history_rect = pg.Rect(margin, self.art_rect.bottom + gap, left_width, available - art_height - gap)
-        self._panel(self.history_rect)
+        self._panel(self.history_rect, ornate=True)
         self._render_history()
         right = pg.Rect(right_x, top, right_width, available)
-        self._panel(right)
+        self._panel(right, ornate=True)
         label = "Resolving the encounter" if self._battle_transition_hold else (self.heading if self.reading else (self.request.label if self.request is not None else (("THE JOURNEY STOPPED" if self.error else "JOURNEY COMPLETE") if self.finished else self.heading)))
         label_lines = wrap_pixels(label.strip(), self.font, right.width - 32)
         label_y = right.top + 17

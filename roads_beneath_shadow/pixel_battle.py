@@ -140,13 +140,18 @@ class BattleView:
         self._effects: list[_Effect] = []
         self._cues: list[str] = []
         self._sprites: dict[tuple[Any, ...], Any] = {}
-        self._fitted_fonts: dict[tuple[int, float], Any] = {}
+        self._fitted_fonts: dict[tuple[Any, ...], Any] = {}
         self._typography_cache: dict[tuple[Any, ...], tuple[bool, Any, Any, Any]] = {}
         self._single_card_heights: dict[tuple[Any, ...], int] = {}
         self._tooltip_layout_cache: dict[tuple[Any, ...], tuple[Any, list[str], int, int, str]] = {}
         self._character_atlas: Any = None
         self._motion_atlas: Any = None
+        self._battle_cast_atlas: Any = None
+        self._battle_enemy_atlas: Any = None
+        self._ranger_sprite: Any = None
         self._atlas_checked = False
+        self._scene_light: str | None = None
+        self._ground_shadows: dict[tuple[Any, ...], Any] = {}
         self._backdrops: dict[str, Any] = {}
         self._scaled_backdrop: tuple[Any, tuple[int, int], Any] | None = None
         self._backdrop_veil: Any = None
@@ -216,6 +221,7 @@ class BattleView:
             return
         self._scene_override = scene
         self._scene_ground_y = anchor
+        self._scene_light = None
         self._backdrop_crop = None
         if not same_scene:
             self._scaled_backdrop = None
@@ -398,6 +404,29 @@ class BattleView:
         self._single_card_heights.clear()
         self._tooltip_layout_cache.clear()
 
+    def _fitted_font(self, font: Any, scale: float) -> Any:
+        """Fit bundled glyphs at an integer point size so their stems survive.
+
+        Resampling already-rasterized small text drops individual strokes.
+        SDL_ttf hints a smaller native font instead; custom/fallback metrics
+        retain the measured wrapper used by damaged-install layout checks.
+        """
+        current = self._font_sets[self._font_layout_key]
+        factor = self._layout_scale * {"standard": 1.0, "large": 1.15, "larger": 1.3}[self._font_layout_key[1]]
+        spec = next(((size, bold) for name, size, bold in FONT_SIZES
+                     if getattr(self, name) is font and current[name] is font), None)
+        if spec is not None:
+            size, bold = spec
+            fitted_size = max(1, round(round(size * factor) * scale))
+            key = (id(font), "native", fitted_size)
+            if key not in self._fitted_fonts:
+                self._fitted_fonts[key] = load_font(self.pg, fitted_size, bold=bold)
+        else:
+            key = (id(font), "scaled", scale)
+            if key not in self._fitted_fonts:
+                self._fitted_fonts[key] = _ScaledFont(self.pg, font, scale)
+        return self._fitted_fonts[key]
+
     def _backdrop(self) -> Any:
         scene = self._scene_override
         if scene is not None and not isinstance(scene, str):
@@ -473,12 +502,172 @@ class BattleView:
             return "captain"
         return "orc"
 
+    def _light_palette(self) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+        """Resolve one restrained light treatment from the actual illustration."""
+        if self._scene_light is None:
+            scene = self._scene_override
+            if isinstance(scene, str):
+                self._scene_light = "warm" if any(word in scene for word in ("tavern", "pony", "seal")) else "cool"
+            else:
+                image = self._backdrop()
+                samples = []
+                if image is not None:
+                    for x in (0.2, 0.4, 0.6, 0.8):
+                        for y in (0.2, 0.4, 0.6):
+                            color = image.get_at((min(image.get_width() - 1, round(image.get_width() * x)),
+                                                  min(image.get_height() - 1, round(image.get_height() * y))))
+                            if sum(color[:3]) > 80:
+                                samples.append(color)
+                red = sum(color[0] for color in samples)
+                blue = sum(color[2] for color in samples)
+                self._scene_light = "warm" if red > blue * 1.2 else "cool"
+        return ((224, 190, 133), (53, 48, 43)) if self._scene_light == "warm" else ((151, 189, 194), (35, 49, 60))
+
+    def _light_sprite(self, sprite: Any) -> Any:
+        """Shade opaque native clusters once; retain their exact transparency."""
+        light, shade = self._light_palette()
+        bounds = sprite.get_bounding_rect()
+        for y in range(bounds.top, bounds.bottom):
+            for x in range(bounds.left, bounds.right):
+                color = sprite.get_at((x, y))
+                if not color.a:
+                    continue
+                horizontal = (x - bounds.x) / max(1, bounds.w - 1)
+                vertical = (y - bounds.y) / max(1, bounds.h - 1)
+                target = shade if horizontal > 0.58 or vertical > 0.72 else light
+                # Three discrete shade bands retain the authored color
+                # clusters instead of introducing a smooth per-pixel ramp.
+                amount = 0.18 if vertical > 0.72 else 0.14 if horizontal > 0.58 else 0.08
+                sprite.set_at((x, y), tuple(round(channel * (1 - amount) + target[index] * amount)
+                                            for index, channel in enumerate(color[:3])) + (color.a,))
+        return sprite
+
+    def _ground_shadow(self, kind: str, scale: float) -> Any:
+        """A stepped cast shadow and dense contact patch on a native pixel grid."""
+        broad = kind in {"warg", "troll", "ghorak"}
+        key = broad, scale
+        cached = self._ground_shadows.get(key)
+        if cached is not None:
+            return cached
+        native = self.pg.Surface((52, 14), self.pg.SRCALPHA)
+        width = 18 if broad else 13
+        center = 22
+        # Light falls from upper left. The long shadow recedes to the right;
+        # a separate contact patch keeps planted feet readable on busy stone.
+        self.pg.draw.polygon(native, (5, 10, 16, 26), [(center - width, 5), (center + width, 5),
+            (center + width + 10, 9), (center + width + 10, 11), (center + 2, 13), (center - 10, 10)])
+        for inset, alpha in ((0, 44), (3, 70), (6, 112)):
+            left, right = center - width + inset, center + width - inset
+            self.pg.draw.polygon(native, (5, 10, 14, alpha), [(left + 3, 2), (right - 3, 2),
+                (right - 3, 3), (right, 3), (right, 6), (right - 3, 6), (right - 3, 7),
+                (left + 3, 7), (left + 3, 6), (left, 6), (left, 3), (left + 3, 3)])
+        cached = self.pg.transform.scale(native, (max(1, round(52 * scale)), max(1, round(14 * scale))))
+        self._ground_shadows[key] = cached
+        while len(self._ground_shadows) > 16:
+            self._ground_shadows.pop(next(iter(self._ground_shadows)))
+        return cached
+
+    def _cast_pose(self, sprite: Any, pose: int, frame: int, stance: str) -> Any:
+        """Move head, shoulders and cloth by native pixels, leaving boots planted."""
+        if self._reduced_motion:
+            return sprite
+        phase = frame % 8
+        lean = 2 if pose > 1 else -1 if pose else -2 if stance == "hurt" else -1 if stance == "guard" else 0
+        breath = 1 if not pose and stance == "idle" and phase in {3, 4, 5} else 0
+        upper = sprite.subsurface(self.pg.Rect(0, 0, 40, 34)).get_bounding_rect()
+        lean = max(-upper.left, min(lean, 40 - upper.right))
+        if not lean and not breath:
+            return sprite
+        posed = self.pg.Surface(sprite.get_size(), self.pg.SRCALPHA)
+        posed.blit(sprite, (0, 34), self.pg.Rect(0, 34, 40, 14))
+        posed.blit(sprite, (lean, breath), self.pg.Rect(0, 0, 40, 34))
+        # The knee overlap joins upper cloth to the stationary lower body.
+        posed.blit(sprite, (lean // 2, 32), self.pg.Rect(0, 32, 40, 3))
+        return posed
+
+    def _cast_story_detail(self, sprite: Any, kind: str) -> None:
+        """Keep the Chain Troll's sewn blindness visible on its native face."""
+        if kind != "troll":
+            return
+        # The right-facing sheet places the eye under this brow. Paint the
+        # closed lid and a single stitch before posing and facing the actor,
+        # so they follow its actual head without changing its silhouette.
+        self.pg.draw.line(sprite, (38, 35, 30), (27, 15), (29, 15))
+        for point in ((28, 14), (28, 16)):
+            self.pg.draw.rect(sprite, (180, 160, 112), (*point, 1, 1))
+
+    def _cast_weapon(self, sprite: Any, kind: str, weapon: str, pose: int) -> None:
+        """Keep real equipment readable against the authored cloth and hands."""
+        pg = self.pg
+        wood, wood_light = (105, 77, 46), (164, 124, 75)
+        steel, steel_light = (97, 121, 120), (213, 223, 201)
+        leather = (81, 63, 44)
+        grip = (28, 29)
+        if kind in {"tobin", "archer"}:
+            pull = 24 if pose else 29
+            pg.draw.lines(sprite, leather, False, [(29, 14), (32, 18), (34, 25), (33, 31), (30, 37)], 3)
+            pg.draw.lines(sprite, wood_light, False, [(29, 14), (32, 18), (34, 25), (33, 31), (30, 37)], 1)
+            pg.draw.lines(sprite, MUTED, False, [(29, 14), (pull, 26), (30, 37)], 1)
+            pg.draw.line(sprite, wood, (25, 27), (34, 27), 2)
+            if pose:
+                pg.draw.line(sprite, steel_light, (pull, 26), (38, 26), 1)
+                pg.draw.polygon(sprite, steel_light, [(38, 25), (39, 26), (38, 27)])
+            return
+        if kind == "player" and weapon == "staff":
+            start = (18, 28) if pose > 1 else (29, 39)
+            tip = (38, 29) if pose > 1 else (33, 12) if pose else (29, 13)
+            pg.draw.line(sprite, leather, start, tip, 3)
+            pg.draw.line(sprite, wood_light, start, tip, 1)
+            pg.draw.rect(sprite, wood, (tip[0] - 1, tip[1] - 2, 3, 3))
+            pg.draw.rect(sprite, steel, (tip[0], tip[1] - 1, 2, 1))
+        elif weapon == "hammer":
+            tip = (33, 32) if pose > 1 else (33, 8) if pose else (30, 15)
+            start = (24, 27) if pose > 1 else (28, 39)
+            pg.draw.line(sprite, leather, start, tip, 3)
+            pg.draw.line(sprite, wood_light, start, tip, 1)
+            pg.draw.polygon(sprite, leather, [(tip[0] - 6, tip[1] - 1), (tip[0] - 1, tip[1] - 3),
+                                             (tip[0] + 6, tip[1] - 1), (tip[0] + 5, tip[1] + 2), (tip[0] - 3, tip[1] + 1)])
+            pg.draw.lines(sprite, steel, False, [(tip[0] - 5, tip[1] - 1), (tip[0], tip[1] - 2), (tip[0] + 5, tip[1])], 2)
+            pg.draw.line(sprite, steel_light, (tip[0] - 4, tip[1] - 2), (tip[0], tip[1] - 2), 1)
+        elif kind == "player" and weapon == "unarmed":
+            fist_x = 34 if pose > 1 else 30 if pose else 28
+            pg.draw.line(sprite, leather, (24, 26), (fist_x, 29), 3)
+            pg.draw.rect(sprite, (180, 145, 105), (fist_x - 1, 27, 3, 3))
+            pg.draw.rect(sprite, (222, 185, 135), (fist_x, 27, 2, 1))
+        else:
+            tip = (37, 33) if pose > 1 else (35, 14) if pose else (35, 20)
+            if weapon == "knife":
+                tip = (34, 31) if pose > 1 else (32, 21) if pose else (32, 24)
+            if weapon == "cleaver":
+                tip = (37, 34) if pose > 1 else (35, 16) if pose else (35, 20)
+                pg.draw.polygon(sprite, leather, [(28, 28), (tip[0] - 3, tip[1]), (tip[0] + 2, tip[1] + 1), (32, 31)])
+                pg.draw.polygon(sprite, steel, [(29, 27), (tip[0] - 2, tip[1]), (tip[0] + 1, tip[1] + 1), (32, 30)])
+            else:
+                pg.draw.line(sprite, leather, grip, tip, 3)
+                pg.draw.line(sprite, steel, grip, tip, 2)
+            pg.draw.line(sprite, steel_light, (grip[0] + 1, grip[1] - 1), tip, 1)
+            pg.draw.line(sprite, wood_light, (25, 30), (31, 29), 2)
+            if kind == "mara":
+                pg.draw.line(sprite, leather, (11, 29), (6, 21), 3)
+                pg.draw.line(sprite, steel, (11, 29), (6, 21), 2)
+                pg.draw.line(sprite, steel_light, (10, 28), (6, 21), 1)
+        if weapon != "unarmed":
+            # A small bent forearm meets the hilt; the weapon never floats
+            # beside the sheet's relaxed hand during an attack pose.
+            arm = steel if kind in {"captain", "ghorak"} else leather
+            skin = (170, 174, 145) if kind == "ghorak" else (142, 147, 104) if kind in {"orc", "captain", "sapper", "archer"} else (168, 135, 96)
+            elbow = (26 if pose > 1 else 23 if pose else 24, 26)
+            pg.draw.line(sprite, arm, elbow, (28, 29), 3)
+            pg.draw.rect(sprite, skin, (27, 28, 3, 2))
+
     def _sprite(self, kind: str, facing_left: bool, pose: int = 0, *, animation_frame: int = 0, stance: str = "idle") -> Any:
-        if kind not in {"player", "mara", "tobin"}:
-            animation_frame, stance = 0, "idle"
         weapon = self._weapon_style() if kind == "player" else ""
         identity = hero_sprite_name(self.snapshot.player.origin) if kind == "player" and self.snapshot else kind
-        key = (kind, identity, weapon, facing_left, pose, animation_frame % 8, stance)
+        authored = self._battle_cast_atlas if kind in {"player", "mara", "tobin"} else self._battle_enemy_atlas
+        if kind not in {"player", "mara", "tobin"} or authored is not None:
+            animation_frame = 3 if not pose and stance == "idle" and animation_frame % 8 in {3, 4, 5} else 0
+        self._light_palette()
+        key = (kind, identity, weapon, facing_left, pose, animation_frame % 8, stance, self._scene_light, self._reduced_motion)
         if key in self._sprites:
             return self._sprites[key]
         pg = self.pg
@@ -494,38 +683,67 @@ class BattleView:
                 self._motion_atlas = pg.image.load(str(ASSET_DIR / "world-motion.png"))
             except (OSError, pg.error):
                 pass
+            try:
+                atlas = pg.image.load(str(ASSET_DIR / "world-battle-cast.png"))
+                if atlas.get_size() == (120, 96):
+                    self._battle_cast_atlas = atlas
+            except (OSError, pg.error):
+                pass
+            try:
+                atlas = pg.image.load(str(ASSET_DIR / "world-battle-enemies.png"))
+                if atlas.get_size() == (160, 96):
+                    self._battle_enemy_atlas = atlas
+            except (OSError, pg.error):
+                pass
+            try:
+                ranger = pg.image.load(str(ASSET_DIR / "world-battle-teren.png"))
+                if ranger.get_size() == (40, 48):
+                    self._ranger_sprite = ranger
+            except (OSError, pg.error):
+                pass
+        enemy_cells = ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider")
+        if (self._battle_enemy_atlas is not None and kind in enemy_cells) or (kind == "ranger" and self._ranger_sprite is not None):
+            if kind == "ranger":
+                sprite = self._ranger_sprite.copy()
+            else:
+                cell = enemy_cells.index(kind)
+                sprite = self._battle_enemy_atlas.subsurface(pg.Rect((cell % 4) * 40, (cell // 4) * 48, 40, 48)).copy()
+            self._cast_story_detail(sprite, kind)
+            sprite = self._cast_pose(sprite, pose, animation_frame, stance)
+            equipment = {"orc": "knife", "captain": "cleaver", "archer": "bow", "sapper": "hammer",
+                         "ghorak": "cleaver", "ranger": "sword"}
+            if kind in equipment:
+                self._cast_weapon(sprite, kind, equipment[kind], pose)
+            if facing_left:
+                sprite = pg.transform.flip(sprite, True, False)
+            sprite = self._light_sprite(sprite)
+            self._sprites[key] = sprite
+            while len(self._sprites) > 384:
+                self._sprites.pop(next(iter(self._sprites)))
+            return sprite
         # The traveler and companions share their exact coats and silhouettes
         # with the exploration maps. Original encounter creatures follow the
         # same palette while keeping different weapons and body shapes.
         atlas_rows = {"player": 2, "mara": 4, "tobin": 5}
-        if (self._motion_atlas is not None or self._character_atlas is not None) and kind in atlas_rows:
-            if self._motion_atlas is not None:
-                native = self._motion_atlas.subsurface(pg.Rect(motion_frame_rect(identity, direction=2, frame=animation_frame, pose=stance)))
+        if (self._battle_cast_atlas is not None or self._motion_atlas is not None or self._character_atlas is not None) and kind in atlas_rows:
+            if self._battle_cast_atlas is not None:
+                cell = {"wayfarer": 0, "scout": 1, "healer": 2, "mara": 3, "tobin": 4}.get(identity, 0)
+                sprite = self._battle_cast_atlas.subsurface(pg.Rect((cell % 3) * 40, (cell // 3) * 48, 40, 48)).copy()
+                sprite = self._cast_pose(sprite, pose, animation_frame, stance)
+            elif self._motion_atlas is not None:
+                atlas_stance = "guard" if stance == "guard" else "walk" if stance == "walk" else "idle"
+                native = self._motion_atlas.subsurface(pg.Rect(motion_frame_rect(identity, direction=2, frame=animation_frame, pose=atlas_stance)))
+                sprite = pg.transform.scale(native, (40, 48))
             else:
                 native = self._character_atlas.subsurface(pg.Rect((2 if pose else 0) * 20, atlas_rows[kind] * 24, 20, 24))
-            sprite = pg.transform.scale(native, (40, 48))
-            if kind == "tobin":
-                pg.draw.lines(sprite, AMBER, False, [(29, 15), (33, 21), (34, 27), (32, 34), (28, 37)], 1)
-                pg.draw.line(sprite, MUTED, (29, 15), (28, 37))
-            else:
-                if kind == "player" and weapon == "staff":
-                    staff_start = (18, 28) if pose > 1 else (29, 39)
-                    staff_tip = (38, 29) if pose > 1 else (33, 12) if pose else (29, 13)
-                    pg.draw.line(sprite, (129, 105, 68), staff_start, staff_tip, 2)
-                    pg.draw.line(sprite, BONE, staff_tip, (min(39, staff_tip[0] + 2), staff_tip[1]))
-                elif kind == "player" and weapon == "unarmed":
-                    fist_x = 33 if pose > 1 else 29 if pose else 28
-                    pg.draw.line(sprite, (193, 160, 119), (25, 27), (fist_x, 28), 2)
-                    pg.draw.rect(sprite, (193, 160, 119), (fist_x, 27, 3, 3))
-                else:
-                    tip = (34, 34) if pose > 1 else (30, 21) if weapon == "knife" and pose else (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
-                    pg.draw.line(sprite, BONE, (28, 29), tip, 1)
-                    pg.draw.line(sprite, AMBER, (26, 30), (31, 30), 1)
-                if kind == "mara":
-                    pg.draw.line(sprite, BONE, (11, 29), (5, 21), 1)
+                sprite = pg.transform.scale(native, (40, 48))
+            self._cast_weapon(sprite, kind, weapon, pose)
             if facing_left:
                 sprite = pg.transform.flip(sprite, True, False)
+            sprite = self._light_sprite(sprite)
             self._sprites[key] = sprite
+            while len(self._sprites) > 384:
+                self._sprites.pop(next(iter(self._sprites)))
             return sprite
 
         def box(color: tuple[int, int, int], bounds: tuple[int, int, int, int]) -> None:
@@ -614,9 +832,13 @@ class BattleView:
                 # The story's silver star stays visible on the traveler's cloak.
                 box(BONE, (18, 23, 5, 1))
                 box(BONE, (20, 21, 1, 5))
+        sprite = self._cast_pose(sprite, 0, animation_frame, stance)
         if facing_left:
             sprite = pg.transform.flip(sprite, True, False)
+        sprite = self._light_sprite(sprite)
         self._sprites[key] = sprite
+        while len(self._sprites) > 384:
+            self._sprites.pop(next(iter(self._sprites)))
         return sprite
 
     def _weapon_style(self) -> str:
@@ -625,6 +847,8 @@ class BattleView:
             return "unarmed"
         if "staff" in weapon:
             return "staff"
+        if "cleaver" in weapon:
+            return "cleaver"
         if any(word in weapon for word in ("knife", "dagger", "dirk")):
             return "knife"
         return "sword"
@@ -641,9 +865,18 @@ class BattleView:
             return 1.0
         return min(1.0, max(0.0, fallen.age) / 0.22)
 
+    def _actor_zoom(self, kind: str, scale: float, ground: int) -> float:
+        """Give a mounted Rider and hulking Troll mass within the same arena."""
+        if kind not in {"rider", "troll"}:
+            return scale
+        available = max(0, ground - self._arena_rect.top) / 48
+        return max(scale, min(scale * 1.25, available))
+
     def _draw_actor(self, surface: Any, actor_id: str, kind: str, anchor: tuple[int, int], scale: float, *, facing_left: bool, alive: bool = True, targeted: bool = False, now_ms: int = 0) -> None:
         pg = self.pg
         x, ground = anchor
+        base_scale = scale
+        scale = self._actor_zoom(kind, scale, ground)
         self.actor_positions[actor_id] = anchor
         effects = self._active_effects(actor_id)
         outgoing = next((effect for effect in self._effects if 0 <= effect.age < 0.30 and effect.feedback.actor_id == actor_id and effect.feedback.kind in {"damage", "evade"} and effect.feedback.target_id != actor_id), None)
@@ -652,8 +885,6 @@ class BattleView:
         fall = self._fall_progress(actor_id, alive)
         standing = fall < 1
         if not self._reduced_motion and standing:
-            if kind not in {"player", "mara", "tobin"}:
-                bob = int(math.sin(now_ms / 390 + x / 45) > 0)
             if outgoing and kind not in {"tobin", "archer"}:
                 target = self.actor_positions.get(outgoing.feedback.target_id)
                 if target is not None:
@@ -677,12 +908,18 @@ class BattleView:
             return
         if actor_id in {"player", "mara", "tobin"} and escape_progress and not self._reduced_motion:
             offset -= round(self._arena_rect.w * 0.24 * escape_progress)
-        shadow_width = int((35 if kind == "warg" else 27) * scale)
-        pg.draw.ellipse(surface, SHADOW, (x + offset - shadow_width // 2, ground - 6, shadow_width, 10))
+        shadow_width = round((36 if kind in {"warg", "troll", "ghorak"} else 26) * scale)
+        foot = ground - round(4 * base_scale)
+        shadow = self._ground_shadow(kind, scale)
+        surface.blit(shadow, (x + offset - round(22 * scale), foot - round(4 * scale)))
         if targeted and alive:
-            pg.draw.ellipse(surface, AMBER, (x + offset - shadow_width // 2 - 5, ground - 8, shadow_width + 10, 13), 2)
+            pg.draw.ellipse(surface, AMBER, (x + offset - shadow_width // 2 - round(5 * scale),
+                                           foot - round(4 * scale), shadow_width + round(10 * scale), round(10 * scale)),
+                            max(1, round(scale)))
         guarding = any(effect.feedback.kind == "defend" and effect.age < 0.5 for effect in effects) or any(effect.feedback.kind == "defend" and effect.feedback.actor_id == actor_id and 0 <= effect.age < 0.5 for effect in self._effects)
-        stance = "walk" if outgoing and kind != "tobin" else "guard" if guarding else "idle"
+        hurt = not self._reduced_motion and any(effect.feedback.kind == "damage" and effect.feedback.amount > 0
+                    and effect.age - effect.impact_time < 0.18 for effect in effects)
+        stance = "hurt" if hurt else "walk" if outgoing and kind != "tobin" else "guard" if guarding else "idle"
         frame = 0 if self._reduced_motion else int(outgoing.age * 30) % 8 if outgoing else int(now_ms * 0.0016) % 8
         attack_pose = (2 if outgoing.age >= outgoing.impact_time else 1) if outgoing else 0
         sprite = self._sprite(kind, facing_left, attack_pose, animation_frame=frame, stance=stance)
@@ -693,8 +930,16 @@ class BattleView:
             sprite = pg.transform.rotate(sprite, round((90 if facing_left else -90) * fall))
             sprite = sprite.copy()
             sprite.set_alpha(round(255 - 165 * fall))
-        sprite = pg.transform.scale(sprite, (max(1, int(sprite.get_width() * scale)), max(1, int(sprite.get_height() * scale))))
-        sprite_rect = sprite.get_rect(midbottom=(x + offset, ground - bob))
+        native_height = sprite.get_height()
+        native_bottom = sprite.get_bounding_rect().bottom
+        base_height = max(1, int(native_height * base_scale))
+        base_foot = ground - (base_height - math.ceil(native_bottom * base_height / native_height))
+        sprite = pg.transform.scale(sprite, (max(1, int(sprite.get_width() * scale)), max(1, int(native_height * scale))))
+        # Increasing a transparent40×48 canvas also increases its empty boot
+        # gutter. Compensate that gutter so the visible soles remain at their
+        # former ground contact, rather than lifting the mount or giant.
+        bottom = base_foot + sprite.get_height() - sprite.get_bounding_rect().bottom if scale != base_scale and not fall else ground
+        sprite_rect = sprite.get_rect(midbottom=(x + offset, bottom - bob))
         self.actor_rects[actor_id] = sprite_rect.copy()
         surface.blit(sprite, sprite_rect)
         if standing and not self._reduced_motion and any(effect.feedback.kind == "damage" and effect.feedback.amount > 0 and effect.age - effect.impact_time < 0.12 for effect in effects):
@@ -838,13 +1083,13 @@ class BattleView:
     def _armor_label(enemy: Any) -> str:
         return f"ARMOR {enemy.armor}" + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
 
-    def _interrupt_label(self, enemy: Any) -> str:
+    def _interrupt_label(self, enemy: Any, *, compact: bool = False) -> str:
         if self.snapshot and self.snapshot.defensive_objective:
             return "◇ HOLD YOUR GROUND"
         if enemy.interruptible:
             available = any(action.enabled and action.id in {"power", "mara"} for action in self.snapshot.actions) if self.snapshot else False
             return "◆ CAN INTERRUPT" if available else "◆ INTERRUPTIBLE"
-        return "◇ COMMITTED INTENT"
+        return "◇ COMMITTED" if compact else "◇ COMMITTED INTENT"
 
     def _intent_help(self, enemy: Any) -> str:
         lines = [f"{enemy.intent_label}: {enemy.telegraph}"]
@@ -899,7 +1144,7 @@ class BattleView:
         y += paragraph_height(enemy.intent_label.upper(), title_font, details_width) + round((1 if compact else 3) * scale)
         y += paragraph_height(self._damage_label(enemy), body_font, details_width) + round((2 if compact else 5) * scale)
         y += paragraph_height(enemy.telegraph, prose_font, details_width) + round((3 if compact else 6) * scale)
-        y += paragraph_height(self._interrupt_label(enemy), body_font, details_width) + round((2 if compact else 6) * scale)
+        y += paragraph_height(self._interrupt_label(enemy, compact=compact), body_font, details_width) + round((2 if compact else 6) * scale)
         if not wide:
             y += paragraph_height(statuses, body_font, details_width)
         return max(left_height, y) + top
@@ -932,13 +1177,7 @@ class BattleView:
             return remember((compact, *fonts))
 
         def scaled_fonts(scale: float) -> tuple[Any, Any, Any]:
-            output = []
-            for font in fonts:
-                key = (id(font), scale)
-                if key not in self._fitted_fonts:
-                    self._fitted_fonts[key] = _ScaledFont(self.pg, font, scale)
-                output.append(self._fitted_fonts[key])
-            return tuple(output)
+            return tuple(self._fitted_font(font, scale) for font in fonts)
 
         # Find the largest readable scale which preserves every card field.
         # Wrapping is recalculated at each candidate; scaling a height estimate
@@ -1019,7 +1258,7 @@ class BattleView:
         y = self._paragraph(surface, enemy.telegraph, (details_x, y), details_width, MUTED, font=prose_font)
         y += round((3 if compact else 6) * scale)
         interrupt_color = AMBER if self.snapshot and self.snapshot.defensive_objective else TEAL if enemy.interruptible else MUTED
-        y = self._paragraph(surface, self._interrupt_label(enemy), (details_x, y), details_width, interrupt_color, font=body_font)
+        y = self._paragraph(surface, self._interrupt_label(enemy, compact=compact), (details_x, y), details_width, interrupt_color, font=body_font)
         y += round((2 if compact else 6) * scale)
         self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), self._intent_help(enemy)))
         if not wide:
@@ -1174,10 +1413,7 @@ class BattleView:
                 lower, upper = 0.35, 1.0
                 for _ in range(9):
                     candidate_scale = round((lower + upper) / 2, 4)
-                    fitted_key = (id(self.mini_font), candidate_scale)
-                    if fitted_key not in self._fitted_fonts:
-                        self._fitted_fonts[fitted_key] = _ScaledFont(self.pg, self.mini_font, candidate_scale)
-                    candidate = self._fitted_fonts[fitted_key]
+                    candidate = self._fitted_font(self.mini_font, candidate_scale)
                     candidate_lines, candidate_height = layout(candidate)
                     if candidate_height <= maximum:
                         lower = candidate_scale
