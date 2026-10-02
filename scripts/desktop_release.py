@@ -100,8 +100,16 @@ def github_api(path: str, *, missing_ok: bool = False, timeout: float = 60) -> d
     return json.loads(result.stdout)
 
 
-def release_for_tag(tag: str) -> dict | None:
-    existing = github_api(f"releases/tags/{tag}", missing_ok=True)
+def release_for_tag(tag: str, *, deadline: float | None = None) -> dict | None:
+    def fetch(path: str, *, missing_ok: bool = False):
+        if deadline is None:
+            return github_api(path, missing_ok=missing_ok)
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Timed out discovering the release draft; the release remains private")
+        return github_api(path, missing_ok=missing_ok, timeout=min(60, remaining))
+
+    existing = fetch(f"releases/tags/{tag}", missing_ok=True)
     if existing is not None:
         if not isinstance(existing, dict):
             raise ValueError("GitHub returned an invalid release object")
@@ -110,7 +118,7 @@ def release_for_tag(tag: str) -> dict | None:
     # 404 for that draft, even though the authenticated release list includes it.
     page = 1
     while True:
-        releases = github_api(f"releases?per_page=100&page={page}")
+        releases = fetch(f"releases?per_page=100&page={page}")
         if not isinstance(releases, list):
             raise ValueError("GitHub returned an invalid release list")
         for release in releases:
@@ -119,6 +127,56 @@ def release_for_tag(tag: str) -> dict | None:
         if len(releases) < 100:
             return None
         page += 1
+
+
+def wait_for_release_draft(
+    tag: str, *, release_id: int | None = None, previous_target: str | None = None,
+    timeout: float = 30, poll_interval: float = 2,
+) -> dict:
+    """Observe a newly created/retargeted draft before any asset upload."""
+    if timeout <= 0 or poll_interval <= 0:
+        raise ValueError("Draft observation requires a positive timeout and polling interval")
+    deadline = monotonic() + timeout
+    commit = github_commit()
+
+    def validate(release: dict) -> bool:
+        if (
+            not isinstance(release, dict) or release.get("draft") is not True
+            or release.get("tag_name") != tag or type(release.get("id")) is not int
+            or release["id"] <= 0 or (release_id is not None and release["id"] != release_id)
+        ):
+            raise ValueError("GitHub did not return the expected unpublished release draft")
+        if release.get("target_commitish") == commit:
+            return True
+        # An edit can briefly read back its known previous target. No other
+        # target is accepted, and nothing is uploaded until the new SHA appears.
+        if previous_target is not None and release.get("target_commitish") == previous_target:
+            return False
+        raise ValueError("The release draft does not name the exact rebuilt commit")
+
+    while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Timed out observing the exact release draft; the release remains private")
+        try:
+            if release_id is None:
+                discovered = release_for_tag(tag, deadline=deadline)
+                if discovered is not None:
+                    validate(discovered)
+                    release_id = discovered["id"]
+            if release_id is not None:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Timed out observing the exact release draft; the release remains private")
+                observed = github_api(f"releases/{release_id}", missing_ok=True, timeout=min(60, remaining))
+                if observed is not None and validate(observed):
+                    return observed
+        except subprocess.TimeoutExpired as error:
+            raise TimeoutError("Release draft metadata did not respond in time; the release remains private") from error
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Timed out observing the exact release draft; the release remains private")
+        sleep(min(poll_interval, remaining))
 
 
 def verify_existing_tag(tag: str) -> None:
@@ -665,7 +723,7 @@ def publish_release(version: str, output: Path) -> None:
             env=environment,
             check=True,
         )
-        existing = release_for_tag(tag)
+        draft = wait_for_release_draft(tag)
     else:
         # A failed publishing attempt can leave a private draft. All archives
         # have just been rebuilt; name their exact commit before retrying.
@@ -674,15 +732,9 @@ def publish_release(version: str, output: Path) -> None:
             env=environment,
             check=True,
         )
-    if existing is None or not existing["draft"]:
-        raise ValueError("GitHub did not create an unpublished release draft")
-    release_path = f"releases/{existing['id']}"
-    draft = github_api(release_path)
-    if (
-        not isinstance(draft, dict) or not draft["draft"]
-        or draft["tag_name"] != tag or draft["target_commitish"] != github_commit()
-    ):
-        raise ValueError("The release draft does not name the exact rebuilt commit")
+        draft = wait_for_release_draft(tag, release_id=existing["id"], previous_target=existing["target_commitish"])
+    release_path = f"releases/{draft['id']}"
+    verify_existing_tag(tag)
     subprocess.run(
         ["gh", "release", "upload", tag, *(str(path) for path in downloads), "--clobber"],
         env=environment,

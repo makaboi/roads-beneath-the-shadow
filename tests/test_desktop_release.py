@@ -34,7 +34,7 @@ class ReleaseServer:
         self.requests = []
         self.commands = []
 
-    def api(self, path, *, missing_ok=False):
+    def api(self, path, *, missing_ok=False, timeout=60):
         self.requests.append(path)
         if path == f"releases/tags/{TAG}":
             # github_api translates an expected 404 into None.
@@ -68,6 +68,21 @@ class ReleaseServer:
         else:
             raise AssertionError(f"Unexpected GitHub release command: {args}")
         return subprocess.CompletedProcess(args, 0)
+
+
+class DraftClock:
+    """Advance bounded observation deterministically, without real sleeps."""
+
+    def __init__(self):
+        self.now = 100.0
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
 
 
 class DesktopReleaseTests(unittest.TestCase):
@@ -174,6 +189,9 @@ class DesktopReleaseTests(unittest.TestCase):
         patch.object(desktop_release, "github_commit", return_value=COMMIT).start()
         patch.object(desktop_release, "github_repository", return_value="fixture/game").start()
         self.quality_gate = patch.object(desktop_release, "verify_quality_gate", return_value={"run_id": 100, "verified_jobs": 8}).start()
+        self.clock = DraftClock()
+        patch.object(desktop_release, "monotonic", side_effect=self.clock.monotonic).start()
+        patch.object(desktop_release, "sleep", side_effect=self.clock.sleep).start()
 
     def publish(self, server):
         with patch.object(desktop_release, "github_api", side_effect=server.api), patch.object(
@@ -272,6 +290,196 @@ class DesktopReleaseTests(unittest.TestCase):
         self.assertEqual(server.release["target_commitish"], COMMIT)
         self.assertFalse(server.release["draft"])
 
+    def test_new_draft_discovery_waits_for_transient_authenticated_list_visibility(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+        hidden_reads = 2
+
+        def delayed_api(path, *, missing_ok=False, timeout=60):
+            nonlocal hidden_reads
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if server.release and path.startswith("releases?per_page=") and hidden_reads:
+                hidden_reads -= 1
+                return []
+            return response
+
+        server.api = delayed_api
+        self.publish(server)
+        self.assertEqual(self.clock.sleeps, [2, 2])
+        self.assertEqual([command[2] for command in server.commands], ["create", "upload", "edit"])
+        self.assertEqual(len(server.release["assets"]), 8)
+        self.assertFalse(server.release["draft"])
+        self.assertEqual(server.requests.count("releases/42"), 2)
+
+    def test_discovered_draft_retries_transient_id_endpoint_404_before_upload(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+        first_id_read = True
+
+        def delayed_api(path, *, missing_ok=False, timeout=60):
+            nonlocal first_id_read
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if path == "releases/42" and first_id_read:
+                first_id_read = False
+                self.assertTrue(missing_ok)
+                return None
+            return response
+
+        server.api = delayed_api
+        self.publish(server)
+        self.assertEqual(self.clock.sleeps, [2])
+        self.assertEqual(server.requests.count("releases/42"), 3)
+        self.assertFalse(server.release["draft"])
+
+    def test_absent_created_draft_times_out_without_upload_or_publication(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+        deadlines = []
+
+        def invisible_api(path, *, missing_ok=False, timeout=60):
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if server.release:
+                deadlines.append((self.clock.now, timeout))
+                if path.startswith("releases?per_page="):
+                    return []
+            return response
+
+        server.api = invisible_api
+        with self.assertRaisesRegex(TimeoutError, "release remains private"):
+            self.publish(server)
+        self.assertEqual(self.clock.now, 130)
+        self.assertEqual(self.clock.sleeps, [2] * 15)
+        self.assertTrue(all(0 < timeout <= 130 - started for started, timeout in deadlines))
+        self.assertEqual([command[2] for command in server.commands], ["create"])
+        self.assertTrue(server.release["draft"])
+        self.assertEqual(server.release["assets"], [])
+        self.quality_gate.assert_not_called()
+
+    def test_draft_metadata_request_timeout_preserves_private_empty_release(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+
+        def stalled_api(path, *, missing_ok=False, timeout=60):
+            if server.release:
+                raise subprocess.TimeoutExpired(["gh", "api", path], timeout)
+            return original_api(path, missing_ok=missing_ok, timeout=timeout)
+
+        server.api = stalled_api
+        with self.assertRaisesRegex(TimeoutError, "metadata did not respond in time"):
+            self.publish(server)
+        self.assertEqual(server.release["assets"], [])
+        self.assertTrue(server.release["draft"])
+        self.assertEqual([command[2] for command in server.commands], ["create"])
+        self.assertEqual(self.clock.sleeps, [])
+
+    def test_post_create_wrong_release_state_is_rejected_without_retry_or_upload(self):
+        for change in ({"draft": False}, {"tag_name": "v-other"}, {"id": 43}, {"target_commitish": OLD_COMMIT}):
+            with self.subTest(change=change):
+                server = ReleaseServer(self.downloads)
+                original_api = server.api
+
+                def wrong_id_response(path, *, missing_ok=False, timeout=60):
+                    response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+                    return {**response, **change} if path == "releases/42" else response
+
+                server.api = wrong_id_response
+                with self.assertRaises(ValueError):
+                    self.publish(server)
+                self.assertEqual([command[2] for command in server.commands], ["create"])
+                self.assertEqual(server.release["assets"], [])
+                self.assertEqual(self.clock.sleeps, [])
+        self.quality_gate.assert_not_called()
+
+    def test_new_draft_with_wrong_discovered_target_is_not_retried(self):
+        server = ReleaseServer(self.downloads)
+        original_command = server.command
+
+        def wrong_created_target(args, **kwargs):
+            result = original_command(args, **kwargs)
+            if args[2] == "create":
+                server.release["target_commitish"] = OLD_COMMIT
+            return result
+
+        server.command = wrong_created_target
+        with self.assertRaisesRegex(ValueError, "exact rebuilt commit"):
+            self.publish(server)
+        self.assertEqual(self.clock.sleeps, [])
+        self.assertEqual([command[2] for command in server.commands], ["create"])
+
+    def test_retargeted_draft_waits_only_for_known_previous_target(self):
+        server = ReleaseServer(self.downloads, existing=self.draft())
+        original_api = server.api
+        stale_reads = 2
+
+        def delayed_target(path, *, missing_ok=False, timeout=60):
+            nonlocal stale_reads
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if path == "releases/42" and stale_reads:
+                self.assertEqual([command[2] for command in server.commands], ["edit"])
+                stale_reads -= 1
+                response["target_commitish"] = OLD_COMMIT
+            return response
+
+        server.api = delayed_target
+        self.publish(server)
+        self.assertEqual(self.clock.sleeps, [2, 2])
+        self.assertEqual([command[2] for command in server.commands], ["edit", "upload", "edit"])
+        self.assertEqual(server.release["target_commitish"], COMMIT)
+        self.assertFalse(server.release["draft"])
+
+    def test_retargeted_draft_stuck_at_previous_target_times_out_without_upload(self):
+        server = ReleaseServer(self.downloads, existing=self.draft())
+        original_api = server.api
+
+        def stale_target(path, *, missing_ok=False, timeout=60):
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if path == "releases/42":
+                response["target_commitish"] = OLD_COMMIT
+            return response
+
+        server.api = stale_target
+        with self.assertRaisesRegex(TimeoutError, "release remains private"):
+            self.publish(server)
+        self.assertEqual(self.clock.now, 130)
+        self.assertEqual([command[2] for command in server.commands], ["edit"])
+        self.assertEqual(server.release["assets"], [])
+        self.assertTrue(server.release["draft"])
+
+    def test_retargeted_draft_at_unexpected_third_target_fails_immediately(self):
+        server = ReleaseServer(self.downloads, existing=self.draft())
+        original_api = server.api
+
+        def third_target(path, *, missing_ok=False, timeout=60):
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if path == "releases/42":
+                response["target_commitish"] = "3" * 40
+            return response
+
+        server.api = third_target
+        with self.assertRaisesRegex(ValueError, "exact rebuilt commit"):
+            self.publish(server)
+        self.assertEqual(self.clock.sleeps, [])
+        self.assertEqual([command[2] for command in server.commands], ["edit"])
+        self.assertEqual(server.release["assets"], [])
+
+    def test_tag_created_during_draft_observation_blocks_upload(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+
+        def new_tag(path, *, missing_ok=False, timeout=60):
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
+            if path == "releases/42":
+                server.tag_commit = OLD_COMMIT
+            return response
+
+        server.api = new_tag
+        with self.assertRaisesRegex(ValueError, "already names another commit"):
+            self.publish(server)
+        self.assertEqual(server.tag_commit, OLD_COMMIT)
+        self.assertEqual([command[2] for command in server.commands], ["create"])
+        self.assertEqual(server.release["assets"], [])
+        self.assertTrue(server.release["draft"])
+
     def test_published_release_is_immutable_even_when_current_commit_differs(self):
         published = {**self.draft(), "draft": False}
         server = ReleaseServer(self.downloads, existing=published, tag_commit=OLD_COMMIT)
@@ -346,8 +554,8 @@ class DesktopReleaseTests(unittest.TestCase):
         server = ReleaseServer(self.downloads)
         original_api = server.api
 
-        def corrupt_uploaded_digest(path, *, missing_ok=False):
-            response = original_api(path, missing_ok=missing_ok)
+        def corrupt_uploaded_digest(path, *, missing_ok=False, timeout=60):
+            response = original_api(path, missing_ok=missing_ok, timeout=timeout)
             if path == "releases/42" and response["assets"]:
                 response["assets"][0]["digest"] = "sha256:" + "0" * 64
             return response
