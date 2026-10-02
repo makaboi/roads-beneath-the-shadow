@@ -7,6 +7,7 @@ player executable. Downloaded source archives must match the checked-in hashes.
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import copy
 import gzip
@@ -28,6 +29,113 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "third_party"
 INVENTORY_NAME = "THIRD-PARTY-INVENTORY.json"
 NOTICES_NAME = "THIRD-PARTY-NOTICES.md"
+WINDOWS_DEPLOYMENT_TARGET = "Windows 10 or later, x64"
+# Actual downlevel UCRT/API-set files observed in the hosted preview. Unknown
+# API families, debug CRTs, and VC runtime DLLs are deliberately not in this set.
+WINDOWS_SYSTEM_UCRT_NAMES = frozenset("""
+api-ms-win-core-console-l1-1-0.dll
+api-ms-win-core-datetime-l1-1-0.dll
+api-ms-win-core-debug-l1-1-0.dll
+api-ms-win-core-errorhandling-l1-1-0.dll
+api-ms-win-core-fibers-l1-1-0.dll
+api-ms-win-core-fibers-l1-1-1.dll
+api-ms-win-core-file-l1-1-0.dll
+api-ms-win-core-file-l1-2-0.dll
+api-ms-win-core-file-l2-1-0.dll
+api-ms-win-core-handle-l1-1-0.dll
+api-ms-win-core-heap-l1-1-0.dll
+api-ms-win-core-interlocked-l1-1-0.dll
+api-ms-win-core-kernel32-legacy-l1-1-1.dll
+api-ms-win-core-libraryloader-l1-1-0.dll
+api-ms-win-core-localization-l1-2-0.dll
+api-ms-win-core-memory-l1-1-0.dll
+api-ms-win-core-namedpipe-l1-1-0.dll
+api-ms-win-core-processenvironment-l1-1-0.dll
+api-ms-win-core-processthreads-l1-1-0.dll
+api-ms-win-core-processthreads-l1-1-1.dll
+api-ms-win-core-profile-l1-1-0.dll
+api-ms-win-core-rtlsupport-l1-1-0.dll
+api-ms-win-core-string-l1-1-0.dll
+api-ms-win-core-synch-l1-1-0.dll
+api-ms-win-core-synch-l1-2-0.dll
+api-ms-win-core-sysinfo-l1-1-0.dll
+api-ms-win-core-sysinfo-l1-2-0.dll
+api-ms-win-core-timezone-l1-1-0.dll
+api-ms-win-core-util-l1-1-0.dll
+api-ms-win-crt-conio-l1-1-0.dll
+api-ms-win-crt-convert-l1-1-0.dll
+api-ms-win-crt-environment-l1-1-0.dll
+api-ms-win-crt-filesystem-l1-1-0.dll
+api-ms-win-crt-heap-l1-1-0.dll
+api-ms-win-crt-locale-l1-1-0.dll
+api-ms-win-crt-math-l1-1-0.dll
+api-ms-win-crt-process-l1-1-0.dll
+api-ms-win-crt-runtime-l1-1-0.dll
+api-ms-win-crt-stdio-l1-1-0.dll
+api-ms-win-crt-string-l1-1-0.dll
+api-ms-win-crt-time-l1-1-0.dll
+api-ms-win-crt-utility-l1-1-0.dll
+ucrtbase.dll
+""".split())
+
+
+def exclude_windows_system_ucrt(bundle: Path, platform: str, analysis_toc: Path) -> list[dict]:
+    """Use the OS-managed UCRT on our explicit Windows 10+ target.
+
+    Pinned PyInstaller documents these as unnecessary for Windows 10+. Require
+    observed source/payload correspondence and Microsoft PE version resources
+    before removing an exact known downlevel object, preserving its provenance.
+    """
+    if platform != "Windows-x64":
+        return []
+    if __package__:
+        from .runtime_notices import _entries, _windows_pe_metadata
+    else:
+        from runtime_notices import _entries, _windows_pe_metadata
+    entries = list(_entries(ast.literal_eval(analysis_toc.read_text(encoding="utf-8"))))
+    exclusions = []
+    for name, source_text, kind in entries:
+        filename = PurePosixPath(name.replace("\\", "/")).name.lower()
+        if kind != "BINARY" or filename not in WINDOWS_SYSTEM_UCRT_NAMES:
+            continue
+        relative = PurePosixPath(name.replace("\\", "/"))
+        if relative.is_absolute() or ".." in relative.parts or any(":" in part for part in relative.parts):
+            raise ValueError("A Windows system component path leaves the standalone folder")
+        path = bundle / "_internal" / Path(*relative.parts)
+        cursor = bundle
+        for part in ("_internal", *relative.parts):
+            cursor /= part
+            if cursor.is_symlink():
+                raise ValueError("Windows system component exclusion requires regular files without symbolic links")
+        if not path.resolve().is_relative_to(bundle.resolve()):
+            raise ValueError("A Windows system component path leaves the standalone folder")
+        source = Path(source_text)
+        if not path.is_file() or not source.is_file():
+            continue
+        original_sha256 = digest(source)
+        if original_sha256 != digest(path):
+            raise ValueError(f"Windows system component source/payload mismatch: {name}")
+        info = _windows_pe_metadata(source)
+        original_name = "ucrtbase.dll" if filename == "ucrtbase.dll" else "apisetstub"
+        product = " ".join(re.findall(r"[a-z0-9]+", info.get("ProductName", "").lower()))
+        if not (
+            info.get("CompanyName") == "Microsoft Corporation"
+            and info.get("OriginalFilename", "").lower() == original_name
+            and product == "microsoft windows operating system"
+            and re.match(r"^10\.0\.\d+\.\d+(?: |$)", info.get("FileVersion", ""))
+            and info.get("Machine") == "0x8664"
+        ):
+            continue
+        exclusions.append({
+            "name": name, "source_path": source_text, "source_sha256": original_sha256,
+            "original_bundled_path": path.relative_to(bundle).as_posix(),
+            "original_bundled_sha256": original_sha256, "microsoft_binary_metadata": info,
+            "deployment_target": WINDOWS_DEPLOYMENT_TARGET,
+            "reason": "The Windows 10+ standalone target uses OS-managed UCRT/API-set components instead of downlevel copies found through the build PATH",
+            "pinned_packager_policy": "https://github.com/pyinstaller/pyinstaller/blob/v6.22.0/PyInstaller/depend/dylib.py#L140-L148",
+        })
+        path.unlink()
+    return exclusions
 
 
 def digest(path: Path, algorithm: str = "sha256") -> str:
@@ -193,6 +301,7 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
     internal = bundle / "_internal"
     if not internal.is_dir():
         raise ValueError("A persistent onedir _internal directory is required")
+    windows_system_exclusions = exclude_windows_system_ucrt(bundle, platform, analysis_toc)
     # The game ships and validates its own DejaVu fonts. pygame's default
     # font is unused in a complete release and has a separate GPL license.
     for font in internal.rglob("freesansbold.ttf"):
@@ -234,6 +343,15 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
         "version": python_version, "url": python_notice_url, "path": python_notice.relative_to(bundle).as_posix(),
         "sha256": digest(python_notice),
     }
+    if platform == "Windows-x64":
+        runtime["deployment_target"] = WINDOWS_DEPLOYMENT_TARGET
+        runtime["windows_system_component_exclusions"] = windows_system_exclusions
+        runtime["microsoft_runtime_references"] = {
+            "scope": "Publisher references accompanying the actual installed CPython Windows binary distribution conditions; URLs are not retained full license artifacts or an independent redistribution grant",
+            "runtime_terms": "https://visualstudio.microsoft.com/license-terms/vs2026-ga-visualcpp-v14-redist-runtime/",
+            "visual_studio_terms": "https://visualstudio.microsoft.com/license-terms/vs2026-ga-pro-enterprise/",
+            "distributable_code_list": "https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution",
+        }
     retain_windows_liblzma_notice(bundle, destination, runtime, python_version, platform)
     # CPython's documentation includes its incorporated-library notices; also
     # retain the exact linked OpenSSL revision's own license/NOTICE when the
@@ -303,6 +421,8 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
         "components": sorted(components.values(), key=lambda value: value["id"]),
         "source_archives": sources, "runtime": runtime, "payload": payload, "supporting_files": supporting_files,
     }
+    if platform == "Windows-x64":
+        inventory["deployment_target"] = WINDOWS_DEPLOYMENT_TARGET
     (bundle / INVENTORY_NAME).write_text(json.dumps(inventory, indent=2) + "\n", encoding="utf-8")
     table = "\n".join(f"| {item['id']} | {item['version']} | {item['license']} |" for item in inventory["components"])
     notices = (
@@ -331,6 +451,16 @@ def prepare_bundle(bundle: Path, platform: str, analysis_toc: Path) -> dict:
         "by this build; keep a backup of the original folder. The pygame library-source archive omits unused "
         "default/example/test fonts and marks the two adjusted install-data lists; library implementation source is unchanged.\n"
     )
+    if platform == "Windows-x64":
+        notices += (
+            "\n## Windows runtime\n\n"
+            "This standalone download requires Windows 10 or later (64-bit), which supplies its OS-managed UCRT/API-set components. "
+            "The inventory records the exact downlevel build-PATH copies excluded from this download. "
+            "The retained Microsoft VC runtime DLLs originate from the observed CPython installation; its full Windows binary "
+            "distribution conditions are retained in `third-party/runtime/CPython/`; the inventory identifies each DLL's "
+            "exact notice path and Microsoft copyright/version resources. The inventory also links the publisher's runtime terms, Visual Studio terms, and "
+            "distributable-code list; those references are separate from the retained installed notice text.\n"
+        )
     (bundle / NOTICES_NAME).write_text(notices, encoding="utf-8")
     return inventory
 

@@ -356,6 +356,7 @@ class PixelWindow:
         self._layout_size: tuple[int, int] | None = None
         self._frame_tick = pygame.time.get_ticks()
         self._toasts: list[tuple[str, float]] = []
+        self._toasts_deferred = False
         self._combat_active = False
         self._battle_transition_hold = False
         self._local_help = False
@@ -579,6 +580,7 @@ class PixelWindow:
         self._observed_details.clear()
         self._observation_session = None
         self._toasts.clear()
+        self._toasts_deferred = False
         self.hud = None
 
     @property
@@ -1025,7 +1027,8 @@ class PixelWindow:
         width, height = self.screen.get_size()
         self._sync_fonts(width)
         now = pg.time.get_ticks()
-        dt = min(0.25, max(0, now - self._frame_tick) / 1000)
+        elapsed = max(0, now - self._frame_tick) / 1000
+        dt = min(0.25, elapsed)
         self._frame_tick = now
         self._advance_narration()
         if self._layout_size != (width, height):
@@ -1186,11 +1189,22 @@ class PixelWindow:
         if self.small_font.size(footer)[0] > width - margin * 2:
             footer = footer.replace("   ", "  ").replace("F11 Fullscreen", "F11 Full").replace("TAB Archive", "TAB Log").replace("F1 Controls", "F1 Help")
         self._text(footer, (margin, height - 26), MUTED, self.small_font)
+        # The compact battle canvas has no spare banner area: stacking notices
+        # over its cards hides Health and Armor. Keep their remaining display
+        # time until the encounter ends, as with an open exploration inspection.
+        defer_toasts = self.world.inspection_open or (
+            self._combat_active and not self.reading and self.battle.snapshot is not None
+        )
+        if self._toasts_deferred:
+            pause_start = now / 1000 - elapsed
+            self._toasts[:] = [
+                (text, min(now / 1000 + 4.0, expires + elapsed))
+                for text, expires in self._toasts if expires > pause_start
+            ]
+        self._toasts_deferred = defer_toasts
         self._toasts[:] = [(text, expires) for text, expires in self._toasts if expires > now / 1000]
-        if self.world.inspection_open:
-            self._toasts[:] = [(text, expires + dt) for text, expires in self._toasts]
         toast_bottom = self.art_rect.bottom - 12
-        for text, _ in reversed(self._toasts if not self.world.inspection_open else []):
+        for text, _ in reversed(self._toasts if not defer_toasts else []):
             lines = wrap_pixels(text, self.small_font, min(520, self.art_rect.width - 48))
             toast_width = max(self.small_font.size(line)[0] for line in lines) + 28
             toast = pg.Rect(self.art_rect.right - toast_width - 12, toast_bottom - 18 - len(lines) * 17, toast_width, 18 + len(lines) * 17)

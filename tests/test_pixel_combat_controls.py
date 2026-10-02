@@ -321,3 +321,155 @@ class CombatControlsTests(unittest.TestCase):
         self.window.render()
         self.assertTrue(any("Mara" in line and "8" in line and "interrupt" in line for line in visible), visible)
         self.assertTrue(any("3 Health" in line and "Bleeding" in line and "1" in line for line in visible), visible)
+
+    def test_acquisition_stack_cannot_cover_any_visible_battle_content(self):
+        notices = (
+            "Acquired Ranger's Token",
+            "Acquired Black Arrowhead",
+            "New quest: Find Calenor's mark at Bree's north gate",
+        )
+        tick = self.pg.time.get_ticks()
+        with patch.object(self.pg.time, "get_ticks", return_value=tick):
+            for size in ((760, 560), (800, 600), (1200, 900)):
+                for text_size in ("standard", "larger"):
+                    with self.subTest(size=size, text_size=text_size):
+                        self.window._toasts.clear()
+                        self.ui.text_size = text_size
+                        self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=size[0], h=size[1]))
+                        self.window.render()
+                        before = self.pg.image.tobytes(self.window.screen, "RGB")
+                        hits = [(rect.copy(), answer) for rect, answer in self.window.choice_hits]
+                        stats = [rect.copy() for rect in self.window.battle.enemy_stat_rects]
+                        for notice in notices:
+                            self.window._toast(notice)
+                        self.window.render()
+                        # Compare the actual rendered pixels, including enemy
+                        # stats, the log, and every action control, not only
+                        # guessed toast rectangles.
+                        self.assertEqual(self.pg.image.tobytes(self.window.screen, "RGB"), before)
+                        self.assertEqual(self.window.choice_hits, hits)
+                        self.assertEqual(self.window.battle.enemy_stat_rects, stats)
+                        self.assertEqual([text for text, _ in self.window._toasts], list(notices))
+                        self.assertIs(self.window.battle.snapshot, self.snapshot)
+                        self.assertIs(self.window.request, self.request)
+                        self.assertTrue(self.ui.responses.empty())
+
+    def test_toast_remaining_time_survives_combat_and_resumes_in_order(self):
+        tick = 1000
+        self.window._frame_tick = tick
+        story = InputRequest(2, "choice", "The road continues", ("Continue",), story=True)
+        self.ui.events.put(UIEvent("request", {"request": story, "hud": None}))
+        self.window.drain()
+        visible = []
+        draw = self.window._text
+
+        def record(text, position, *args):
+            if text.startswith("Acquired"):
+                visible.append(text)
+            draw(text, position, *args)
+
+        self.window._text = record
+        with patch.object(self.pg.time, "get_ticks", side_effect=lambda: tick):
+            self.window.render()
+            self.window._toast("Acquired Ranger's Token")
+            self.window._toast("Acquired Black Arrowhead")
+            tick = 1500
+            self.window.render()
+            self.assertEqual(visible, ["Acquired Black Arrowhead", "Acquired Ranger's Token"])
+            visible.clear()
+            self.ui.events.put(UIEvent("request", {"request": self.request, "hud": None}))
+            self.window.drain()
+            self.window.render()
+            # Real frame increments preserve the3.5 seconds remaining when
+            # combat begins, even though the battle lasts beyond expiry.
+            for _ in range(250):
+                tick += 20
+                self.window.render()
+            self.assertEqual(visible, [])
+            for _, expires in self.window._toasts:
+                self.assertAlmostEqual(expires - tick / 1000, 3.5)
+            history = list(self.window.history)
+            self.ui.events.put(UIEvent("request", {"request": story, "hud": None}))
+            self.window.drain()
+            self.window.render()
+            self.assertEqual(visible, ["Acquired Black Arrowhead", "Acquired Ranger's Token"])
+            self.assertEqual(self.window.history, history, "deferral duplicated Archive entries")
+            tick += 3499
+            self.window.render()
+            self.assertEqual(len(self.window._toasts), 2)
+            tick += 2
+            self.window.render()
+            self.assertEqual(self.window._toasts, [])
+
+    def test_help_return_preserves_deferred_notices_without_answering(self):
+        tick = 1000
+        self.window._frame_tick = tick
+        with patch.object(self.pg.time, "get_ticks", side_effect=lambda: tick):
+            self.window._toast("Acquired Ranger's Token")
+            self.key(self.pg.K_F1)
+            self.assertTrue(self.window.panels.active)
+            # A window can stop drawing briefly; elapsed time rather than the
+            # capped animation delta must preserve the notice's lifetime.
+            tick += 7000
+            self.window.render()
+            self.assertAlmostEqual(self.window._toasts[0][1] - tick / 1000, 4)
+            self.key(self.pg.K_ESCAPE)
+            self.window.render()
+            self.assertFalse(self.window.panels.active)
+            self.assertIs(self.window.request, self.request)
+            self.assertTrue(self.ui.responses.empty())
+            self.assertAlmostEqual(self.window._toasts[0][1] - tick / 1000, 4)
+
+    def test_new_notice_during_long_paused_gap_has_only_four_seconds(self):
+        tick = 1000
+        self.window._frame_tick = tick
+        with patch.object(self.pg.time, "get_ticks", side_effect=lambda: tick):
+            self.window._toast("Acquired an earlier item")
+            self.window.render()
+            tick += 7000
+            self.window._toast("Acquired a newly drained item")
+            self.window.render()
+            self.assertEqual([text for text, _ in self.window._toasts], [
+                "Acquired an earlier item", "Acquired a newly drained item",
+            ])
+            self.assertTrue(all(abs(expires - tick / 1000 - 4) < 0.001 for _, expires in self.window._toasts))
+
+    def test_expired_notice_before_combat_entry_is_not_revived(self):
+        tick = 1000
+        self.window._frame_tick = tick
+        with patch.object(self.pg.time, "get_ticks", side_effect=lambda: tick):
+            story = InputRequest(2, "choice", "The road continues", ("Continue",), story=True)
+            self.ui.events.put(UIEvent("request", {"request": story, "hud": None}))
+            self.window.drain()
+            self.window.render()
+            self.window._toast("Acquired an old item")
+            tick += 7000
+            self.window._toast("Acquired a newly drained item")
+            self.ui.events.put(UIEvent("request", {"request": self.request, "hud": None}))
+            self.window.drain()
+            self.window.render()
+            self.assertEqual(self.window._toasts, [("Acquired a newly drained item", 12.0)])
+
+    def test_new_or_loaded_journey_and_cancel_cannot_leave_toasts_deferred(self):
+        tick = 1000
+        self.window._frame_tick = tick
+        with patch.object(self.pg.time, "get_ticks", side_effect=lambda: tick):
+            for journey in ("new", "loaded"):
+                with self.subTest(journey=journey):
+                    self.window.battle.set_snapshot(self.snapshot)
+                    self.window._combat_active = True
+                    self.window._toast("Acquired old journey item")
+                    tick += 1000
+                    self.window.render()
+                    self.ui.events.put(UIEvent("journey"))
+                    self.window.drain()
+                    self.assertEqual(self.window._toasts, [])
+                    self.assertFalse(self.window._combat_active)
+            self.ui.begin_creation()
+            self.ui.cancel_creation()
+            self.ui.events.put(UIEvent("request", {"request": InputRequest(3, "choice", "MAIN MENU", ("Begin",)), "hud": None}))
+            self.window.drain()
+            self.window._toast("Acquired current journey item")
+            tick += 4001
+            self.window.render()
+            self.assertEqual(self.window._toasts, [], "cancel left a stale paused-toast state")

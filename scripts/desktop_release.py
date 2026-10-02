@@ -363,9 +363,11 @@ def assemble_archive(executable: Path, platform: str, version: str, output: Path
             )
             launcher.chmod(0o755)
             launch = "Run ./Roads-Beneath-the-Shadow from the extracted folder."
+        os_requirement = "Requires Windows 10 or later (64-bit).\n" if platform == "Windows-x64" else ""
         (package / "START-HERE.txt").write_text(
             f"Roads Beneath the Shadow {version} — {platform}\n\n"
             f"Extract the complete archive first. {launch}\n"
+            f"{os_requirement}"
             "Keep the executable and the complete _internal folder together.\n"
             "Python and separate game packages are not required.\n"
             "The game runs offline; a desktop display is required for pixel mode.\n"

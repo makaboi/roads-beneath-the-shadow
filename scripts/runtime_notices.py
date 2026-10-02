@@ -181,7 +181,13 @@ def _installed_native_notices(source: Path) -> list[Path]:
         index = source.parts.index("Cellar")
         if len(source.parts) > index + 2:
             roots.append(Path(*source.parts[:index + 3]))
-    crt = source.name.lower().startswith(("vcruntime", "msvcp", "concrt", "ucrtbase"))
+    crt = source.name.lower() in {"vcruntime140.dll", "vcruntime140_1.dll"}
+    if crt:
+        if sys.platform != "win32":
+            return []
+        identity = _windows_pe_metadata(source)
+        if identity.get("OriginalFilename", "").lower() != source.name.lower() or not identity.get("FileVersion"):
+            return []
     if crt:
         for variable in ("VCToolsRedistDir", "VCINSTALLDIR"):
             if os.environ.get(variable):
@@ -213,10 +219,58 @@ def _installed_native_notices(source: Path) -> list[Path]:
 
 
 def _microsoft_runtime_notice(text: str) -> bool:
-    lowered = text.lower()
-    return "microsoft" in lowered and any(token in lowered for token in ("visual c++", "visual studio", "visual c")) and any(
-        token in lowered for token in ("redistribut", "distributable code")
+    # A general third-party notice, URL-only Redist.txt, or another product's
+    # EULA can mention VC/redistribution without supplying runtime terms.
+    lowered = " ".join(text.lower().split())
+    heading = lowered[:3000]
+    return (
+        "microsoft software license terms" in heading
+        and "visual c++" in heading and "runtime" in heading
+        and any(token in lowered for token in ("you may", "you must", "you shall"))
     )
+
+
+def _windows_pe_metadata(source: Path) -> dict:
+    """Read actual Microsoft version resources; do not infer them from names."""
+    import pefile  # Installed by pinned PyInstaller on Windows.
+
+    try:
+        binary = pefile.PE(str(source), fast_load=False)
+    except pefile.PEFormatError:
+        return {}
+    with binary:
+        for layer in getattr(binary, "FileInfo", ()):
+            for info in layer:
+                for table in getattr(info, "StringTable", ()):
+                    values = {
+                        key.decode("utf-8", "replace"): value.decode("utf-8", "replace")
+                        for key, value in table.entries.items()
+                    }
+                    if values.get("CompanyName") == "Microsoft Corporation":
+                        values["Machine"] = hex(binary.FILE_HEADER.Machine)
+                        return values
+    return {}
+
+
+def _python_windows_runtime_notices(source: Path, python_licenses: list[Path]) -> list[Path]:
+    """Resolve only the two VC runtime DLLs supplied with this interpreter."""
+    if sys.platform != "win32" or source.name.lower() not in {"vcruntime140.dll", "vcruntime140_1.dll"}:
+        return []
+    if source.parent.resolve() != Path(sys.base_prefix).resolve():
+        return []
+    info = _windows_pe_metadata(source)
+    if info.get("OriginalFilename", "").lower() != source.name.lower() or not info.get("FileVersion"):
+        return []
+    notices = []
+    for notice in python_licenses:
+        text = " ".join(notice.read_text(encoding="utf-8", errors="replace").lower().split())
+        if (
+            "additional conditions for this windows binary build" in text
+            and "microsoft distributable code" in text
+            and "redistribution of the windows binary build of the python interpreter complies with this agreement" in text
+        ):
+            notices.append(notice)
+    return notices
 
 
 def _visual_studio_notices() -> list[Path]:
@@ -376,6 +430,13 @@ def collect_runtime_notices(bundle_dir: Path, analysis_toc: Path, destination: P
             report["unresolved"].append({"component": name, "source_path": source_text, "reason": "Native build source file is unavailable"})
             continue
         native["source_sha256"] = _digest(source)
+        python_runtime_notices = _python_windows_runtime_notices(source, python_licenses)
+        if python_runtime_notices:
+            native["component"] = "Microsoft VC runtime supplied with the observed Windows CPython distribution"
+            native["microsoft_binary_metadata"] = _windows_pe_metadata(source)
+            native["notice_resolution"] = "Actual installed CPython Windows binary distribution conditions, with verified interpreter-root DLL provenance"
+            native["notices"] = [record for record in report["python"]["notices"] if record["source_path"] in {str(path) for path in python_runtime_notices}]
+            continue
         python_library = source.name.lower().startswith(("libpython", "python3")) or source.name == "Python"
         if python_library or (kind == "EXTENSION" and _stdlib_extension(source, relative)):
             native["component"] = "CPython runtime" if python_library else "CPython stdlib extension"

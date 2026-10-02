@@ -25,7 +25,7 @@ The game contains two complete playable episodes: **Part I — The Black Rider's
 | --- | --- | --- |
 | macOS, Apple silicon | [macOS Apple silicon ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-macOS-Apple-Silicon.zip) | Double-click `Play Roads Beneath the Shadow.command` |
 | macOS, Intel | [macOS Intel ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-macOS-Intel.zip) | Double-click `Play Roads Beneath the Shadow.command` |
-| Windows, x64 | [Windows ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Windows-x64.zip) | Double-click `Roads-Beneath-the-Shadow.exe` |
+| Windows 10/11, x64 | [Windows ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Windows-x64.zip) | Double-click `Roads-Beneath-the-Shadow.exe` |
 | Linux, x64 | [Linux TAR.GZ](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Linux-x64.tar.gz) | Run `./Roads-Beneath-the-Shadow` from the extracted folder |
 
 Each release includes a matching `.sha256` checksum for every archive and a `START-HERE.txt` guide. Keep the executable and its complete `_internal` folder together after extraction. A desktop display is required for pixel mode. The game runs offline, and the same executable accepts `--terminal` for terminal play.

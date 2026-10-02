@@ -141,12 +141,13 @@ class RuntimeNoticeTests(unittest.TestCase):
     def test_windows_crt_requires_microsoft_notice_instead_of_psf_license(self):
         source = self.native("vcruntime140.dll", self.root / "python" / "vcruntime140.dll")
         (source.parent / "LICENSE.txt").write_text("Python Software Foundation LICENSE\n")
-        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True):
+        identity = {"CompanyName": "Microsoft Corporation", "OriginalFilename": source.name, "FileVersion": "14.51.36247.0"}
+        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True), patch.object(runtime_notices, "_windows_pe_metadata", return_value=identity):
             report = self.collect()
         self.assertEqual(report["native_libraries"][0]["notices"], [])
         self.assertEqual(report["unresolved"][0]["component"], "vcruntime140.dll")
-        (source.parent / "license.rtf").write_text("Microsoft Visual C++ runtime redistributable license fixture\n")
-        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True):
+        (source.parent / "license.rtf").write_text("Microsoft Software License Terms\nMicrosoft Visual C++ 2015–2026 Runtime\nYou may install and use the software under these terms.\n")
+        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True), patch.object(runtime_notices, "_windows_pe_metadata", return_value=identity):
             report = self.collect()
         self.assertEqual(len(report["native_libraries"][0]["notices"]), 1)
         self.assertEqual(report["unresolved"], [])
@@ -160,14 +161,54 @@ class RuntimeNoticeTests(unittest.TestCase):
         studio = self.root / "Visual Studio" / "2022" / "Enterprise"
         notice = studio / "Licenses" / "1033" / "VS_EULA.rtf"
         notice.parent.mkdir(parents=True)
-        notice.write_text("Microsoft Visual Studio license: Distributable Code terms fixture\n")
+        notice.write_text("Microsoft Software License Terms\nMicrosoft Visual C++ 2015–2026 Runtime\nYou may install and use the software under these terms.\n")
         with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(
             runtime_notices.os.environ, {"ProgramFiles(x86)": str(program_files)}, clear=True
-        ), patch.object(runtime_notices, "_command", return_value=subprocess.CompletedProcess([], 0, stdout=str(studio) + "\n")) as command:
+        ), patch.object(runtime_notices, "_command", return_value=subprocess.CompletedProcess([], 0, stdout=str(studio) + "\n")) as command, patch.object(
+            runtime_notices, "_windows_pe_metadata", return_value={"CompanyName": "Microsoft Corporation", "OriginalFilename": "vcruntime140.dll", "FileVersion": "14.51.36247.0"}
+        ):
             report = self.collect()
         self.assertEqual(command.call_args.args[0][0], str(vswhere))
         self.assertEqual(report["native_libraries"][0]["notices"][0]["source_path"], str(notice))
         self.assertEqual(report["unresolved"], [])
+
+    def test_python_windows_runtime_conditions_require_installed_origin_and_microsoft_identity(self):
+        source = self.native("VCRUNTIME140.dll", self.root / "python" / "VCRUNTIME140.dll")
+        conditions = (
+            "Additional Conditions for this Windows binary build\n"
+            "This program is linked with and uses Microsoft Distributable Code, copyrighted by Microsoft Corporation.\n"
+            "Redistribution of the Windows binary build of the Python interpreter complies with this agreement, provided that you do not alter copyright notices.\n"
+        )
+        self.license.write_text("Python Software Foundation LICENSE\n\n" + conditions)
+        identity = {"CompanyName": "Microsoft Corporation", "OriginalFilename": source.name, "FileVersion": "14.51.36247.0"}
+        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True), patch.object(runtime_notices, "_windows_pe_metadata", return_value=identity):
+            report = self.collect()
+        library = report["native_libraries"][0]
+        self.assertEqual(library["notices"], report["python"]["notices"])
+        self.assertIn("verified interpreter-root DLL provenance", library["notice_resolution"])
+        self.assertEqual(report["unresolved"], [])
+        self.assertEqual((self.destination / library["notices"][0]["notice_path"]).read_bytes(), self.license.read_bytes())
+
+        self.entries.clear()
+        external = self.native("VCRUNTIME140.dll", self.root / "unrelated package" / "VCRUNTIME140.dll")
+        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True), patch.object(runtime_notices, "_windows_pe_metadata", return_value=identity):
+            report = self.collect()
+        self.assertEqual(report["native_libraries"][0]["notices"], [])
+        self.assertEqual(report["unresolved"][0]["source_path"], str(external))
+
+    def test_unrelated_microsoft_documents_and_named_vendor_dll_cannot_resolve_runtime(self):
+        for text in (
+            "Microsoft Entity Framework Designer for Visual Studio 2012. Distributable Code terms.",
+            "Distributable Code for Microsoft Visual Studio\nVisit https://aka.ms/vs/18/redistribution.",
+            "ThirdPartyNotices: Microsoft Visual Studio incorporates runtime redistributable libraries.",
+        ):
+            self.assertFalse(runtime_notices._microsoft_runtime_notice(text), text)
+        source = self.native("vcruntime-fake.dll", self.root / "vendor" / "vcruntime-fake.dll")
+        (source.parent / "LICENSE.txt").write_text("Microsoft Software License Terms\nMicrosoft Visual C++ 2026 Runtime\nYou may install and use the software.\n")
+        with patch.object(runtime_notices.sys, "platform", "win32"), patch.dict(runtime_notices.os.environ, {}, clear=True):
+            report = self.collect()
+        self.assertEqual(report["native_libraries"][0]["notices"], [])
+        self.assertEqual(report["unresolved"][0]["component"], "vcruntime-fake.dll")
 
     def test_explicit_python_component_notice_resolves_openssl_but_keeps_other_libraries_unresolved(self):
         self.native("libcrypto-3.dll", self.root / "python" / "DLLs" / "libcrypto-3.dll")

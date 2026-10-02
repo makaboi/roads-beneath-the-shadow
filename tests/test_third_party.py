@@ -10,9 +10,82 @@ import unittest
 from unittest.mock import patch
 
 from scripts import third_party
+from scripts import runtime_notices
 
 
 class ThirdPartySourceTests(unittest.TestCase):
+    def test_windows_system_exclusion_preserves_exact_provenance_and_required_libraries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            (bundle / "_internal").mkdir(parents=True)
+            entries = []
+            names = ("api-ms-win-core-console-l1-1-0.dll", "ucrtbase.dll", "VCRUNTIME140.dll",
+                     "api-ms-win-core-madeup-l1-1-0.dll", "ucrtbased.dll")
+            for name in names:
+                source = root / "jdk" / "bin" / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(b"exact frozen DLL " + name.encode())
+                (bundle / "_internal" / name).write_bytes(source.read_bytes())
+                entries.append((name, str(source), "BINARY"))
+            toc = root / "Analysis-00.toc"
+            toc.write_text(repr(entries))
+            def metadata(source):
+                return {"CompanyName": "Microsoft Corporation", "OriginalFilename": "ucrtbase.dll" if source.name == "ucrtbase.dll" else "apisetstub",
+                        "ProductName": "Microsoft® Windows® Operating System", "FileVersion": "10.0.26100.1742 (WinBuild.160101.0800)", "Machine": "0x8664"}
+            with patch.object(runtime_notices, "_windows_pe_metadata", side_effect=metadata):
+                excluded = third_party.exclude_windows_system_ucrt(bundle, "Windows-x64", toc)
+            self.assertEqual([x["name"] for x in excluded], list(names[:2]))
+            for record in excluded:
+                source = Path(record["source_path"])
+                self.assertTrue(source.is_file())
+                self.assertEqual(record["source_sha256"], third_party.digest(source))
+                self.assertEqual(record["original_bundled_sha256"], record["source_sha256"])
+                self.assertIn("Windows 10", record["deployment_target"])
+                self.assertFalse((bundle / record["original_bundled_path"]).exists())
+            for name in names[2:]:
+                self.assertTrue((bundle / "_internal" / name).is_file())
+
+    def test_windows_system_exclusion_rejects_vendor_metadata_and_changed_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            (bundle / "_internal").mkdir(parents=True)
+            name = "api-ms-win-core-console-l1-1-0.dll"
+            source = root / name
+            source.write_bytes(b"original DLL")
+            payload = bundle / "_internal" / name
+            payload.write_bytes(source.read_bytes())
+            toc = root / "Analysis-00.toc"
+            toc.write_text(repr([(name, str(source), "BINARY")]))
+            with patch.object(runtime_notices, "_windows_pe_metadata", return_value={"CompanyName": "Other Vendor"}):
+                self.assertEqual(third_party.exclude_windows_system_ucrt(bundle, "Windows-x64", toc), [])
+            self.assertTrue(payload.is_file())
+            payload.write_bytes(b"different frozen DLL")
+            with self.assertRaisesRegex(ValueError, "source/payload mismatch"):
+                third_party.exclude_windows_system_ucrt(bundle, "Windows-x64", toc)
+            self.assertTrue(payload.is_file())
+
+    def test_windows_system_exclusion_does_not_follow_external_links(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            (bundle / "_internal").mkdir(parents=True)
+            external = root / "outside"
+            external.mkdir()
+            name = "ucrtbase.dll"
+            source = external / name
+            source.write_bytes(b"external DLL must remain")
+            try:
+                (bundle / "_internal" / "link").symlink_to(external, target_is_directory=True)
+            except OSError:
+                self.skipTest("Symbolic links are unavailable")
+            toc = root / "Analysis-00.toc"
+            toc.write_text(repr([("link/" + name, str(source), "BINARY")]))
+            with self.assertRaisesRegex(ValueError, "without symbolic links"):
+                third_party.exclude_windows_system_ucrt(bundle, "Windows-x64", toc)
+            self.assertEqual(source.read_bytes(), b"external DLL must remain")
+
     def test_validated_cached_source_is_used_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
             cache = Path(temporary)

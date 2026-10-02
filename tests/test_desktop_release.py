@@ -70,6 +70,21 @@ class ReleaseServer:
 
 
 class DesktopReleaseTests(unittest.TestCase):
+    def test_windows_download_guide_states_the_os_managed_runtime_baseline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "bundle"
+            (bundle / "_internal").mkdir(parents=True)
+            executable = bundle / (desktop_release.GAME_NAME + ".exe")
+            executable.write_bytes(b"fixture executable")
+            (bundle / "THIRD-PARTY-NOTICES.md").write_text("Retained constituent notices")
+            (bundle / "THIRD-PARTY-INVENTORY.json").write_text(json.dumps({"schema_version": 1, "payload": []}))
+            archive = desktop_release.assemble_archive(executable, "Windows-x64", "0.5.0", root / "downloads")
+            with zipfile.ZipFile(archive) as source:
+                guide = source.read(desktop_release.GAME_NAME + "/START-HERE.txt").decode("utf-8")
+            self.assertIn("Requires Windows 10 or later (64-bit).", guide)
+            self.assertIn("Keep the executable and the complete _internal folder together.", guide)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
