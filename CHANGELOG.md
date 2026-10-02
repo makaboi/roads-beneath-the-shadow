@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — Fullscreen Window Restoration
+
+- Restored the previous window size when leaving fullscreen with F11.
+- Kept adjacent traveler and companion labels readable in compact battles.
+
 ## 0.5.0 — More Roads, Clearer Choices
 
 - Expanded exploration from five to thirteen walkable locations and from thirteen to thirty-five optional look spots, covering Bree's north gate, Midgewater, Echo Bridge, the Drowned Mile, the prisoners' sluice, and the refuge.

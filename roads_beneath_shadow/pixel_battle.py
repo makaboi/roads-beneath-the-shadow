@@ -1199,6 +1199,54 @@ class BattleView:
             self._text(surface, line, (x + round(10 * scale), y + round(8 * scale)), BONE, font=font)
             y += font.get_linesize()
 
+    @staticmethod
+    def _elided_name(name: str, font: Any, width: int) -> str:
+        if font.size(name)[0] <= width:
+            return name
+        prefix = name
+        while prefix and font.size(prefix + "…")[0] > width:
+            prefix = prefix[:-1].rstrip()
+        return prefix + "…" if font.size(prefix + "…")[0] <= width else ""
+
+    def _draw_party_names(self, surface: Any, arena: Any, player_x: int, ground: int,
+                          companions: Any, anchors: Any) -> None:
+        """Fit names around the existing formation without changing its actors."""
+        if self.snapshot.phase == "escaped":
+            return
+        scale = self._layout_scale
+        gap, padding = round(4 * scale), round(2 * scale)
+        # Reserve a short traveler label. Companions retain their full names
+        # whenever their measured ink fits; nearby labels can shift slightly.
+        name = self.snapshot.player.name
+        minimum = self.small_font.size(name[:1] + "…")[0]
+        companion_right = min(arena.right - padding, player_x + round(14 * scale) - minimum - gap)
+        entries = sorted(zip(companions, anchors), key=lambda entry: entry[1][0])
+        available = companion_right - arena.left - padding - gap * max(0, len(entries) - 1)
+        widths = [self.party_font.size(ally.name)[0] for ally, _ in entries]
+        limit = max(1, available // len(entries)) if entries and sum(widths) > available else None
+        labels = []
+        cursor = arena.left + padding
+        for ally, (x, y) in entries:
+            text = self._elided_name(ally.name, self.party_font, limit) if limit is not None else ally.name
+            width = self.party_font.size(text)[0]
+            left = max(cursor, x - width // 2)
+            labels.append([text, left, y, width])
+            cursor = left + width + gap
+        right = companion_right
+        for label in reversed(labels):
+            label[1] = min(label[1], right - label[3])
+            right = label[1] - gap
+        for text, left, y, width in labels:
+            top = min(y + round(3 * scale), arena.bottom - self.party_font.get_height() - padding)
+            self._text(surface, text, (left, top), TEAL, font=self.party_font)
+        left = max(arena.left + padding, labels[-1][1] + labels[-1][3] + gap if labels else arena.left + padding)
+        width = min(round(140 * scale), round(arena.w * 0.30), arena.right - padding - left,
+                    2 * (player_x + round(14 * scale) - left))
+        text = self._elided_name(name, self.small_font, max(1, width))
+        if "player" in self.actor_rects:
+            top = min(ground + round(3 * scale), arena.bottom - self.small_font.get_height() - padding)
+            self._text(surface, text, (max(left, player_x - self.small_font.size(text)[0] // 2), top), BONE, font=self.small_font)
+
     def draw(self, surface: Any, rect: Any, now_ms: int = 0, *, text_size: str = "standard") -> Any:
         """Draw the arena and full intent cards inside ``rect`` and return it."""
         pg = self.pg
@@ -1286,19 +1334,12 @@ class BattleView:
         # player attacks cannot travel toward enemies rendered later in order.
         self.actor_positions.update({"player": (player_x, ground), **{ally.id: anchor for ally, anchor in zip(companions, ally_anchors)}, **{enemy.id: anchor for enemy, anchor in zip(enemies, enemy_anchors)}})
         self._draw_actor(surface, "player", "player", (player_x, ground), actor_scale, facing_left=False, alive=snapshot.player.hp > 0, now_ms=now_ms)
-        player_label = snapshot.player.name
-        label_width = min(round(140 * scale), round(arena.w * 0.30))
-        while len(player_label) > 1 and self.small_font.size(player_label)[0] > label_width:
-            player_label = player_label[:-2].rstrip() + "…"
-        if "player" in self.actor_rects and snapshot.phase != "escaped":
-            self._text(surface, player_label, (player_x - self.small_font.size(player_label)[0] // 2, ground + round(3 * scale)), BONE, font=self.small_font)
         # Companions stand a step behind the traveler rather than becoming
         # abstract ability names in a menu.
         for index, companion in enumerate(companions):
             ally_x, ally_ground = ally_anchors[index]
             self._draw_actor(surface, companion.id, self._kind(companion.id + companion.name), (ally_x, ally_ground), party_scale, facing_left=False, now_ms=now_ms)
-            if companion.id in self.actor_rects and snapshot.phase != "escaped":
-                self._text(surface, companion.name, (ally_x - self.party_font.size(companion.name)[0] // 2, ally_ground + round(3 * scale)), TEAL, font=self.party_font)
+        self._draw_party_names(surface, arena, player_x, ground, companions, ally_anchors)
         for index, enemy in enumerate(enemies):
             enemy_x, _ = enemy_anchors[index]
             self._draw_actor(surface, enemy.id, self._kind(enemy.archetype + " " + enemy.name), (enemy_x, ground), actor_scale, facing_left=True, alive=enemy.hp > 0, targeted=enemy.id == snapshot.target_id, now_ms=now_ms)

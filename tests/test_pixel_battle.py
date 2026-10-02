@@ -104,6 +104,54 @@ class BattleSDLTests(unittest.TestCase):
         self.assertEqual(self.view.hovered_id, "enemy_1")
         self.assertEqual(self.snapshot.target_id, "enemy_0")
 
+    def test_party_name_ink_stays_separate_and_inside_the_actual_arena(self):
+        self.surface = self.pg.Surface((2400, 1500))
+        for canvas in ((24, 100, 418, 322), (24, 100, 680, 496), (24, 100, 1488, 842), (24, 100, 2256, 1310)):
+            for preference in ("standard", "larger"):
+                for count in (0, 1, 2):
+                    for name in ("Zoë Native", "Éowen — 夜道の旅人星明かり", "É" + "W" * 23):
+                        with self.subTest(canvas=canvas, preference=preference, companions=count, name=name):
+                            baseline = replace(self.snapshot, companions=self.snapshot.companions[:count])
+                            self.view.set_snapshot(baseline)
+                            self.view.draw(self.surface, canvas, text_size=preference)
+                            anchors = dict(self.view.actor_positions)
+                            targets = [(rect.copy(), target) for rect, target in self.view.enemy_hits]
+                            updated = replace(baseline, player=replace(baseline.player, name=name))
+                            self.view.set_snapshot(updated)
+                            with patch.object(self.view, "_text", wraps=self.view._text) as text:
+                                self.view.draw(self.surface, canvas, text_size=preference)
+                            labels = []
+                            for call in text.call_args_list:
+                                value, position = call.args[1:3]
+                                font = call.kwargs.get("font")
+                                party = font is self.view.party_font and any(value.startswith(ally.name[:1]) for ally in updated.companions)
+                                hero = font is self.view.small_font and value.startswith(name[:1])
+                                if party or hero:
+                                    glyph = font.render(value, False, call.args[3])
+                                    ink = glyph.get_bounding_rect().move(position)
+                                    self.assertTrue(self.view._arena_rect.contains(ink), (value, ink, self.view._arena_rect))
+                                    self.assertFalse(any(ink.colliderect(previous) for previous in labels), (value, ink, labels))
+                                    labels.append(ink)
+                            self.assertEqual(len(labels), count + 1, "a visible party name was lost")
+                            self.assertEqual(self.view.actor_positions, anchors, "name fitting moved the formation")
+                            self.assertEqual(self.view.enemy_hits, targets, "name fitting changed target identity")
+                            self.assertIs(self.view.snapshot, updated)
+                            self.assertEqual(updated.player.name, name)
+                            self.assertEqual(self.view._party_help("player").splitlines()[0], name)
+
+    def test_compact_names_elide_only_the_canvas_and_leave_short_companion_names_readable(self):
+        name = "Éowen of the Northern Stars"
+        snapshot = replace(self.snapshot, player=replace(self.snapshot.player, name=name))
+        self.view.set_snapshot(snapshot)
+        with patch.object(self.view, "_text", wraps=self.view._text) as draw:
+            self.view.draw(self.surface, (24, 100, 418, 322), text_size="larger")
+        labels = [call.args[1] for call in draw.call_args_list]
+        self.assertIn("Mara", labels)
+        self.assertIn("Tobin", labels)
+        self.assertTrue(any(label.startswith("É") and label.endswith("…") for label in labels), labels)
+        self.assertEqual(snapshot.player.name, name)
+        self.assertIn(name, self.view._party_help("player"))
+
     def test_focus_loss_clears_enemy_and_party_hover_without_changing_target(self):
         rect = next(rect for rect, actor_id in self.view.party_hits if actor_id == "mara")
         self.view.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=rect.center, rel=(0, 0), buttons=(0, 0, 0)))

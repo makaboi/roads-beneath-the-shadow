@@ -331,6 +331,7 @@ class PixelWindow:
         self.menu_rect = pygame.Rect(0, 0, 0, 0)
         self.fullscreen = False
         self.window_size = size
+        self._restoring_window_size: tuple[int, int] | None = None
         self.finished = False
         self.error: str | None = None
         self._sound_cache: dict[str, Any] = {}
@@ -766,12 +767,30 @@ class PixelWindow:
             self.pg.key.stop_text_input()
 
     def _toggle_fullscreen(self) -> None:
-        if self.fullscreen:
-            self.screen = self.pg.display.set_mode(self.window_size, self.pg.RESIZABLE)
-        else:
-            self.window_size = self.screen.get_size()
-            self.screen = self.pg.display.set_mode((0, 0), self.pg.FULLSCREEN)
-        self.fullscreen = not self.fullscreen
+        pg = self.pg
+        try:
+            if self.fullscreen:
+                # set_mode resizes before leaving fullscreen in pygame-ce
+                # 2.5.8. SDL can ignore that resize, leaving a desktop-sized
+                # window on X11. Leave fullscreen before requesting the size.
+                # The headless dummy driver has no native fullscreen toggle.
+                if pg.display.get_driver() != "dummy":
+                    pg.display.toggle_fullscreen()
+                    if pg.display.is_fullscreen():
+                        raise pg.error("The display did not leave fullscreen")
+                self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
+                self._restoring_window_size = self.window_size
+            else:
+                self.window_size = self.screen.get_size()
+                self.screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
+                self._restoring_window_size = None
+            self.fullscreen = pg.display.is_fullscreen()
+        except pg.error:
+            # An unsupported native toggle must not terminate a pending story
+            # request. Keep rendering the surface and mode SDL actually owns.
+            self.screen = pg.display.get_surface() or self.screen
+            self.fullscreen = pg.display.is_fullscreen()
+            self._toast("This display could not change fullscreen mode.")
 
     def handle_event(self, event: Any) -> None:
         pg = self.pg
@@ -779,6 +798,17 @@ class PixelWindow:
             self.ui.close()
             return
         if event.type == pg.VIDEORESIZE and not self.fullscreen:
+            if self._restoring_window_size is not None:
+                actual_size = pg.display.get_window_size()
+                if (event.w, event.h) != actual_size:
+                    # Already-fetched fullscreen resize events may arrive
+                    # after F11. They cannot replace the restored dimensions.
+                    return
+                if actual_size == self._restoring_window_size:
+                    self.screen = pg.display.get_surface()
+                    return
+                # A real later drag changes SDL's size before its event arrives.
+                self._restoring_window_size = None
             self.window_size = (max(760, event.w), max(560, event.h))
             self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
             return
