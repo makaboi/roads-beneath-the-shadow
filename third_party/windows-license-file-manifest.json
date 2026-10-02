@@ -1,0 +1,715 @@
+{
+  "pygame_tag": "2.5.8",
+  "pygame_commit": "c8200a9eaa530f884a0a4c3384cefc48006e58be",
+  "archives": [
+    {
+      "url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+      "archive": "SDL2-devel-2.32.10-VC.zip",
+      "sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+      "sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+      "files": [
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/README-SDL.txt",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/README-SDL.txt",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "f17d8919136f9627468b4dffbd7bddd188ef2aaa8ed21914d2107d1c759e99d7",
+          "size": 433
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/LICENSE.txt",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/LICENSE.txt",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+          "size": 884
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/README.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/README.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "333de1a6fab2433571809e62195d32bb90b95e016fda16292a34d8abb18d9113",
+          "size": 546
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-android.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-android.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "074fafc40c431ea653262d99f08e19b394d84d2c15ae637518decb64dd8ace12",
+          "size": 20536
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-cmake.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-cmake.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "0613616aff6312fbda8cfc9a435047549df24b6c8c452b6ae51cbe6e5b4aa9d5",
+          "size": 5961
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-directfb.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-directfb.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "f82dd522a2e831e54d4c852449f50f707c4295d2cd77454c4ec4dccb2232b5bd",
+          "size": 2494
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-dynapi.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-dynapi.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "48c22497f377716e846658bcf9cc7b80282da8ad534c5a2a0548d6615b5eac5e",
+          "size": 6791
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-emscripten.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-emscripten.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "ea1195db51168d6f15fc756b6ceea2cb4d528acb8d407150e917b5c0a544ac2a",
+          "size": 14263
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-gdk.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-gdk.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "9f8797c58f7bae80170e9a33cb07954160f4e0a30c9c46bf5048d33fd9b0e542",
+          "size": 12265
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-gesture.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-gesture.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "4b3e0c2458d0a5282a9b69fee1bc2f389acddd6c83399e9befc9fbba29e70e10",
+          "size": 4000
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-git.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-git.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "7403077de99ca417cce4a22a76c111db7754379ecfeaa54d00d50f4f6028787e",
+          "size": 667
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-hg.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-hg.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "64f55f234ba48c12cbb0a658ddbb30d33767193f48ee2b244ece07fc91a43ee6",
+          "size": 86
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ios.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-ios.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "2b75d58110290f81daf803f5a18930736ee17962c9737ab08178346796c34f16",
+          "size": 15939
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-kmsbsd.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-kmsbsd.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "06ca195be8f5e3a9fc0d1ee69fba40aa8e809e21a9dcdb56623e537421d0183e",
+          "size": 1447
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-linux.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-linux.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "c39149ceda9b253a3cc768d32b68173fe780286171294c75e5c2173abbbb05af",
+          "size": 4234
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-macos.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-macos.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "27e97f72782123f0622657b8b63fe26570b0ff3329d518fa7a6637cf3a2f6bba",
+          "size": 9844
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-n3ds.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-n3ds.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "d1f0c8ad5df145db078af542b382d9cb000b01348601b832c468fb6325695631",
+          "size": 1400
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-nacl.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-nacl.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "df7230132f952237d4f9d594ffd14195fe733afd5e341fe201336c4acb293615",
+          "size": 4272
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ngage.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-ngage.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "a2cc7220a601e49f7bd06f6c37ba91b01c92a12290d694a959ce9422ec452067",
+          "size": 1472
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-os2.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-os2.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "c68e15947d11c892b45db6568855eab69c54dfbd770ee02ae250109af0ac36ad",
+          "size": 3083
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-pandora.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-pandora.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "5b22799dd3cecbef00dc60187ee0275031db96df1aa5fb1e1fade8db76013ceb",
+          "size": 735
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-platforms.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-platforms.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "4d4a47f2df9a497f3545a95c292495b973001f4fc0cf396443ba45eb54da47fb",
+          "size": 179
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-porting.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-porting.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "4cf4bdd5450752e330212226323c1f45396643efe99ec39a2d605a231a9850df",
+          "size": 1961
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ps2.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-ps2.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "fa675c3b8a51475d5e47a2d90e5648273c239258bbe0e15ec1d6cbd73b76d77f",
+          "size": 1699
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-psp.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-psp.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "69f05ed70d33073c754b0c2663c977c108b7624ce1bf61197e5bd95366df1e2d",
+          "size": 869
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-raspberrypi.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-raspberrypi.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "ea9df735373108ecb8e8ee60d00812ac1fb93dc510fb0c2af3e4705f4011e50b",
+          "size": 6274
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-riscos.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-riscos.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "a203c06f6e72d999d3285a69c1c681ad812a9bbe5779b4c535aed39bcf91fc59",
+          "size": 1818
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-touch.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-touch.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "745dbd1a617d9434027d6d2178c0811c4a6ae44996fad2dede0a4cb8bf8fde56",
+          "size": 4024
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-versions.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-versions.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "fd920274217eaf101fc1e1a35fe09f21fe32c46e74c362c805e3b4d478c806e1",
+          "size": 2672
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-visualc.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-visualc.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "5218149424d1878cd233ee575ca50391c5a3f8239fec35ec6c4d4ba1f1a391be",
+          "size": 4869
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-vita.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-vita.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "959858256d8ad8d2c4fc38924da4858fa269be04bdea604ac3ef42cb5db586fd",
+          "size": 1751
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-wince.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-wince.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "fe622040f83d896dc8edd5b54ac57deba3323f6ca4904d05b47b2879551565c3",
+          "size": 210
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-windows.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-windows.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "0ba502be95d335510d1ae1e06c00a50207f5a7469682ad4dec8c621d94cbfbe9",
+          "size": 2517
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-winrt.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README-winrt.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "56ee99cf71ed74af666a2d6ab0ce11c18d05b9d3422b63c93b3999b222bc3e5f",
+          "size": 23439
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README.md",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/docs/README.md",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "2614a9acee12b42ccddca53c9773d04d8640244145db52d9c88b903aae80b43d",
+          "size": 2295
+        },
+        {
+          "file": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/include/SDL_copying.h",
+          "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-VC.zip",
+          "archive_member": "SDL2-2.32.10/include/SDL_copying.h",
+          "archive_sha1": "27f5179346a0b0db80c4dd1769c7c9d62b9a91f3",
+          "archive_sha256": "af347939395a58b365846aaea27391e69f9ec9d4dd650d6ac40802159b418a6e",
+          "file_sha256": "3f90be470c18f99f4aef39444e9374edba166cfeb1b90f99f35286cc33924642",
+          "size": 939
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+      "archive": "SDL2_image-devel-2.8.12-VCpgce.zip",
+      "sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+      "sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+      "files": [
+        {
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libjpeg-62.dll",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "207c139e6029741b786d08942dbad54127520b361dda56228e660e4d556d8ca1",
+          "size": 1147092,
+          "evidence_file": "libjpeg-62.dll",
+          "included_as_notice": false
+        },
+        {
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/libtiff-5.dll",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "32a7816d6480f06bc5b8b030f134852b0e2d9f07fc3a4c06e0419a7f3b77671b",
+          "size": 385536,
+          "evidence_file": "libtiff-5.dll",
+          "included_as_notice": false
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.avif.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/LICENSE.avif.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "5a6e603c08d02a173954aced9957fa7e5fcd72c43ff78775b758fc7109da18a6",
+          "size": 19152
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.dav1d.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/LICENSE.dav1d.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "b19d87106bf153f6233927d95347b54e7bec089fbfb49e3c36133b56e45b1571",
+          "size": 1340
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.libjpegturbo.md",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/LICENSE.libjpegturbo.md",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "cff8701dc999e39b5044ece8f22ed65b3a10d6a8dbddca8ffb802d24580181db",
+          "size": 6224
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.tiff.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/LICENSE.tiff.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "8f859efd8916b7df374bd39dc9eeea9d53dbcf35e62fcf670d2b3b4c4d8f251a",
+          "size": 1167
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.webp.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x64/optional/LICENSE.webp.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "17c029a902ad45a199dfe8e3a1c39305ab28d302b0703360c4a27351a4673dcb",
+          "size": 1526
+        },
+        {
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/libjpeg-62.dll",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "1eec93574857ed573d685d46e0a0f26939ae11a79d7e643d42cf0bec08450d22",
+          "size": 927074,
+          "evidence_file": "libjpeg-62.dll",
+          "included_as_notice": false
+        },
+        {
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/libtiff-5.dll",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "dec16b077bc3de19c1c20ae94f10121cb2db7408b9d837561276abdb6837aff7",
+          "size": 380416,
+          "evidence_file": "libtiff-5.dll",
+          "included_as_notice": false
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.avif.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/LICENSE.avif.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "5a6e603c08d02a173954aced9957fa7e5fcd72c43ff78775b758fc7109da18a6",
+          "size": 19152
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.dav1d.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/LICENSE.dav1d.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "b19d87106bf153f6233927d95347b54e7bec089fbfb49e3c36133b56e45b1571",
+          "size": 1340
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.tiff.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/LICENSE.tiff.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "8f859efd8916b7df374bd39dc9eeea9d53dbcf35e62fcf670d2b3b4c4d8f251a",
+          "size": 1167
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.webp.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/lib/x86/optional/LICENSE.webp.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "17c029a902ad45a199dfe8e3a1c39305ab28d302b0703360c4a27351a4673dcb",
+          "size": 1526
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/LICENSE.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/LICENSE.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "bed1d84d6aa7abbe0a7a675ca43f1e76e518064ce88954f2fe815be777a6f709",
+          "size": 895
+        },
+        {
+          "file": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/README.txt",
+          "source_url": "https://github.com/pygame-community/SDL_image/releases/download/2.8.12-pgce/SDL2_image-devel-2.8.12-VCpgce.zip",
+          "archive_member": "SDL2_image-2.8.12/README.txt",
+          "archive_sha1": "77058bbf460c7701d60b27e82bec17b529d55014",
+          "archive_sha256": "dbc8d7cc4d6b258554d0299a486208f23968462ca7e62198435f12d7433fa534",
+          "file_sha256": "12a177f2b777d82c867ac7b2191f0b63db6500eaa940e5acf06e1d2ab79a2cb9",
+          "size": 2041
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-VC.zip",
+      "archive": "SDL2_ttf-devel-2.24.0-VC.zip",
+      "sha1": "2d18b9a4fc2ec0eee80de2a946b088d4e6efd0ee",
+      "sha256": "2dea8ea01e04756ead27e196a681034ed71342562a75b512ea279fcdfde83307",
+      "files": [
+        {
+          "file": "licenses/windows/SDL2_ttf-devel-2.24.0-VC/SDL2_ttf-2.24.0/LICENSE.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-VC.zip",
+          "archive_member": "SDL2_ttf-2.24.0/LICENSE.txt",
+          "archive_sha1": "2d18b9a4fc2ec0eee80de2a946b088d4e6efd0ee",
+          "archive_sha256": "2dea8ea01e04756ead27e196a681034ed71342562a75b512ea279fcdfde83307",
+          "file_sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+          "size": 878
+        },
+        {
+          "file": "licenses/windows/SDL2_ttf-devel-2.24.0-VC/SDL2_ttf-2.24.0/README.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-VC.zip",
+          "archive_member": "SDL2_ttf-2.24.0/README.txt",
+          "archive_sha1": "2d18b9a4fc2ec0eee80de2a946b088d4e6efd0ee",
+          "archive_sha256": "2dea8ea01e04756ead27e196a681034ed71342562a75b512ea279fcdfde83307",
+          "file_sha256": "e8ab44d739979785d407b7b0f5de12be161b4a5dbb9c14295b665cdfec66692d",
+          "size": 1032
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+      "archive": "SDL2_mixer-devel-2.8.2-VC.zip",
+      "sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+      "sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+      "files": [
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/LICENSE.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/LICENSE.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+          "size": 878
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/README.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/README.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "3edf4716645f6893a1086f2c08cd19e74f88576c5ed151de250570effaac401c",
+          "size": 2518
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.gme.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.gme.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "319daefe38ebeead3df178e5937898a52d67c0c795f54f1c0bb10ac3b9cffb63",
+          "size": 26940
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.ogg-vorbis.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.ogg-vorbis.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "1300208dc709bce1f7b1bf5295acb4df8eca42a67a301ce4317c9b901560092a",
+          "size": 1498
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opus.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opus.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "fde149f902d124a8c02a218527c440ee2fab6884323f180061b1405fb06af60e",
+          "size": 1972
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opusfile.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opusfile.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "54e125c8250361407b34322e0f328f6bdf7fd30cd4f2941a321e47b41f9c159d",
+          "size": 1515
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.wavpack.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.wavpack.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "c580b15e1391e59164d17c642df7019cb11946ab89281b5d781b43c732d4bf97",
+          "size": 1582
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.xmp.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.xmp.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "02962db795b4b5dd0b23102bb449fe97fec9c71993d1c06d4e0657303cf759fe",
+          "size": 1132
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.gme.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.gme.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "319daefe38ebeead3df178e5937898a52d67c0c795f54f1c0bb10ac3b9cffb63",
+          "size": 26940
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.ogg-vorbis.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.ogg-vorbis.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "1300208dc709bce1f7b1bf5295acb4df8eca42a67a301ce4317c9b901560092a",
+          "size": 1498
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opus.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opus.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "fde149f902d124a8c02a218527c440ee2fab6884323f180061b1405fb06af60e",
+          "size": 1972
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opusfile.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opusfile.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "54e125c8250361407b34322e0f328f6bdf7fd30cd4f2941a321e47b41f9c159d",
+          "size": 1515
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.wavpack.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.wavpack.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "c580b15e1391e59164d17c642df7019cb11946ab89281b5d781b43c732d4bf97",
+          "size": 1582
+        },
+        {
+          "file": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.xmp.txt",
+          "source_url": "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.2/SDL2_mixer-devel-2.8.2-VC.zip",
+          "archive_member": "SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.xmp.txt",
+          "archive_sha1": "7e01cc961326ec44a61009c61a409310489aee6b",
+          "archive_sha256": "13d7def40e7e3400c930c0d45df5b14e70c5ca75817232812f24b6e85577b37b",
+          "file_sha256": "02962db795b4b5dd0b23102bb449fe97fec9c71993d1c06d4e0657303cf759fe",
+          "size": 1132
+        }
+      ]
+    },
+    {
+      "url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+      "archive": "prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+      "sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+      "sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+      "files": [
+        {
+          "file": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/freetype/config/ftoption.h",
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/include/freetype/config/ftoption.h",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "file_sha256": "3679c267bc813769e141a445e272e29aad631feef9a4dc61ec2c7d402f359e27",
+          "size": 40668
+        },
+        {
+          "file": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/freetype/freetype.h",
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/include/freetype/freetype.h",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "file_sha256": "fb864eb73c0441fae861d0a4e43a6ab3ce91e97c53da31094259df166a27380b",
+          "size": 169009
+        },
+        {
+          "file": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/portmidi.h",
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/include/portmidi.h",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "file_sha256": "ae2cd25acc382f80c1939f6e8a87e6442be569c721fb922e74a7f22637258ab9",
+          "size": 28421
+        },
+        {
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/lib/freetype.dll",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "file_sha256": "1c487392d6d06970ba3c7b52705881f1fb069f607243499276c2f0c033c7df6f",
+          "size": 654336,
+          "evidence_file": "freetype.dll",
+          "included_as_notice": false
+        },
+        {
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/lib/portmidi.dll",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "file_sha256": "c9f8d9043ac1570b10f104f2d00aec791f56261c84ee40773be73d0a3822e013",
+          "size": 41984,
+          "evidence_file": "portmidi.dll",
+          "included_as_notice": false
+        },
+        {
+          "file": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/LICENSE.portmidi.txt",
+          "source_url": "https://github.com/pygame-community/pygame-ce/releases/download/2.1.3/prebuilt-x64-pygame-2.1.4-20220319_2.zip",
+          "archive_member": "prebuilt-x64/include/portmidi.h",
+          "archive_sha1": "3aaacd02f0c2ed497e2615d3a1f89c250a32f1fa",
+          "archive_sha256": "69bbb371e40d8d22b88a61d6911b875a775f0d11717b2d3f7da59143f3720ee8",
+          "source_file_sha256": "ae2cd25acc382f80c1939f6e8a87e6442be569c721fb922e74a7f22637258ab9",
+          "file_sha256": "bfe3bd5105cc0b09d677f06878720244525f66b289717ee9c768c24eee728632",
+          "source_byte_range": [
+            79,
+            1888
+          ],
+          "size": 1809,
+          "extraction": "Entire authoritative PortMidi license plus non-binding request comments exactly reproduced from bundled header; embedded version undeclared"
+        }
+      ]
+    }
+  ]
+}

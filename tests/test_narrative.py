@@ -44,6 +44,67 @@ class NarrativeDirectorTests(unittest.TestCase):
         self.assertEqual([page.number for page in pages], list(range(1, len(pages) + 1)))
         self.assertTrue(all(page.total == len(pages) for page in pages))
 
+    def test_a_fitting_paragraph_moves_whole_to_the_following_page(self):
+        director = NarrativeDirector()
+        director.record("text", text="first\nsecond\nthird", narration=True)
+        director.record("text", text="a quiet\nwarning", color="red", bold=True, narration=True)
+        pages = director.prepare(wrap=lambda text: text.splitlines(), rows=4)
+        self.assertEqual([page.text for page in pages], ["first\nsecond\nthird", "a quiet\nwarning"])
+        self.assertEqual(pages[1].start, (0, 1, 0))
+        self.assertTrue(all(line.color == "red" and line.bold for line in pages[1].lines))
+
+    def test_long_paragraph_does_not_leave_a_one_line_continuation(self):
+        director = NarrativeDirector()
+        text = "\n".join(f"line{index}" for index in range(9))
+        director.record("text", text=text, narration=True)
+        pages = director.prepare(wrap=lambda text: text.splitlines(), rows=8)
+        self.assertEqual([len(page.lines) for page in pages], [7, 2])
+        self.assertEqual("\n".join(page.text for page in pages), text)
+        self.assertEqual(pages[1].start, (0, 0, len(" ".join(f"line{index}" for index in range(7))) + 1))
+
+    def test_single_closing_line_shares_the_last_screen_with_prior_prose(self):
+        director = NarrativeDirector()
+        text = "\n".join(f"line{index}" for index in range(8))
+        director.record("text", text=text, narration=True)
+        director.record("text", text="Listen.", color="cyan", narration=True)
+        pages = director.prepare(wrap=lambda text: text.splitlines(), rows=8)
+        self.assertEqual([len(page.lines) for page in pages], [6, 3])
+        self.assertEqual("\n".join(page.text for page in pages), text + "\nListen.")
+        self.assertEqual(pages[-1].lines[-1].color, "cyan")
+
+    def test_blank_separators_never_create_empty_screens(self):
+        for rows in (1, 2, 3):
+            with self.subTest(rows=rows):
+                director = NarrativeDirector()
+                for text in ("", "One.", "", "", "Two.", "", "Three.", ""):
+                    director.record("text", text=text, narration=True)
+                pages = director.prepare(wrap=lambda text: [text], rows=rows)
+                self.assertTrue(all(page.text.strip() for page in pages))
+                self.assertTrue(all(len(page.lines) <= rows for page in pages))
+                self.assertEqual(" ".join(" ".join(page.text.split()) for page in pages), "One. Two. Three.")
+                self.assertEqual(len(director.beats[0].paragraphs), 8)
+
+    def test_a_heading_separator_does_not_strand_the_heading_on_a_small_screen(self):
+        director = NarrativeDirector()
+        director.record("text", text="A ROAD", bold=True)
+        director.record("text", text="")
+        director.record("text", text="first\nsecond\nthird\nfourth", narration=True)
+        pages = director.prepare(wrap=lambda text: text.splitlines() or [""], rows=3)
+        self.assertEqual([page.text for page in pages], ["A ROAD\nfirst\nsecond", "third\nfourth"])
+        self.assertEqual(pages[1].start, (0, 2, len("first second ")))
+
+    def test_small_capacities_preserve_source_without_exceeding_the_screen(self):
+        for rows in range(1, 9):
+            with self.subTest(rows=rows):
+                director = NarrativeDirector()
+                texts = [" ".join(f"word{index:02}" for index in range(count)) for count in (1, 6, 20, 2, 9)]
+                for text in texts:
+                    director.record("text", text=text, narration=True)
+                pages = director.prepare(wrap=wrap(18), rows=rows)
+                self.assertTrue(all(1 <= len(page.lines) <= rows for page in pages))
+                self.assertEqual(" ".join(line.text for page in pages for line in page.lines), " ".join(texts))
+                self.assertEqual([page.start for page in pages], sorted(page.start for page in pages))
+
     def test_art_transitions_retain_text_and_caption_only_illustrations(self):
         director = self.director()
         director.record("art", text="silent interior", alt_text="A crowded inn falls silent.")

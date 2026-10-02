@@ -10,6 +10,7 @@ import textwrap
 import time
 from collections.abc import Callable, Sequence
 from numbers import Real
+from unicodedata import decimal
 
 from .lighting import ASCII_RAMP, Color, art_ink
 
@@ -24,6 +25,24 @@ TEXT_SPEED_DELAYS: dict[str, float] = {
 
 class InputClosed(Exception):
     """Raised when the terminal input stream is closed."""
+
+
+def choice_number(text: str, option_count: int) -> int | None:
+    """Read a bounded menu number without converting an unbounded integer.
+
+    Unicode decimal digits share the ordinary numbered-choice behavior.
+    Superscripts and other numeric-looking text are unrelated input, and
+    oversized pasted numbers must not interrupt the pending choice.
+    """
+
+    if option_count < 1 or not text.isdecimal():
+        return None
+    value = 0
+    for character in text:
+        value = value * 10 + decimal(character)
+        if value > option_count:
+            return None
+    return value if value >= 1 else None
 
 
 class TerminalUI:
@@ -119,7 +138,7 @@ class TerminalUI:
         self.text_speed = self._validate_text_speed(value)
 
     def style(self, text: str, *codes: str) -> str:
-        if not self.color:
+        if not self.color or self.screen_reader:
             return text
         return "".join(codes) + text + Color.RESET
 
@@ -154,10 +173,16 @@ class TerminalUI:
         self.output_fn(self.style(text, *codes))
 
     def rule(self, char: str = "=") -> None:
+        if self.screen_reader:
+            self.write()
+            return
         glyph = char[0] if char else "="
         self.write(glyph * min(72, self.width), color=Color.DIM)
 
     def title(self, text: str) -> None:
+        if self.screen_reader:
+            self.write(text)
+            return
         stage_width = min(72, self.width)
         self.rule()
         self.write(text.center(stage_width), color=Color.YELLOW, bold=True)
@@ -385,8 +410,8 @@ class TerminalUI:
                 return selected + 1
             elif allow_back and normalized in {"a", "h", "b", "q", "\x1b[d", "\x1b"}:
                 return None
-            elif normalized.isdigit() and 1 <= int(normalized) <= len(options):
-                return int(normalized)
+            elif (number := choice_number(normalized, len(options))) is not None:
+                return number
             else:
                 continue
             updated = self._choice_lines(title, options, selected, allow_back, raw_keys=True)
@@ -413,8 +438,8 @@ class TerminalUI:
             answer = self.prompt("Enter your choice: ").lower()
             if allow_back and answer in {"b", "back", "q", "a", "h", "\x1b[d"}:
                 return None
-            if answer.isdigit() and 1 <= int(answer) <= len(options):
-                return int(answer)
+            if (number := choice_number(answer, len(options))) is not None:
+                return number
             if self.keyboard_navigation:
                 if answer in {"w", "k", "up", "\x1b[a"}:
                     selected = (selected - 1) % len(options)
@@ -445,6 +470,8 @@ class TerminalUI:
 
     def meter(self, label: str, value: int, maximum: int, *, color: str = Color.GREEN) -> str:
         maximum = max(1, maximum)
+        if self.screen_reader:
+            return f"{label}: {value} of {maximum}"
         bar_width = max(8, min(16, self.width - 20))
         filled = max(0, min(bar_width, round((value / maximum) * bar_width)))
         bar = "#" * filled + "-" * (bar_width - filled)

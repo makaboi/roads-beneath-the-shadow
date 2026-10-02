@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import os
-import tomllib
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
+if __package__:
+    from .desktop_release import project_version
+else:
+    from desktop_release import project_version
 
 
 def main() -> None:
-    with (ROOT / "pyproject.toml").open("rb") as source:
-        version = tomllib.load(source)["project"]["version"]
+    version = project_version()
     tag = os.environ.get("GITHUB_REF_NAME", "")
     ref_type = os.environ.get("GITHUB_REF_TYPE", "")
     if ref_type == "tag" and tag != f"v{version}":

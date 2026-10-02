@@ -1,10 +1,16 @@
 """Every scene the story can display must ship in the graphical package."""
 
+import hashlib
+import json
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
 from roads_beneath_shadow import artwork, journey_artwork, part_two_artwork, pixel_art
+from scripts import generate_pixel_assets
 
 
 class PixelArtworkTests(unittest.TestCase):
@@ -45,3 +51,47 @@ class PixelArtworkTests(unittest.TestCase):
         )
         for illustration, subject in expected:
             self.assertEqual(pixel_art.resolve_scene(illustration).stem, subject)
+
+    def test_standalone_background_build_preserves_existing_assets_and_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            destination = directory / "pixel_assets"
+            destination.mkdir()
+            original_manifest = json.loads((pixel_art.ASSET_DIR / "manifest.json").read_text())
+            (destination / "manifest.json").write_text(json.dumps(original_manifest))
+            protected = ("title.png", "map.png", "broken-key.png", "world-motion.png")
+            for name in protected:
+                (destination / name).write_bytes(b"existing asset: " + name.encode())
+            source = directory / "generated-source.png"
+            image = Image.new("RGB", (96, 72))
+            image.putdata([((x * 3) % 256, (y * 5) % 256, (x + y) % 256) for y in range(72) for x in range(96)])
+            image.save(source)
+            source_bytes = source.read_bytes()
+            with patch.object(generate_pixel_assets, "DEST", destination), patch.object(
+                generate_pixel_assets, "draw_props", side_effect=AssertionError("A standalone background must not rebuild props")
+            ), patch("sys.argv", ["generate_pixel_assets.py", "--battle-background", f"test-bridge={source}", "--source-date", "2026-10-02"]):
+                generate_pixel_assets.main()
+            self.assertEqual(source.read_bytes(), source_bytes)
+            for name in protected:
+                self.assertEqual((destination / name).read_bytes(), b"existing asset: " + name.encode())
+            manifest = json.loads((destination / "manifest.json").read_text())
+            self.assertEqual(manifest["environment_scenes"], original_manifest["environment_scenes"])
+            self.assertEqual(manifest["encounter_scenes"], original_manifest["encounter_scenes"])
+            self.assertEqual(len(manifest["environment_scenes"]), 6)
+            self.assertEqual(len(manifest["encounter_scenes"]), 6)
+            self.assertIn("test-bridge", manifest["battle_backgrounds"])
+            metadata = manifest["battle_background_sources"]["test-bridge"]
+            self.assertEqual(metadata["source_sha256"], hashlib.sha256(source_bytes).hexdigest())
+            self.assertEqual(metadata["source_dimensions"], [96, 72])
+            self.assertEqual(metadata["generated_on"], "2026-10-02")
+            built = destination / "test-bridge.png"
+            self.assertEqual(metadata["native_sha256"], hashlib.sha256(built.read_bytes()).hexdigest())
+            with Image.open(built) as background:
+                self.assertEqual(background.size, (320, 240))
+                self.assertIsNotNone(background.convert("RGB").getcolors(maxcolors=32))
+
+    def test_background_conversion_cannot_overwrite_fixed_atlas_or_world_names(self):
+        import argparse
+        for name in ("title", "ranger", "broken-key", "world-motion"):
+            with self.subTest(name=name), self.assertRaises(argparse.ArgumentTypeError):
+                generate_pixel_assets.background_source(f"{name}=source.png")

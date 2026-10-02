@@ -39,9 +39,19 @@ def cue(notes: list[tuple[float, float, float, str]], duration: float, *, noise:
             mixed += oscillator(frequency, local, kind) * envelope
             mixed += oscillator(frequency * 2.01, local, "sine") * envelope * 0.16
         if noise:
-            mixed += rng.uniform(-noise, noise) * max(0.0, 1.0 - moment / duration)
+            mixed += rng.uniform(-noise, noise) * min(1.0, moment / 0.012) * max(0.0, 1.0 - moment / duration)
         samples.append(max(-32767, min(32767, round(mixed * 7200))))
-    return samples
+    # Keep every cue at a consistent, comfortable level so discoveries do not
+    # shout over quiet exploration. Short edge fades also soften noise tails.
+    edge = max(1, round(0.008 * SAMPLE_RATE))
+    for index in range(min(edge, len(samples))):
+        gain = index / edge
+        samples[index] = round(samples[index] * gain)
+        samples[-1 - index] = round(samples[-1 - index] * gain)
+    rms = math.sqrt(sum(value * value for value in samples) / max(1, len(samples)))
+    peak = max((abs(value) for value in samples), default=1)
+    gain = min(32767 * 10 ** (-24 / 20) / max(1, rms), 32767 * 0.30 / max(1, peak))
+    return [round(value * gain) for value in samples]
 
 
 def write(name: str, samples: list[int]) -> None:

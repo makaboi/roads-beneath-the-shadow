@@ -2,13 +2,31 @@ name: Publish Desktop Downloads
 
 on:
   workflow_dispatch:
+    inputs:
+      preview_only:
+        description: Build and test desktop archives without publishing a release
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
       - pyproject.toml
       - .github/workflows/desktop-release.yml
       - scripts/desktop_release.py
+      - scripts/third_party.py
+      - scripts/runtime_notices.py
+      - third_party/**
+      - scripts/check_installed_game.py
+      - scripts/check_release_version.py
       - scripts/standalone_entry.py
+      - Play Standalone.command
+      - Play Roads Beneath the Shadow.command
+      - README.md
+      - CHANGELOG.md
+      - assets/**
       - roads_beneath_shadow/**
       - tests/**
 
@@ -22,12 +40,13 @@ concurrency:
 jobs:
   plan:
     name: Check whether this version needs a release
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
       build: ${{ steps.release.outputs.build }}
+      publish: ${{ steps.release.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,13 +56,15 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/desktop_release.py plan
+        run: python scripts/desktop_release.py plan${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)) && ' --preview-only' || '' }}
 
   build:
     name: Build ${{ matrix.platform }}
     needs: plan
     if: needs.plan.outputs.build == 'true'
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +88,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install the game, tests, and packager
-        run: python -m pip install --disable-pip-version-check ".[test]" pyinstaller==6.22.0
+        run: python -m pip install --disable-pip-version-check ".[test]" pygame-ce==2.5.8 pyinstaller==6.22.0
       - name: Verify the release candidate
         env:
           RBS_SAVE_DIR: ${{ runner.temp }}/rbs-desktop-tests
@@ -75,12 +96,14 @@ jobs:
           python -m compileall -q roads_beneath_shadow
           python -m unittest discover -s tests -v
           python scripts/check_release_version.py
+      - name: Verify the installed wheel outside the source checkout
+        run: python scripts/check_installed_game.py --expected-version "${{ needs.plan.outputs.version }}"
       - name: Freeze the desktop game and its assets
         run: >-
           python -m PyInstaller
           --clean
           --noconfirm
-          --onefile
+          --onedir
           --name Roads-Beneath-the-Shadow
           --collect-data roads_beneath_shadow
           scripts/standalone_entry.py
@@ -99,10 +122,11 @@ jobs:
   publish:
     name: Publish all verified downloads together
     needs: [plan, build]
-    if: needs.plan.outputs.build == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.preview_only)
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -4,9 +4,9 @@ import unittest
 from copy import deepcopy
 
 from roads_beneath_shadow.app import Game
-from roads_beneath_shadow.content import ORIGINS
+from roads_beneath_shadow.content import ORIGINS, QUEST_NAMES_LOST, QUEST_REACH_CALENOR
 from roads_beneath_shadow.models import Character, GameState
-from roads_beneath_shadow.player_view import chronicle_snapshot, player_snapshot, route_snapshot
+from roads_beneath_shadow.player_view import background_snapshot, chronicle_snapshot, player_snapshot, route_snapshot
 from roads_beneath_shadow.profile import ACHIEVEMENTS, PlayerProfile
 from roads_beneath_shadow.ui import TerminalUI
 
@@ -60,6 +60,27 @@ class PlayerViewTests(unittest.TestCase):
         self.assertEqual(sum(entry["current"] for entry in route), 1)
         self.assertEqual(route[1], {"name": "Bree's North Gate", "visited": True, "current": True})
         self.assertNotIn("old_internal_scene_id", str(route))
+
+    def test_hall_rooms_follow_their_stop_without_reordering_recorded_inspections(self):
+        state = self.state("part2_last_seal")
+        state.visited = ["complete", "part2_hall", "part2_echo_bridge", "part2_teren", "part2_erased_statue", "part2_cipher_archive", "part2_last_seal"]
+        state.flags.update({"part2_cipher_archive": True, "part2_erased_statue": True})
+        before = state.to_dict()
+        names = [place["name"] for place in route_snapshot(state)["route"]]
+        self.assertEqual(names, ["The Hall of Eight", "The Erased Statue", "The Cipher Archive", "Echo Bridge", "The Warden Refuge", "The Last Seal"])
+        self.assertNotIn("The Road Ahead", names)
+        self.assertEqual(state.to_dict(), before)
+        state.scene = "complete"
+        route = route_snapshot(state)["route"]
+        self.assertEqual(route[-1], {"name": "The Road Ahead", "visited": True, "current": True})
+
+    def test_legacy_earned_hall_rooms_stay_near_the_hall_and_hidden_rooms_stay_hidden(self):
+        state = self.state("part2_vigil")
+        state.visited = ["part2_hall", "part2_echo_bridge", "part2_teren"]
+        state.flags["part2_cipher_archive"] = True
+        names = [place["name"] for place in route_snapshot(state)["route"]]
+        self.assertEqual(names[:3], ["The Hall of Eight", "The Cipher Archive", "Echo Bridge"])
+        self.assertNotIn("The Erased Statue", names)
 
     def test_player_panel_visit_labels_do_not_expose_internal_room_ids(self):
         state = self.state("wayhouse")
@@ -115,9 +136,131 @@ class PlayerViewTests(unittest.TestCase):
         Game(ui)._how_to_play()
         self.assertEqual(ui.panels[0][0], "information")
         instructions = " ".join(section["text"] for section in ui.panels[0][1]["sections"])
-        for control in ("WASD", "Press E", "click", "numbered choices", "Space or Enter", "Tab", "F5", "R shows the road map"):
-            self.assertIn(control, instructions)
+        for control in ("WASD", "press E", "click", "numbered", "Space or Enter", "Tab", "F5", "R shows the road map"):
+            self.assertIn(control.casefold(), instructions.casefold())
         self.assertEqual(ui.pauses, 0)
+
+    def test_live_decision_copy_preserves_option_order_without_exposing_future_choices(self):
+        state = self.state("bree_exploration")
+        decision = {"heading": "WHERE WILL YOU INVESTIGATE?", "options": ["Search the stable yard", "Go to the north gate"]}
+        for snapshot in (player_snapshot(state, decision=decision), route_snapshot(state, decision=decision)):
+            self.assertEqual(snapshot["decision"], decision)
+            decision["options"].append("A later edit")
+            self.assertNotIn("A later edit", snapshot["decision"]["options"])
+            decision["options"].pop()
+            self.assertNotIn("Fornost", str(snapshot))
+            self.assertNotIn("Last Seal", str(snapshot))
+
+    def test_journal_guidance_uses_only_active_objectives_and_recorded_evidence(self):
+        state = self.state("part2_hall_exploration")
+        state.quests = [QUEST_NAMES_LOST]
+        state.journal = ["A Warden's first testimony names the road home.", "Mara remembers a fireside in Bree."]
+        state.flags["part2_testimony_first"] = True
+        before = state.to_dict()
+        snapshot = player_snapshot(state)
+        detail = snapshot["quest_details"][0]
+        self.assertEqual(detail["title"], QUEST_NAMES_LOST)
+        self.assertEqual(detail["progress"], "1 of 3 testimonies recovered")
+        self.assertEqual(detail["related_clues"], [state.journal[0]])
+        self.assertNotIn("Calenor's Prison", str(detail))
+        self.assertNotIn("Last Seal", str(detail))
+        detail["related_clues"].clear()
+        self.assertEqual(state.to_dict(), before)
+
+    def test_healer_supply_capacity_and_rescued_companion_are_grounded_in_state(self):
+        state = GameState(Character.from_origin("Mira", ORIGINS[2]), scene="part2_vigil", chapter=2)
+        state.character.hp -= 12
+        snapshot = player_snapshot(state)
+        herb = next(item for item in snapshot["items"] if item["id"] == "healing_herb")
+        self.assertEqual(herb["healing_effective"], herb["healing"] + 2)
+        self.assertNotIn("Calenor", [person["name"] for person in snapshot["companions"]])
+        state.completed_quests.append(QUEST_REACH_CALENOR)
+        snapshot = player_snapshot(state)
+        calenor = next(person for person in snapshot["companions"] if person["name"] == "Calenor")
+        self.assertTrue(calenor["present"])
+        self.assertNotIn("trust", calenor)
+        state.flags["part2_calenor_remained"] = True
+        calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
+        self.assertFalse(calenor["present"])
+
+    def test_companion_departures_follow_earned_hand_off_and_refuge_facts_without_guessing_fates(self):
+        for flag, survived, status in (
+            ("tobin_returns_with_ned", True, "Remained above with Ned"),
+            ("tobin_stays_at_threshold", False, "Remained at the threshold with Ned's lantern"),
+        ):
+            with self.subTest(flag=flag):
+                game = Game(ReadOnlyPanelUI())
+                game.state = self.state("cliffhanger")
+                game.state.flags.update({flag: True, "ned_survived": survived})
+                game._prepare_part_two_consequences()
+                for scene, chapter in (("complete", 1), ("part2_vigil", 2)):
+                    game.state.scene, game.state.chapter = scene, chapter
+                    before = game.state.to_dict()
+                    snapshot = player_snapshot(game.state)
+                    tobin = next(person for person in snapshot["companions"] if person["name"] == "Tobin")
+                    self.assertFalse(tobin["present"])
+                    self.assertEqual(tobin["status"], status)
+                    tobin["status"] = "Changed by renderer"
+                    self.assertEqual(game.state.to_dict(), before)
+
+        state = self.state("part2_vigil")
+        state.flags.update({"part2_mara_left": True, "part_two_mara_present": False, "part2_drowned_branch_collapsed": True})
+        mara = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Mara")
+        self.assertFalse(mara["present"])
+        self.assertEqual(mara["status"], "Left at the burned refuge to seek the prisoners")
+        self.assertNotIn("rescued", mara["status"])
+        self.assertNotIn("died", mara["status"])
+
+    def test_legacy_absent_companions_keep_only_recorded_whereabouts(self):
+        state = self.state()
+        companions = player_snapshot(state)["companions"]
+        self.assertTrue(all(person["status"] == "Not traveling with you" for person in companions))
+        state.flags["part_two_ned_safe"] = True
+        tobin = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Tobin")
+        self.assertEqual(tobin["status"], "Remained above with Ned")
+        state.flags["part_two_tobin_present"] = True
+        tobin = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Tobin")
+        self.assertTrue(tobin["present"])
+        self.assertEqual(tobin["status"], "Traveling with you")
+
+    def test_calenor_presence_distinguishes_final_binding_collapse_and_escape(self):
+        state = self.state("part2_seal_choice")
+        state.completed_quests.append(QUEST_REACH_CALENOR)
+        state.flags["part2_calenor_condemned"] = True
+        calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
+        self.assertTrue(calenor["present"], "A judgment alone has not yet bound him to the final seal")
+        for flags, present, status in (
+            ({"part2_calenor_rebound": True}, False, "Bound again at the Last Seal"),
+            ({"part2_calenor_rebound": True, "part2_company_collapsed_road": True}, False, "Bound again at the Last Seal"),
+            ({"part2_calenor_remained": True}, False, "Remained within the renewed seal"),
+            ({"part2_calenor_collapsed_road": True}, False, "Stayed to collapse the road behind the company"),
+            ({"part2_teren_took_spoke": True, "part2_calenor_escaped": True}, True, "Escaped the Last Seal with you"),
+            ({"part2_teren_stayed_to_collapse": True, "part2_calenor_escaped": True}, True, "Escaped the Last Seal with you"),
+        ):
+            with self.subTest(flags=flags):
+                state.flags = flags
+                before = state.to_dict()
+                calenor = next(person for person in player_snapshot(state)["companions"] if person["name"] == "Calenor")
+                self.assertEqual(calenor["present"], present)
+                self.assertEqual(calenor["status"], status)
+                self.assertEqual(state.to_dict(), before)
+
+    def test_chronicle_counts_episode_completions_separately(self):
+        snapshot = chronicle_snapshot(PlayerProfile(completed_runs=4, endings={"fellowship": 2, "living_road": 1, "road_in_ruin": 1}))
+        self.assertEqual(snapshot["part_one_completions"], 2)
+        self.assertEqual(snapshot["part_two_completions"], 2)
+
+    def test_background_cards_expose_all_engine_origins_and_count_starting_supplies(self):
+        snapshot = background_snapshot()
+        self.assertEqual([entry["id"] for entry in snapshot["origins"]], [origin.origin_id for origin in ORIGINS])
+        for entry, origin in zip(snapshot["origins"], ORIGINS):
+            self.assertEqual(entry["max_hp"], Character.from_origin("Arin", origin).max_hp)
+            self.assertEqual(entry["ability_name"], origin.ability_name)
+            self.assertEqual(entry["ability_description"], origin.ability_description)
+            self.assertFalse(any("_" in item for item in entry["starting_items"]))
+        self.assertIn("Healing Herb ×2", snapshot["origins"][2]["starting_items"])
+        snapshot["origins"][0]["starting_items"].clear()
+        self.assertTrue(background_snapshot()["origins"][0]["starting_items"])
 
 
 if __name__ == "__main__":

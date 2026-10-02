@@ -42,6 +42,24 @@ class CombatTurnTests(unittest.TestCase):
     def state(origin=0):
         return GameState(Character.from_origin("Arin", ORIGINS[origin]))
 
+    def test_reader_output_preserves_enemy_identity_and_spoken_tactical_cues(self):
+        outputs = {}
+        for reader in (False, True):
+            ui = CombatViewUI(["defend"])
+            ui.screen_reader = reader
+            enemy = Enemy("Orc Lookout", 40, 40, 4, 4, intent_pattern=("aim",))
+            CombatEngine(ui, random.Random(2)).run(self.state(), [enemy], CombatConfig(max_rounds=1))
+            outputs[reader] = "\n".join(ui.output)
+
+        self.assertIn("Orc Lookout: 40 of 40 (targeted)", outputs[True])
+        self.assertIn("Intent: Take Aim (can be interrupted)", outputs[True])
+        self.assertNotIn("< TARGET", outputs[True])
+        self.assertNotIn("  ->", outputs[True])
+        self.assertIn("Orc Loo", outputs[False])
+        self.assertIn("< TARGET", outputs[False])
+        self.assertIn("  -> Take Aim !", outputs[False])
+        self.assertNotIn("(can be interrupted)", outputs[False])
+
     def test_inspect_target_and_cancelled_item_leave_round_and_bleeding_unchanged(self):
         ui = CombatViewUI(["mara", "inspect", "target", "item", "defend"])
         state = self.state()
@@ -171,6 +189,20 @@ class CombatTurnTests(unittest.TestCase):
             first.player.hp = 0
         self.assertEqual(first.enemies[0].hp, 1)
 
+    def test_successful_escape_reports_outcome_without_an_enemy_attack(self):
+        ui = CombatViewUI(["flee"])
+        state = self.state(1)
+        enemy = Enemy("Road Hunter", 40, 40, 20, 20)
+
+        result = CombatEngine(ui, random.Random(5)).run(state, [enemy], CombatConfig(allow_flee=True))
+
+        self.assertEqual(result, CombatResult.ESCAPED)
+        self.assertEqual((state.character.hp, enemy.hp, enemy.turn_count), (state.character.max_hp, 40, 0))
+        self.assertEqual(ui.snapshots[-1].phase, "escaped")
+        self.assertEqual(ui.feedback, [CombatFeedback(
+            "escape", "player", "player", 0, "You find an opening and escape."
+        )])
+
     def test_snapshot_forecasts_announced_hits_without_consuming_rng_or_statuses(self):
         ui = CombatViewUI(["attack"])
         enemy = Enemy("Heavy", 100, 100, 4, 7, intent_pattern=("heavy",))
@@ -205,10 +237,66 @@ class CombatTurnTests(unittest.TestCase):
         snapshot = ui.snapshots[0]
         self.assertEqual(result, CombatResult.VICTORY)
         self.assertEqual((snapshot.objective, snapshot.max_rounds, snapshot.defensive_objective), ("Hold the seal", 1, True))
-        self.assertFalse({"attack", "power", "target", "origin"} & {action.id for action in snapshot.actions})
+        self.assertFalse({"attack", "power", "target"} & {action.id for action in snapshot.actions})
+        stance = next(action for action in snapshot.actions if action.id == "origin")
+        self.assertIn("does not counterattack", stance.description)
         self.assertEqual(enemy.hp, 999)
         self.assertEqual({view.id for view in snapshot.companions if view.available}, {"mara", "tobin"})
         self.assertFalse(any(event.target_id == "enemy_0" for event in ui.feedback))
+
+    def test_survival_inspection_explains_available_defense_and_hides_placeholder_health(self):
+        class InspectionUI(CombatViewUI):
+            def __init__(self):
+                super().__init__(["inspect", "defend"])
+                self.panels = []
+
+            def show_panel(self, kind, data):
+                self.panels.append((kind, data))
+                return {"action": "close"}
+
+        for reader in (False, True):
+            with self.subTest(reader=reader):
+                ui = InspectionUI()
+                ui.screen_reader = reader
+                enemy = Enemy("Black Rider", 999, 999, 4, 4, intent_pattern=("heavy",))
+                result = CombatEngine(ui, random.Random(3)).run(self.state(), [enemy], CombatConfig(
+                    max_rounds=1, objective_enemy_invulnerable=True, objective="Hold the seal",
+                ))
+                self.assertEqual(result, CombatResult.VICTORY)
+                self.assertEqual((enemy.hp, enemy.turn_count), (999, 1))
+                self.assertEqual([snapshot.round_number for snapshot in ui.snapshots], [1, 1, 1])
+                self.assertTrue(all(snapshot.enemies[0].invulnerable for snapshot in ui.snapshots))
+                self.assertFalse(any(snapshot.enemies[0].interruptible for snapshot in ui.snapshots))
+                self.assertTrue(all("guard the blow" in snapshot.enemies[0].telegraph for snapshot in ui.snapshots))
+                prose = " ".join(section["text"] for section in ui.panels[0][1]["sections"])
+                self.assertIn("Cannot be wounded here", prose)
+                self.assertIn("Setup effects still resolve", prose)
+                self.assertNotIn("interrupt", prose)
+                self.assertNotIn("999", prose)
+                self.assertNotIn("interrupt", " ".join(ui.output))
+                self.assertNotIn("999", " ".join(ui.output))
+
+    def test_killable_survival_encounter_retains_health_and_offensive_interrupts(self):
+        ui = CombatViewUI(["power"])
+        enemy = Enemy("Ghorak", 25, 25, 5, 5, intent_pattern=("heavy",))
+        CombatEngine(ui, random.Random(3)).run(self.state(), [enemy], CombatConfig(max_rounds=1))
+        snapshot = ui.snapshots[0]
+        self.assertFalse(snapshot.enemies[0].invulnerable)
+        self.assertTrue(snapshot.enemies[0].interruptible)
+        self.assertEqual(snapshot.enemies[0].hp, 25)
+        self.assertIn("interrupt", snapshot.enemies[0].telegraph)
+        self.assertLess(enemy.hp, 25)
+        self.assertEqual(enemy.turn_count, 1)
+
+    def test_boss_transition_publishes_one_structured_phase_event_across_free_inspection(self):
+        ui = CombatViewUI(["inspect", "defend"])
+        enemy = Enemy("Ash Captain", 20, 10, 2, 2, intent_pattern=("strike",),
+                      phase_two_pattern=("heavy",), phase_threshold=0.5)
+        CombatEngine(ui, random.Random(3)).run(self.state(), [enemy], CombatConfig(max_rounds=1))
+        phases = [event for event in ui.feedback if event.kind == "phase"]
+        self.assertEqual(phases, [CombatFeedback("phase", "enemy_0", "enemy_0", 2, "Ash Captain enters Phase II.")])
+        self.assertTrue(all(snapshot.enemies[0].phase == 2 for snapshot in ui.snapshots))
+        self.assertEqual(enemy.turn_count, 1)
 
     def test_defensive_companion_commands_add_protection_without_wounding_rider(self):
         class NoPassiveAidRandom(random.Random):
@@ -251,6 +339,35 @@ class CombatTurnTests(unittest.TestCase):
                 hits = [event.amount for event in ui.feedback if event.kind == "damage" and event.target_id == "player"]
                 self.assertEqual(hits, expected)
                 self.assertFalse(ui.snapshots[-1].player.statuses)
+                if action == "tobin_guard":
+                    evade = next(event for event in ui.feedback if event.kind == "evade")
+                    self.assertEqual((evade.actor_id, evade.target_id), ("enemy_0", "player"))
+
+    def test_survival_stand_fast_cleanses_hostile_effects_without_countering_the_rider(self):
+        ui = CombatViewUI(["defend", "defend", "origin"])
+        state = self.state()
+        rider = Enemy("Rider", 999, 999, 8, 8, intent_pattern=("maul", "menace", "guard"))
+        CombatEngine(ui, random.Random(2)).run(state, [rider], CombatConfig(max_rounds=3, objective_enemy_invulnerable=True))
+
+        third_round = next(snapshot for snapshot in ui.snapshots if snapshot.phase == "active" and snapshot.round_number == 3)
+        self.assertEqual({status.id for status in third_round.player.statuses}, {"bleeding", "exposed"})
+        self.assertFalse(ui.snapshots[-1].player.statuses)
+        self.assertEqual(state.character.focus, 1)
+        self.assertEqual(rider.hp, 999)
+        self.assertFalse(any(event.kind == "damage" and event.target_id == "enemy_0" for event in ui.feedback))
+        self.assertEqual(sum(event.text == "Bleeding" for event in ui.feedback), 1)
+        self.assertFalse(any("counter" in line.lower() for line in ui.output))
+
+    def test_survival_stand_fast_remains_once_per_battle_and_spent_retry_is_free(self):
+        ui = CombatViewUI(["origin", "origin", "defend"])
+        state = self.state()
+        rider = Enemy("Rider", 999, 999, 8, 8)
+        CombatEngine(ui, random.Random(2)).run(state, [rider], CombatConfig(max_rounds=2, objective_enemy_invulnerable=True))
+        second_round = [snapshot for snapshot in ui.snapshots if snapshot.phase == "active" and snapshot.round_number == 2]
+        self.assertEqual(len(second_round), 2)
+        self.assertEqual(second_round[0].player.hp, second_round[1].player.hp)
+        self.assertEqual(next(action for action in second_round[0].actions if action.id == "origin").disabled_reason, "Already used in this battle")
+        self.assertEqual((rider.hp, rider.turn_count, state.character.focus), (999, 2, 3))
 
 
 if __name__ == "__main__":

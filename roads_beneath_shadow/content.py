@@ -110,7 +110,7 @@ ORIGINS: tuple[Origin, ...] = (
         armor="patched_leather",
         ability_id="stand_fast",
         ability_name="Stand Fast",
-        ability_description="Guard every incoming blow, clear Exposed, and counter the first attacker.",
+        ability_description="Guard every incoming blow, clear Bleeding and Exposed, and counter the first attacker.",
     ),
     Origin(
         "north_road_scout",
@@ -157,7 +157,7 @@ ENDING_TEXT = {
     "fellowship": (
         "BENEATH THE SHADOW",
         "The buried gate stands open. Beyond it, Calenor's trail descends under the Weather Hills—"
-        "and a Black Rider waits above while you, Mara, and Tobin have only one road left: down.",
+        "and a Black Rider waits above while you turn toward the only road left: down.",
     ),
     "hidden_road": (
         "THE HIDDEN ROAD",
@@ -171,7 +171,7 @@ ENDING_TEXT = {
     ),
     "shadow_claim": (
         "SHADOW-MARKED",
-        "You descend wounded while the Black Rider claims the threshold behind you. The star-key "
+        "You descend as the Black Rider claims the threshold behind you. The star-key "
         "burns with a mark it did not bear before, and the Dead Road now knows both your name and your fear.",
     ),
     "living_road": (

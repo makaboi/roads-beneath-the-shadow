@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -15,7 +16,9 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 from roads_beneath_shadow.app import Game
 from roads_beneath_shadow.content import ORIGINS
 from roads_beneath_shadow.models import Character, GameState
-from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow, launch_pixel_game, wrap_pixels
+from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow, UIEvent, launch_pixel_game, wrap_pixels
+from roads_beneath_shadow.savegame import SaveManager
+from roads_beneath_shadow.settings import SettingsManager
 from roads_beneath_shadow.ui import InputClosed
 
 
@@ -166,6 +169,29 @@ class PixelSDLTests(unittest.TestCase):
         self.assertTrue(self.ui.closed.is_set())
         self.assertFalse(self.workers[-1].is_alive())
 
+    def test_worker_error_stays_visible_until_the_player_closes_it(self):
+        self.ui.fast = False
+        self.ui.narrate("The previous story page must not conceal an error.")
+        self.start(lambda: self.ui.choose_story("Keep walking?", ["Continue"]))
+        self.assertIsNotNone(self.window.narrative.current)
+        self.ui.events.put(UIEvent("finished", {"error": "The journey stopped: a useful diagnostic"}))
+        self.window.drain()
+        visible = []
+        draw = self.window._text
+
+        def record(text, *args):
+            visible.append(text)
+            draw(text, *args)
+
+        self.window._text = record
+        self.window.render()
+        self.assertFalse(self.ui.closed.is_set())
+        self.assertEqual(self.window.error, "The journey stopped: a useful diagnostic")
+        self.assertIn("THE JOURNEY STOPPED", visible)
+        self.assertIn("a useful diagnostic", " ".join(visible))
+        self.key(self.pg.K_RETURN)
+        self.assertTrue(self.ui.closed.is_set())
+
     def test_new_journey_uses_native_requests_with_the_complete_engine(self):
         game = Game(self.ui)
         self.ui.state_provider = lambda: game.state
@@ -197,6 +223,43 @@ class PixelSDLTests(unittest.TestCase):
             picture = self.pg.image.load(str(target))
             self.assertEqual(picture.get_size(), (1200, 900))
             self.assertTrue(ui.closed.is_set())
+
+
+@unittest.skipUnless(importlib.util.find_spec("pygame"), "pygame-ce is needed for graphical launch tests")
+class PixelLaunchTests(unittest.TestCase):
+    def test_actual_main_menu_quit_exits_without_a_second_acknowledgement(self):
+        ui = PixelUI(fast=True)
+        posted = []
+        forced = []
+
+        class QuitWindow(PixelWindow):
+            def render(self):
+                super().render()
+                if self.request and self.request.label == "MAIN MENU" and not posted:
+                    posted.append(self.request.options[-1])
+                    for _ in self.request.options[:-1]:
+                        self.pg.event.post(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_DOWN, unicode="", mod=0))
+                    self.pg.event.post(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_RETURN, unicode="", mod=0))
+
+        def watchdog():
+            if not ui.closed.wait(2):
+                forced.append(True)
+                ui.close()
+
+        with tempfile.TemporaryDirectory() as directory:
+            game = Game(ui, saves=SaveManager(Path(directory) / "saves"),
+                        settings_manager=SettingsManager(Path(directory) / "settings.json"))
+            guard = threading.Thread(target=watchdog)
+            guard.start()
+            try:
+                with patch("roads_beneath_shadow.pixel_ui.PixelWindow", QuitWindow):
+                    launch_pixel_game(game, ui)
+            finally:
+                ui.close()
+                guard.join(1)
+        self.assertEqual(posted, ["Quit"])
+        self.assertEqual(forced, [], "Quit waited for another acknowledgement")
+        self.assertTrue(ui.closed.is_set())
 
 
 if __name__ == "__main__":

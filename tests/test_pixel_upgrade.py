@@ -292,6 +292,9 @@ class PixelUpgradeSDLTests(unittest.TestCase):
             submit.assert_not_called()
         self.assertIs(self.window.request, request)
         self.assertEqual((state.character.hp, enemy.hp, enemy.turn_count), before)
+        # Paid moves wait for this round's impacts; an early second key
+        # cannot overwrite the action that is still being presented.
+        self.window.battle.update(1.5)
         defend = next(index for index, option in enumerate(request.options, 1) if option.startswith("Defend"))
         self.key(self.pg.K_0 + defend, str(defend))
         worker.join(timeout=1)

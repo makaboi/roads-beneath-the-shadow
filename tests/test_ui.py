@@ -165,6 +165,34 @@ class TerminalUITests(unittest.TestCase):
 
         self.assertEqual(output, ["[Scene: A rider blocks the buried road]"])
 
+    def test_screen_reader_meters_use_spoken_values_without_decorative_bars(self) -> None:
+        ui = TerminalUI(color=True, screen_reader=True)
+        self.assertEqual(ui.meter("Health", 18, 28), "Health: 18 of 28")
+        self.assertEqual(ui.meter("Focus", 0, 3), "Focus: 0 of 3")
+        self.assertEqual(ui.meter("Ward", 0, 0), "Ward: 0 of 1")
+
+    def test_screen_reader_headings_and_forced_colors_remain_plain_text(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=True, screen_reader=True, output_fn=output.append)
+        ui.rule()
+        ui.title("THE ROAD REMEMBERS")
+        ui.art("###", color=Color.YELLOW, alt_text="A lantern above a quiet road.")
+        ui.write("Guarded", color=Color.GREEN, bold=True)
+        self.assertEqual(output, ["", "THE ROAD REMEMBERS", "[Scene: A lantern above a quiet road.]", "Guarded"])
+        self.assertNotIn("\x1b", "\n".join(output))
+
+    def test_ordinary_terminal_retains_its_bars_title_frame_and_color(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=True, screen_reader=False, output_fn=output.append, terminal_size_fn=lambda _: os.terminal_size((78, 24)))
+        ui.title("A ROAD")
+        self.assertIn("=" * 72, output[0])
+        self.assertIn("=" * 72, output[2])
+        meter = ui.meter("Health", 18, 28)
+        self.assertIn("#", meter)
+        self.assertIn("-", meter)
+        self.assertIn("18/28", meter)
+        self.assertIn("\x1b", meter)
+
     def test_art_uses_a_centered_viewport_in_a_narrow_terminal(self) -> None:
         output: list[str] = []
         ui = TerminalUI(

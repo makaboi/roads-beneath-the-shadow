@@ -253,6 +253,85 @@ class NarrativeDirector:
                     cursor += 1
         return measured
 
+    @staticmethod
+    def _page_chunks(lines: Sequence[_MeasuredLine], capacity: int) -> list[list[_MeasuredLine]]:
+        """Keep fitting paragraphs together and leave readable continuations.
+
+        Blank separators belong between prose, rather than on a Continue page
+        of their own. Source paragraphs and their character offsets remain in
+        the director even when a separator falls at a page boundary.
+        """
+
+        groups: list[list[_MeasuredLine]] = []
+        for line in lines:
+            if not groups or groups[-1][0].paragraph != line.paragraph:
+                groups.append([])
+            groups[-1].append(line)
+        chunks: list[list[_MeasuredLine]] = []
+        current: list[_MeasuredLine] = []
+
+        def finish() -> None:
+            while current and not current[-1].content.text.strip():
+                current.pop()
+            while current and not current[0].content.text.strip():
+                current.pop(0)
+            if current:
+                chunks.append(current.copy())
+            current.clear()
+
+        for group in groups:
+            if not any(line.content.text.strip() for line in group):
+                if current and len(current) < capacity:
+                    current.append(group[0])
+                continue
+            if len(current) + len(group) > capacity:
+                # A visual separator should not strand a heading on its own
+                # page or push otherwise fitting prose onto another screen.
+                while current and not current[-1].content.text.strip():
+                    current.pop()
+            if len(group) <= capacity:
+                if len(current) + len(group) > capacity:
+                    finish()
+                current.extend(group)
+                continue
+            remaining = group
+            if current:
+                available = capacity - len(current)
+                # A paragraph too long for one page can use leftover space,
+                # provided its opening and continuation each have two rows.
+                if available >= 2 and len(remaining) - available >= 2:
+                    current.extend(remaining[:available])
+                    remaining = remaining[available:]
+                finish()
+            while len(remaining) > capacity:
+                count = capacity
+                if capacity >= 3 and len(remaining) - count == 1:
+                    count -= 1
+                current.extend(remaining[:count])
+                remaining = remaining[count:]
+                finish()
+            current.extend(remaining)
+        finish()
+
+        # A short closing sentence after a full paragraph should not create a
+        # nearly empty last screen. Bring a whole short paragraph, or at least
+        # two rows of a long paragraph, forward without stranding its opening.
+        if capacity >= 3 and len(chunks) > 1 and len(chunks[-1]) == 1:
+            previous, final = chunks[-2:]
+            tail_paragraph = previous[-1].paragraph
+            tail = 0
+            for line in reversed(previous):
+                if line.paragraph != tail_paragraph:
+                    break
+                tail += 1
+            count = tail if tail <= 3 else 2
+            if len(final) + count <= capacity and len(previous) - count >= 2:
+                final[:0] = previous[-count:]
+                del previous[-count:]
+                while previous and not previous[-1].content.text.strip():
+                    previous.pop()
+        return chunks
+
     def _paginate(self, wrap: WrapText, rows: int) -> tuple[NarrativePage, ...]:
         capacity = max(1, int(rows))
         pages: list[NarrativePage] = []
@@ -260,8 +339,7 @@ class NarrativeDirector:
             if beat.heading.strip().casefold() in self._suppressed_headers:
                 continue
             lines = self._measure(beat, wrap)
-            for offset in range(0, len(lines), capacity):
-                chunk = lines[offset:offset + capacity]
+            for chunk in self._page_chunks(lines, capacity):
                 first = chunk[0]
                 pages.append(
                     NarrativePage(

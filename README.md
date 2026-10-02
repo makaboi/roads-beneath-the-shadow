@@ -7,11 +7,11 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.4.0 brings the road to life.** Walk through five pixel-art locations, meet animated characters, and explore clues and conversations in the world. Story scenes unfold in readable illustrated pages; battles show the party, enemy intentions, and action feedback together. Both complete episodes and existing saves remain playable in the desktop and terminal editions.
+**Version 0.5.0 opens more of the road.** Explore thirteen pixel-art locations with animated travelers, companion followers, and places to inspect. Read illustrated story pages, search your story and discoveries, and follow battles through visible blows, enemy phases, and clear turn summaries. Character panels remember who is still traveling with you. Bundled fonts, larger text preferences, and in-game Controls keep the journey readable. Both complete episodes and existing saves remain playable in the desktop and terminal editions.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
-The game contains two complete playable episodes: **Part I — The Black Rider's Letter** and **Part II — The Dead Road**. Part I is roughly 45–70 minutes; Part II is roughly 110–130 minutes for a normal first playthrough, depending on reading speed, exploration, and combat choices.
+The game contains two complete playable episodes: **Part I — The Black Rider's Letter** and **Part II — The Dead Road**. Play at your own pace; the time you spend varies with reading speed, exploration, and combat choices.
 
 ![Pixel-art edition main menu](assets/pixel-title.png)
 
@@ -25,10 +25,10 @@ The game contains two complete playable episodes: **Part I — The Black Rider's
 | --- | --- | --- |
 | macOS, Apple silicon | [macOS Apple silicon ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-macOS-Apple-Silicon.zip) | Double-click `Play Roads Beneath the Shadow.command` |
 | macOS, Intel | [macOS Intel ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-macOS-Intel.zip) | Double-click `Play Roads Beneath the Shadow.command` |
-| Windows, x64 | [Windows ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Windows-x64.zip) | Double-click `Roads-Beneath-the-Shadow.exe` |
+| Windows 10/11, x64 | [Windows ZIP](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Windows-x64.zip) | Double-click `Roads-Beneath-the-Shadow.exe` |
 | Linux, x64 | [Linux TAR.GZ](https://github.com/makaboi/roads-beneath-the-shadow/releases/latest/download/Roads-Beneath-the-Shadow-Linux-x64.tar.gz) | Run `./Roads-Beneath-the-Shadow` from the extracted folder |
 
-Each release includes a matching `.sha256` checksum for every archive and a `START-HERE.txt` guide. A desktop display is required for pixel mode. The game runs offline, and the same executable accepts `--terminal` for terminal play.
+Each release includes a matching `.sha256` checksum for every archive and a `START-HERE.txt` guide. Keep the executable and its complete `_internal` folder together after extraction. A desktop display is required for pixel mode. The game runs offline, and the same executable accepts `--terminal` for terminal play.
 
 ### Run from source
 
@@ -54,15 +54,21 @@ On Windows, use `py` in place of `python3` when creating the environment, then:
 .venv\Scripts\python.exe -m roads_beneath_shadow
 ```
 
-The pixel edition uses **pygame-ce**. World maps, character animation, illustrations, and original audio are bundled locally; the game does not need an internet connection while playing. The macOS source launcher, `Play Roads Beneath the Shadow.command`, uses the local `.venv` when available.
+The pixel edition uses **pygame-ce**. World maps, character animation, illustrations, readable DejaVu fonts, and original audio are bundled locally; the game does not need an internet connection while playing. The macOS source launcher, `Play Roads Beneath the Shadow.command`, uses the local `.venv` when available.
 
 ### Explore the road
 
-At the Prancing Pony, Bree, the wayhouse, the Warden hall, and the Last Lantern, use **WASD** to walk and **E** beside a character, clue, or doorway to interact. Nearby points show what they offer. Walking leads to the same story choices shown in the side menu, so you can also click an option or use its number without crossing the room.
+Thirteen walkable locations carry the journey through Bree and the Dead Road, including the north gate, Midgewater camp and watch-post, Echo Bridge, the Drowned Mile, and the prisoners' sluice. Use **WASD** to walk and **E** beside a character, clue, or doorway to interact. Click a marked place to walk there, then press E or click it again to interact. Nearby points show what they offer. The side menu offers the same story choices, so you can also click an option or use its number.
 
-Thirteen unnumbered diamond markers offer small details of these places. Approach one and press **E** to look closer; reading these descriptions is free and leaves your story choices open.
+Thirty-five unnumbered diamond markers offer small details of these places. Approach one and press **E** to look closer; reading these descriptions is free and leaves your story choices open. Close a description with E, Enter, Escape, or its X button; the discovery remains searchable in Archive.
 
-Continue illustrated story pages with **Space** or **Enter**. During battle, enemy cards show health, status, and the next telegraphed intention; choose your target and command from the action menu. Inventory, character, and journal panels keep equipment, relationships, quests, and clues close at hand.
+Continue illustrated story pages with **Space** or **Enter**. **F1** opens Controls while keeping your place. At a story choice, **Escape** or **P** opens Pause for saves, Settings, and Controls. Larger reading text and reduced motion are available there.
+
+During battle, read each enemy's next intention before choosing a command. Click an enemy or use **[** and **]** to change targets; Inspect and changing targets spend no turn. Health changes when the visible blow lands, and a short summary keeps your strike, healing, guard, and incoming damage clear. Enemy phase changes are announced. Survival encounters state how long you must hold out; the Black Rider is marked **Cannot be wounded** instead of showing an ordinary Health target.
+
+Inventory, character, and journal panels keep equipment, relationships, quests, and clues close at hand. Companion cards distinguish traveling companions from those who returned above, left the company, or remained at a seal. Conversations and recovery choices update as you complete them; the Last Lantern offers only the companions who are actually present.
+
+**Tab** opens the searchable story archive. It records the current session's narration, chosen answers, and inspected world details. **Ctrl+F** or **Command+F** searches the full record, including discoveries that have scrolled out of view. Starting or loading a journey begins a fresh transcript; **Continue** keeps your current record.
 
 The game records a separate automatic checkpoint at safe story transitions. **Resume checkpoint** restores it from the main menu. Your three manual save slots remain available, and **F5** opens saving while exploring. A checkpoint returns to a story decision rather than a character's exact position in a room or an unfinished combat turn.
 
@@ -75,21 +81,28 @@ The game records a separate automatic checkpoint at safe story transitions. **Re
 | W / A / S / D | Walk in exploration locations |
 | E | Interact with a nearby character, clue, or doorway |
 | Click a choice | Select a story, exploration, or combat action |
+| Click a world marker | Walk to it; click again nearby or press E to interact |
+| Click an enemy / [ / ] | Choose a combat target without spending a turn |
 | Up / Down | Navigate menu choices |
 | Return / Space | Reveal or advance the story; confirm a menu selection |
 | Backspace | Return to the previous story page |
-| Number keys | Choose the corresponding option |
+| 1–9 | Choose the corresponding option; use arrows or the mouse for longer menus |
 | Tab | Open or close the story archive |
 | Page Up / Page Down | Open and scroll the story archive |
+| Ctrl+F / Command+F | Search the open story archive |
+| Enter / Shift+Enter in search | Go to the next / previous match |
+| F3 / Shift+F3 | Repeat the saved archive search forward / backward |
 | Mouse wheel | Scroll menu choices or an open story archive |
 | I / C / J | Inventory, character, and journal at story decisions |
 | R | Open the road map at story decisions |
 | F5 | Open save slots while exploring |
 | M | Return to the main menu at story decisions |
+| F1 | Open Controls without changing the current story choice |
+| P / Escape at a story choice | Open Pause for saves, Settings, and Controls |
 | F11 | Toggle fullscreen |
-| Escape | Close a utility panel or return from a menu with Back |
+| Escape | Close a panel, end transcript search, or return from a menu with Back |
 
-Enter your traveler's name with the keyboard. Resize the window to fit your display. Every exploration choice remains available through the side menu; walking is optional.
+Enter your traveler's name with the keyboard. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Unicode text and input-method composition are supported. Escape cancels name entry or background selection; **Choose again** returns from the confirmation screen to background selection. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
 
 ### Terminal and accessibility
 
@@ -100,7 +113,7 @@ python3 -m roads_beneath_shadow --terminal
 python3 -m roads_beneath_shadow --screen-reader
 ```
 
-Screen-reader mode uses terminal prompts and scene descriptions. If this preference was saved, the next launch uses terminal mode; `--pixel` explicitly opens the graphical game.
+Screen-reader mode uses numbered terminal prompts, scene descriptions, full enemy names, and numeric Health and Focus. It omits decorative art and color escapes, even when Color is enabled. If this preference was saved, the next launch uses terminal mode; `--pixel` explicitly opens the graphical game.
 
 These options apply to either presentation:
 
@@ -111,25 +124,26 @@ These options apply to either presentation:
 .venv/bin/python -m roads_beneath_shadow --difficulty story
 ```
 
-Set persistent preferences from **Settings**. Sound starts **off**; enable it there or with `--sound` for original ambience, music, and cues. Five subtle scores follow the tavern, northern road, buried halls, Last Lantern, and combat, with smooth transitions between them. Reduced motion quiets character and scene animation while keeping exploration controls available. Combat difficulty choices are **Story**, **Ranger**, and **Shadow**. In a server or CI environment without a desktop, use terminal mode or the headless screenshot command under Development.
+Set persistent preferences from **Settings**, including Standard, Large, or Larger graphical reading and battle text. Sound starts **off**; enable it there or with `--sound` for original ambience, music, and cues. Five subtle scores follow the tavern, northern road, buried halls, Last Lantern, and combat, with smooth transitions between them. Separate music and sound-effect volume controls also apply to story cues and battle reactions. Quiet footsteps follow the terrain; hits, guards, healing, and escapes have distinct cues, and important story cues briefly soften the music. Reduced motion quiets character and scene animation while keeping exploration controls available. Combat difficulty choices are **Story**, **Ranger**, and **Shadow**. In a server or CI environment without a desktop, use terminal mode or the headless screenshot command under Development.
 
 ## Current features
 
-- Five walkable pixel-art locations with collision, nearby interaction prompts, thirteen optional look spots, animated characters, and direct menu alternatives
-- Illustrated story pages that preserve each scene and paragraph in order, with adjustable text reveal and reading position during window resizing
-- Animated tactical battle presentation with party and enemy sprites, health and Focus, enemy intentions, status, target cards, and action feedback
-- Graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels for equipment, relationships, quests, clues, achievements, and tactical decisions
+- Thirteen walkable pixel-art locations with collision, nearby prompts, thirty-five optional look spots, companion followers, and direct menu alternatives
+- Directional and origin-specific character animation, origin portraits, and foliage and pillars that characters can walk behind
+- Illustrated story pages with adjustable reading text, paragraph-aware pagination, preserved reveal and reading position during resizing, and a searchable archive of the current journey and its discoveries
+- Animated tactical battles with visible Health impacts, enemy phase changes, concise turn summaries, intentions, status, selectable targets, and clear survival objectives
+- Graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels with readable equipment comparisons and companion whereabouts that follow earned story outcomes
 - A separate automatic story checkpoint alongside three manual save slots, with atomic writes and compatible existing saves
-- Eighteen bundled scene illustrations, five world maps, and a shared character animation atlas in a restrained dark fantasy palette
-- Five original, seamless ambient scores and quiet optional interaction sounds, all generated from original procedural synthesis
-- Two complete episodes: Part I at roughly 45–70 minutes and Part II at roughly 110–130 minutes for a normal first playthrough
-- Character name, three distinct backgrounds, and a formative lesson from Calenor
+- Nineteen bundled scene and battle illustrations, thirteen world maps, shared character and depth atlases, and bundled fonts in a restrained dark fantasy palette
+- Five original, seamless ambient scores, terrain footsteps, and battle and story cues, with shared mute/volume controls and graceful audio-device recovery
+- Two complete episodes with branching routes, optional conversations, and consequences carried into their endings
+- Editable Unicode character names, three distinct backgrounds, and a formative lesson from Calenor
 - Five opening tactics that alter clues, trust, resources, and later options
 - Substantive conversations with Mara and watchman Tobin Reed
 - Rescue, testimony, and prisoner quests whose outcomes carry into later scenes and endings
 - Eight encounter slots across both episodes: three in Part I, four mandatory in Part II, and an avoidable duel with Teren
 - Telegraphed enemy intentions, target selection, interrupts, status effects, Focus, defense, armor, healing, and encounter objectives
-- Reliable defense against multiple enemies: Defend halves every incoming attack that round and restores 1 Focus; companions can protect you during survival objectives
+- Reliable defense against multiple enemies: Defend halves incoming physical hits for the round and restores 1 Focus; companions can protect you during survival objectives
 - Recovery after the opening fight keeps the journey moving, and inspecting or switching targets never repeats an enemy's Bleeding damage
 - A distinct combat ability for each background, plus different tactical commands for Mara and Tobin
 - Story, Ranger, and Shadow combat difficulty modes; Shadow rewards interrupts, defense, and companion tactics instead of damage-racing
@@ -137,7 +151,7 @@ Set persistent preferences from **Settings**. Sound starts **off**; enable it th
 - Eight causally different endings across Parts I and II, each with an explicit recap of the choices that created it
 - A persistent Traveler's Chronicle with episode-aware ending records and eleven achievements
 - An optional Last Lantern scene before the Part II finale: hear Mara's hopes, share Tobin's watch, or speak to Calenor beyond his Warden duty; these conversations remember earlier choices and return in the ending recap
-- Adjustable narration speed, reduced motion, narrow-terminal handling, and screen-reader scene descriptions
+- Adjustable narration speed and reading text size, reduced motion, narrow-terminal handling, screen-reader scene descriptions, and in-game Controls
 - Mouse choices, number keys, arrow navigation, resizing, and fullscreen in the pixel edition; W/S and numbered prompts in the terminal
 - A Part I Black Rider cliffhanger, a complete Part II resolution, and a new road toward Part III: *The Waking City*
 - Shared story and combat logic across the desktop and terminal presentations
@@ -160,16 +174,17 @@ The automatic checkpoint is `checkpoint.json` inside the same save directory. Se
 
 ## Controls
 
-The terminal edition uses numbered choices. During story decisions:
+The terminal edition uses numbered choices. Interactive menus also support W/S or arrow navigation and Return/D to confirm; screen-reader mode keeps numbered line prompts. At story decisions:
 
 | Key | Action |
 | --- | --- |
-| `1`–`9` | Choose a menu or story option |
-| `W` / `S`, arrows | Move through supported menus |
-| `Return` / `D` | Confirm the highlighted menu choice |
+| Number, then Return | Choose a story option |
 | `I` | Open inventory and equipment |
 | `C` | Show character status |
 | `J` | Read quests and clues |
+| `R` | Show the road map |
+| `P` | Open Pause for saves, Settings, and Controls |
+| `H` | Read Controls |
 | `S` | Save the journey |
 | `M` | Return to the main menu |
 
@@ -182,6 +197,8 @@ Install the development dependencies and run the complete suite:
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python -m compileall -q roads_beneath_shadow
 .venv/bin/python -m roads_beneath_shadow --check-install
+.venv/bin/python -m roads_beneath_shadow --check-runtime-assets
+.venv/bin/python scripts/check_installed_game.py --python .venv/bin/python
 ```
 
 The graphical tests use dummy SDL drivers and do not open a window. To render a real title-screen screenshot without a desktop on macOS/Linux:
@@ -193,17 +210,22 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
 
 On Windows, set `$env:SDL_VIDEODRIVER="dummy"` and `$env:SDL_AUDIODRIVER="dummy"` in PowerShell before the same command. Pixel scenes use nearest-neighbor scaling; the renderer keeps all graphics operations on the main thread while the story engine waits for choices in a worker.
 
-The GitHub quality workflow checks the game on macOS, Windows, and Linux. The desktop release workflow builds Linux x64, Windows x64, Apple-silicon macOS, and Intel macOS downloads. Each frozen game verifies its bundled assets, graphical rendering, and terminal input before packaging; all four archives and their SHA-256 checksums publish together. The workflow runs when the project version changes on `main`, or can be started manually.
+The Quality Gate runs eight combinations of Python 3.10 and 3.13 on Linux, Windows, Apple-silicon macOS, and Intel macOS. It also verifies a regular installed wheel from outside the checkout, comparing every module and bundled resource with the source. The desktop workflow builds all four standalone downloads, checks their version, decodes every PNG, TTF, and WAV through the bundled SDL runtime, renders a title screen, and exercises terminal input. It repeats those checks through the extracted player launcher from a folder containing spaces. All four archives and their SHA-256 checksums publish together only after the exact commit passes every Quality Gate job and GitHub's uploaded digests match. Pull requests build the same four native archives as preview artifacts without creating a tag or release. The workflow can also be started manually with `preview_only` enabled. On `main`, an unpublished project version can publish after the required checks; an existing published version is retained.
 
 The code is split into portable systems:
 
 - `pixel_ui.py` — desktop controls and the main-thread bridge to the story engine
 - `pixel_world.py` / `pixel_assets/` — walkable maps, collision, interaction points, and character animation
-- `narrative.py` — chronological illustrated story pages and resize-aware reading position
+- `narrative.py` / `pixel_transcript.py` — illustrated story pages, source-anchored reading position, and searchable transcripts
+- `pixel_theme.py` / `font_assets/` — bundled typography and measured wrapping
+- `controls.py` — shared in-game help
+- `text_input.py` — Unicode caret editing shared by name entry and archive search
+- `runtime_assets.py` — display-free native decoder verification for release candidates
 - `pixel_battle.py` / `combat_view.py` — tactical battle presentation and immutable combat snapshots
 - `pixel_panels.py` / `player_view.py` — inventory, character, and journal panels with immutable player snapshots
 - `pixel_art.py` — story illustration selection
 - `app.py` / `part_two.py` — story flow, consequences, and endings
+- `story_choices.py` — live choices refreshed after Inventory or Settings
 - `combat.py` / `models.py` — tactical combat and character state
 - `savegame.py` / `checkpoint.py` / `profile.py` / `settings.py` — save slots, automatic checkpoints, Chronicle, and preferences
 - `ui.py` — original terminal presentation and accessibility
@@ -211,7 +233,7 @@ The code is split into portable systems:
 - `audio.py` / `soundscapes.py` — optional original cues, ambience, and nonblocking music transitions
 - `content.py` — items, backgrounds, and chapter content
 
-Pixel artwork provenance is bundled with the assets. `scripts/generate_world_assets.py` rebuilds the authored world maps and character atlas; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play.
+Pixel artwork provenance is bundled with the assets. `scripts/generate_world_assets.py` rebuilds the authored world maps, character motion, depth atlas, and origin portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`. Desktop downloads retain third-party licenses, LGPL library source archives, and build provenance in `third-party/`, with a guide in `THIRD-PARTY-NOTICES.md` and file hashes in `THIRD-PARTY-INVENTORY.json`. Their pygame libraries remain separate files for compatible replacement; the game's copyright terms are unchanged.
 
 ## Roadmap
 

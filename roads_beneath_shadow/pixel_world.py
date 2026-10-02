@@ -9,22 +9,55 @@ in by the main-thread renderer and is never imported by the story worker.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from math import hypot
 from pathlib import Path
 from typing import Any, Sequence
+
+from .pixel_theme import load_font, wrap_text
 
 
 TILE = 16
 WORLD_SIZE = (320, 240)
 GRID_SIZE = (20, 15)
 ASSET_DIRECTORY = Path(__file__).resolve().parent / "pixel_assets"
-WALKABLE = frozenset(".,=+:")
+WALKABLE = frozenset(".,=+:;-")
 CHARACTER_CELL = (20, 24)
 CHARACTER_ATLAS_ROWS = {
     "mara": 4, "tobin": 5, "calenor": 6, "edrin": 7, "orc": 8,
     "orc_scout": 9, "patron": 10, "butterbur": 11,
 }
+MOTION_CHARACTERS = (
+    "traveler", "mara", "tobin", "calenor", "orc", "orc_scout", "patron",
+    "butterbur", "ned", "warg", "orc_sapper", "captive", "orc_archer",
+    "wayfarer", "scout", "healer",
+)
+MOTION_ROWS = 11
+MOTION_FRAMES = 8
+ORIGIN_PORTRAITS = ("wayfarer", "scout", "healer")
+
+
+def hero_sprite_name(origin: str | None) -> str:
+    """Origin changes clothing; the equipped combat weapon remains separate."""
+    name = str(origin or "").strip().casefold()
+    name = {"bree_wayfarer": "wayfarer", "bree wayfarer": "wayfarer", "bree-land wayfarer": "wayfarer", "north_road_scout": "scout", "north road scout": "scout", "north-road scout": "scout", "healers_apprentice": "healer", "healer's apprentice": "healer", "healers apprentice": "healer"}.get(name, name)
+    return name if name in ORIGIN_PORTRAITS else "traveler"
+
+
+def origin_portrait_rect(origin: str | None) -> tuple[int, int, int, int] | None:
+    """Three original 20×24 portraits in world-portraits.png, or fallback."""
+    name = hero_sprite_name(origin)
+    return (ORIGIN_PORTRAITS.index(name) * 20, 0, 20, 24) if name in ORIGIN_PORTRAITS else None
+
+
+def motion_frame_rect(name: str = "traveler", *, direction: int = 0, frame: int = 0, pose: str = "idle") -> tuple[int, int, int, int]:
+    """Eight-frame blocks: four walk/idle rows, then guard/sleep/snared.
+
+    Legacy world-characters.png keeps its original geometry and pixels.
+    """
+    row = {"walk": direction % 4, "idle": 4 + direction % 4, "guard": 8, "sleep": 9, "snared": 10}.get(pose, 4 + direction % 4)
+    character = MOTION_CHARACTERS.index(name) if name in MOTION_CHARACTERS else 0
+    return frame % MOTION_FRAMES * 20, (character * MOTION_ROWS + row) * 24, 20, 24
 
 
 def character_frame_rect(name: str = "traveler", *, direction: int = 0, frame: int = 0) -> tuple[int, int, int, int]:
@@ -41,6 +74,9 @@ class WorldPoint:
     option: str
     description: str
     sprite: str | None = None
+    aliases: tuple[str, ...] = ()
+    pose: str = "idle"
+    decoration: str | None = None
 
     @property
     def position(self) -> tuple[float, float]:
@@ -70,6 +106,7 @@ class WorldMap:
     lights: tuple[tuple[int, int], ...] = ()
     actors: tuple[tuple[str, tuple[int, int]], ...] = ()
     looks: tuple[WorldLook, ...] = ()
+    followers: tuple[str, ...] = ()
 
     def passable(self, tile: tuple[int, int]) -> bool:
         x, y = tile
@@ -83,12 +120,23 @@ class BoundPoint:
     option: str
 
 
-def _grid(fill: str = ".") -> list[list[str]]:
+@dataclass
+class _Follower:
+    name: str
+    position: tuple[float, float]
+    direction: int = 0
+    walk_time: float = 0.0
+    walking: bool = False
+    path: deque[tuple[float, float]] = field(default_factory=deque)
+    target: tuple[int, int] | None = None
+
+
+def _grid(fill: str = ".", *, edge: str = "#") -> list[list[str]]:
     result = [[fill] * GRID_SIZE[0] for _ in range(GRID_SIZE[1])]
     for x in range(GRID_SIZE[0]):
-        result[0][x] = result[-1][x] = "#"
+        result[0][x] = result[-1][x] = edge
     for row in result:
-        row[0] = row[-1] = "#"
+        row[0] = row[-1] = edge
     return result
 
 
@@ -229,16 +277,219 @@ def _maps() -> dict[str, WorldMap]:
             WorldLook("low_arch", "The last low arch", (3, 4), "Beyond this low stone arch, the vault waits. There is still time for a few words."),
         ),
     }
-    return {key: replace(spec, looks=details[key]) for key, spec in maps.items()}
+    return {key: replace(spec, looks=details[key], followers=("mara", "tobin") if key in {"wayhouse", "hall"} else ()) for key, spec in maps.items()}
 
 
-WORLD_MAPS = _maps()
+def _journey_maps() -> dict[str, WorldMap]:
+    """The roads between the original hubs, grounded in existing scenes."""
+    gate = _grid(",")
+    _fill(gate, (1, 4, 18, 1), "#")
+    _fill(gate, (9, 1, 3, 13), "=")
+    _fill(gate, (3, 6, 6, 3), ";")
+    for x, y in ((4, 6), (5, 6), (6, 6)):
+        gate[y][x] = "s"
+    for x, y in ((2, 2), (5, 2), (15, 2), (17, 3), (3, 11), (16, 10), (14, 12)):
+        gate[y][x] = "V"
+    gate_points = (
+        WorldPoint("star", "The third stone", (6, 6), "Press the broken star into the third stone", "The broken star faces an old mark beneath the mortar."),
+        WorldPoint("token", "The hidden notch", (5, 7), "Use Calenor's oak-leaf Ranger token as a lever", "A narrow notch cuts into the weathered boundary stone."),
+        WorldPoint("weapon", "Loose mortar", (7, 7), "Pry the stone free with your weapon", "The stone's mortar has loosened in the long rain."),
+    )
+    gate_looks = (
+        WorldLook("old_gate", "The north gate", (10, 4), "The north gate leans into the storm. Beyond it, the northern road lies empty."),
+        WorldLook("boundary_stones", "Boundary stones", (4, 6), "Three weathered stones stand beside the gate. Calenor's letter told you which one to count."),
+        WorldLook("wet_hawthorn", "Wet hawthorn", (16, 10), "Rain holds in the hawthorn. One distant horn answers from the eastern dark."),
+    )
+
+    fork = _grid(",")
+    for x in range(20):
+        fork[0][x] = fork[-1][x] = "V"
+    for row in fork:
+        row[0] = row[-1] = "V"
+    _fill(fork, (9, 1, 3, 13), "=")
+    _fill(fork, (2, 4, 8, 2), ";")
+    _fill(fork, (5, 6, 6, 2), ";")
+    _fill(fork, (11, 6, 7, 3), ";")
+    for x, y in ((3, 2), (6, 2), (7, 3), (15, 3), (17, 4), (3, 10), (6, 11), (14, 11), (17, 12)):
+        fork[y][x] = "V"
+    fork[3][3] = "r"
+    fork[3][5] = "L"
+    fork_points = (
+        WorldPoint("ranger_marks", "The marked hill path", (4, 3), "Follow Calenor's tiny Ranger marks through the hills", "Small Ranger cuts wait beneath a root at the western fork."),
+        WorldPoint("enemy_tracks", "The muddy trail", (16, 7), "Follow the Orc and warg tracks before rain erases them", "Bootprints and broad paw marks cross the wet eastern ground."),
+        WorldPoint("cart_road", "The old cart-road", (10, 2), "Take the old cart-road and trust speed over secrecy", "The wider road runs straight toward the marsh."),
+    )
+    fork_looks = (
+        WorldLook("last_lamps", "Bree's last lamps", (9, 12), "Bree's last lamps sink behind wet hawthorn. The horns behind you begin moving east."),
+        WorldLook("cart_ruts", "Old cart ruts", (11, 5), "Long ruts cut through the exposed road. There is little shelter between its hedges."),
+        WorldLook("root_sign", "A turned stone", (5, 3), "A pale turned stone rests beneath the root beside the narrow hill path."),
+    )
+
+    camp = _grid(",", edge="E")
+    _fill(camp, (13, 1, 6, 6), "~")
+    _fill(camp, (1, 9, 3, 5), "~")
+    _fill(camp, (5, 6, 8, 6), ";")
+    for x, y in ((3, 3), (4, 4), (12, 2), (12, 4), (14, 7), (15, 8), (3, 8), (4, 10), (12, 12), (17, 11)):
+        camp[y][x] = "E"
+    camp[5][8] = "s"
+    camp[7][8] = "C"
+    camp_points = (
+        WorldPoint("keep_watch", "The sheltered ember", (8, 7), "Take it yourself and let both companions sleep", "The little ember is sheltered in the standing stone's lee."),
+        WorldPoint("wake_mara", "Mara's resting place", (6, 9), "Wake Mara", "Mara has set her boots toward the road.", "mara", pose="sleep"),
+        WorldPoint("wake_tobin", "Tobin's resting place", (11, 9), "Wake Tobin", "Tobin sleeps with one hand around his watch-whistle.", "tobin", pose="sleep"),
+    )
+    camp_looks = (
+        WorldLook("standing_stone", "Leaning standing stone", (8, 5), "The ancient stone takes the worst of the wind. Forgotten walls show their teeth beyond the reeds."),
+        WorldLook("camp_reeds", "The reed beds", (14, 7), "Midgewater spreads ahead in black pools and reed beds. Somewhere among them a weak watch-whistle sounds."),
+        WorldLook("small_ember", "A fire without flame", (7, 7), "Mara made a smokeless ember under her cloak. Its warmth holds close to the ground."),
+    )
+
+    post = _grid("~", edge="~")
+    _fill(post, (2, 10, 16, 3), ";")
+    _fill(post, (2, 2, 4, 9), ";")
+    _fill(post, (5, 2, 8, 3), ";")
+    _fill(post, (10, 4, 6, 2), ":")
+    _fill(post, (12, 4, 6, 5), ":")
+    _fill(post, (13, 2, 5, 2), ";")
+    _fill(post, (9, 6, 3, 6), "=")
+    for x, y in ((2, 2), (4, 2), (2, 5), (4, 6), (5, 8), (13, 2), (17, 2), (17, 4), (2, 13), (16, 12)):
+        post[y][x] = "E"
+    post[7][15] = "s"
+    post[8][13] = "P"
+    post_points = (
+        WorldPoint("reed_circle", "The reed-side approach", (3, 7), "Circle through the reeds and approach the tracker unseen", "A narrow muddy line circles the black pool."),
+        WorldPoint("low_crossing", "The low crossing", (6, 10), "Send Tobin low across the water while you draw the enemy's eyes", "The pool offers a low approach beneath the tracker's sightline."),
+        WorldPoint("watch_stones", "The old causeway stones", (10, 10), "Raise the silver star and command the old stones to answer", "Old stone slabs break the black water at the causeway."),
+        WorldPoint("causeway", "The causeway entrance", (14, 10), "Rush the causeway before the tracker can loose", "The tracker waits for a step onto the exposed causeway.", aliases=("Break the Dwarf-smoke flask across the causeway",)),
+    )
+    post_looks = (
+        WorldLook("post_pool", "The black pool", (7, 9), "Water surrounds the fallen watch-stone. Across it, yellow eyes wait between the reeds."),
+        WorldLook("broken_post", "The fallen watch post", (13, 8), "The drowned watch post has fallen into its own causeway."),
+        WorldLook("ned_snare", "Ned's black-rope snare", (16, 7), "Ned is alive inside the black-rope snare. One leg lies trapped beneath fallen masonry; the tracker has left him as bait."),
+    )
+
+    bridge = _grid("X")
+    _fill(bridge, (1, 1, 5, 13), ":")
+    _fill(bridge, (15, 1, 4, 13), ":")
+    _fill(bridge, (5, 6, 11, 3), "-")
+    for x in (6, 10, 14):
+        bridge[5][x] = bridge[9][x] = "P"
+    bridge[5][4] = bridge[9][4] = "L"
+    bridge_points = (
+        WorldPoint("bridgehead", "The exposed bridgehead", (5, 7), "Cross the exposed bridgehead", "The old bridge gives back every footfall."),
+        WorldPoint("hidden_stair", "The Warden stair", (3, 3), "Descend the hidden Warden stair", "A known Warden stair descends below the bridge's western arch.", decoration="stairs"),
+        WorldPoint("ropes", "The western rope anchor", (4, 5), "Defend the ropes and keep the road open", "Ancient ropes strain above a lightless gulf."),
+        WorldPoint("sapper", "The pitch-jar sightline", (4, 9), "Hunt the sapper before the pitch is lit", "Across the gulf, an Orc sapper works beside the old ropes."),
+    )
+    bridge_looks = (
+        WorldLook("echo_gulf", "The bottomless gulf", (7, 7), "The gulf beneath Echo Bridge gives back sound without showing its depth."),
+        WorldLook("stone_arch", "An ancient arch", (6, 5), "Three stone arches carry the bridge above the darkness."),
+    )
+
+    drowned = _grid("~")
+    _fill(drowned, (2, 7, 5, 7), ":")
+    _fill(drowned, (5, 9, 9, 3), "=")
+    _fill(drowned, (10, 1, 4, 10), "=")
+    _fill(drowned, (3, 4, 8, 3), "=")
+    _fill(drowned, (14, 7, 5, 4), ":")
+    drowned[4][3] = "b"
+    drowned[6][12] = "n"
+    drowned[7][16] = "L"
+    drowned_points = (
+        WorldPoint("prisoners", "The flooded cage-road", (4, 5), "Reach the prisoners before the sluice horn", "The flooded cut turns toward the cages beyond the bend."),
+        WorldPoint("wards", "The ward-stone turn", (16, 8), "Reach the flood wards before they are broken", "Old ward-stones stand above the rising black water."),
+        WorldPoint("calenor", "The northern passage", (11, 2), "Reach Calenor before the Ash-Hand moves him", "The shortest line continues into the dark northern road."),
+    )
+    drowned_looks = (
+        WorldLook("prison_cart", "A broken prison cart", (3, 4), "A prison cart and its snapped wheel lean into the shallow floodwater."),
+        WorldLook("drowned_marker", "The drowned milestone", (12, 6), "Black water climbs the milestones, swallowing the old names from the bottom upward."),
+    )
+
+    sluice = _grid(":")
+    _fill(sluice, (1, 11, 15, 3), "~")
+    _fill(sluice, (3, 3, 3, 2), "K")
+    _fill(sluice, (7, 3, 3, 2), "K")
+    _fill(sluice, (16, 9, 3, 5), ":")
+    sluice[3][14] = "W"
+    sluice[5][14] = "L"
+    sluice[8][11] = "d"
+    sluice_points = (
+        WorldPoint("captives", "The captives' ledge", (6, 5), "Rescue the captives before the water reaches them", "The captives have been roped together for the march east."),
+        WorldPoint("wards", "The flood wards", (14, 6), "Preserve the flood wards and keep the old road alive", "The last Warden wards begin to drown below the cages."),
+        WorldPoint("onward", "The eastward passage", (17, 10), "Race onward while the Ash-Hand is still unready", "The road continues beyond the sluice's eastern shelf."),
+        WorldPoint("locks", "The cage locks", (3, 5), "Pick the cage locks beneath the horn's next note", "Rusted iron locks bind the captive cages."),
+        WorldPoint("hinges", "The rusted hinges", (9, 5), "Break the rusted hinges with Calenor's sword", "The old cage hinges have rusted in the rising damp."),
+        WorldPoint("drain", "The Warden drain", (11, 8), "Open the Warden drain and lead them through the dry channel", "An old drain lies below the eight-spoked floodgate wheel."),
+    )
+    sluice_looks = (
+        WorldLook("iron_bars", "Iron cage bars", (4, 3), "Two iron cages hold reaching prisoners above the flooded ledge."),
+        WorldLook("floodwheel", "The eight-spoked wheel", (14, 3), "An enormous eight-spoked floodgate wheel rises above the water."),
+        WorldLook("rising_water", "Rising floodwater", (8, 11), "The sluice horn sounds beyond the bend. Below the stone shelf, the water keeps rising."),
+    )
+
+    refuge = _grid(":")
+    _fill(refuge, (7, 3, 6, 5), "H")
+    refuge[7][10] = "+"
+    _fill(refuge, (1, 1, 5, 1), "r")
+    _fill(refuge, (14, 1, 5, 1), "r")
+    for x, y in ((3, 2), (5, 4), (14, 3), (17, 2), (15, 8), (3, 10)):
+        refuge[y][x] = "r"
+    refuge_points = (
+        WorldPoint("handprints", "The low western wall", (4, 3), "Follow the child-height handprints", "Small handprints follow the low wall through the refuge."),
+        WorldPoint("service", "The Warden service way", (16, 5), "Take the Warden service passage", "A narrow service passage runs beside the rooted house."),
+        WorldPoint("dormitory", "The ruined dormitory", (10, 11), "Cross the ruined dormitory", "The dormitory lies on the southern side of the refuge."),
+    )
+    refuge_looks = (
+        WorldLook("ash_shackle", "A cold shackle", (6, 8), "A cold shackle lies in the ash, stamped by Ghorak's forge."),
+        WorldLook("great_roots", "The enormous roots", (14, 3), "The roots shelter a small stone house intact beneath the hills."),
+        WorldLook("dormitory_stone", "Dormitory stone", (11, 12), "Ash holds in the seams of the old dormitory's stone."),
+    )
+
+    return {
+        "north-gate": WorldMap("north-gate", "BREE'S NORTH GATE", _freeze(gate), (10, 12), gate_points, "rain", ((9, 8),), (("tobin", (10, 8)), ("mara", (13, 3))), gate_looks),
+        "road-fork": WorldMap("road-fork", "OUT THROUGH THE HEDGE", _freeze(fork), (10, 12), fork_points, "rain", (), (), fork_looks, ("mara", "tobin")),
+        "camp": WorldMap("camp", "A FIRE WITHOUT FLAME", _freeze(camp), (9, 11), camp_points, "marsh", ((8, 7),), (), camp_looks),
+        "watch-post": WorldMap("watch-post", "THE LOST WHISTLE", _freeze(post), (9, 12), post_points, "marsh", (), (("ned", (15, 7)), ("warg", (16, 5)), ("orc_archer", (14, 3))), post_looks, ("mara", "tobin")),
+        "bridge": WorldMap("bridge", "ECHO BRIDGE", _freeze(bridge), (3, 11), bridge_points, "gulf", (), (("orc_sapper", (16, 6)), ("orc", (16, 8)), ("orc_archer", (17, 7))), bridge_looks, ("mara", "tobin")),
+        "drowned-mile": WorldMap("drowned-mile", "THE DROWNED MILE", _freeze(drowned), (5, 11), drowned_points, "water", (), (), drowned_looks, ("mara", "tobin")),
+        "sluice": WorldMap("sluice", "PRISONERS OF ASH", _freeze(sluice), (11, 10), sluice_points, "water", (), (("captive", (4, 4)), ("captive", (8, 4))), sluice_looks, ("mara", "tobin")),
+        "refuge": WorldMap("refuge", "THE HOUSE UNDER ASH", _freeze(refuge), (9, 12), refuge_points, "ash", (), (), refuge_looks, ("mara", "tobin")),
+    }
+
+
+WORLD_MAPS = {**_maps(), **_journey_maps()}
+DEPTH_CELL = (32, 40)
+DEPTH_COLUMNS = 16
+DEPTH_OBJECTS = tuple(
+    (key, x, y, glyph)
+    for key, spec in WORLD_MAPS.items()
+    for y, row in enumerate(spec.grid)
+    for x, glyph in enumerate(row)
+    if glyph in {"V", "E", "s", "n", "L", "P", "Q", "W"}
+)
+
+
+def depth_frame_rect(index: int) -> tuple[int, int, int, int]:
+    """Original prop silhouettes, each padded for its canopy or tall crown."""
+    return index % DEPTH_COLUMNS * DEPTH_CELL[0], index // DEPTH_COLUMNS * DEPTH_CELL[1], *DEPTH_CELL
+
+
 MAP_HEADINGS = {
     "WHAT WILL YOU DO?": "pony",
     "WHERE WILL YOU INVESTIGATE?": "bree",
     "EXPLORE THE BURIED WAYHOUSE": "wayhouse",
     "EXPLORE THE HALL OF EIGHT": "hall",
     "BEFORE THE LAST SEAL": "lantern",
+    "HOW WILL YOU OPEN CALENOR'S CACHE?": "north-gate",
+    "CHOOSE THE APPROACH TO MIDGEWATER": "road-fork",
+    "WHO TAKES THE LAST WATCH?": "camp",
+    "HOW DO YOU REACH NED?": "watch-post",
+    "HOW DO YOU REACH ECHO BRIDGE?": "bridge",
+    "WHAT MUST SURVIVE AT ECHO BRIDGE?": "bridge",
+    "WHO DO YOU REACH FIRST?": "drowned-mile",
+    "THE SLUICE HORN SOUNDS. CHOOSE.": "sluice",
+    "HOW DO YOU FREE THEM?": "sluice",
+    "CHOOSE A WAY THROUGH THE REFUGE": "refuge",
 }
 
 
@@ -246,6 +497,7 @@ def missing_world_assets() -> list[Path]:
     """The installer can validate worlds alongside the original illustrations."""
     paths = [ASSET_DIRECTORY / f"world-{key}.png" for key in WORLD_MAPS]
     paths.append(ASSET_DIRECTORY / "world-characters.png")
+    paths.extend(ASSET_DIRECTORY / name for name in ("world-motion.png", "world-portraits.png", "world-depth.png"))
     return [path for path in paths if not path.is_file()]
 
 
@@ -266,7 +518,7 @@ def _matches_option(point: WorldPoint, option: str) -> bool:
         prefix = point.option.casefold() + " (recover up to "
         suffix = " health and all focus)"
         return option == point.option.casefold() or (option.startswith(prefix) and option.endswith(suffix) and option[len(prefix):-len(suffix)].isdigit())
-    return point.option.casefold() == option.casefold()
+    return option.casefold() in {point.option.casefold(), *(alias.casefold() for alias in point.aliases)}
 
 
 def bind_points(spec: WorldMap, options: Sequence[str]) -> tuple[BoundPoint, ...]:
@@ -313,8 +565,17 @@ class WorldView:
         self._navigation_spec: WorldMap | None = None
         self.points: tuple[BoundPoint, ...] = ()
         self._character_points: tuple[WorldPoint, ...] = ()
+        self._actors: tuple[tuple[str, tuple[int, int]], ...] = ()
+        self._hero_name = "traveler"
+        self._session_identifier: Any = None
+        self._followers: list[_Follower] = []
+        self._follower_positions: dict[str, dict[str, tuple[float, float]]] = {}
+        self._trail: deque[tuple[float, float]] = deque(maxlen=160)
+        self._trail_maps: dict[str, tuple[tuple[float, float], ...]] = {}
+        self._revealed_details: dict[str, set[str]] = {}
         self._request_identifier: Any = None
         self._positions: dict[str, tuple[float, float]] = {}
+        self._directions: dict[str, int] = {}
         self._position = (0.0, 0.0)
         self._direction = 0
         self._walking = False
@@ -326,12 +587,32 @@ class WorldView:
         self._hovered: BoundPoint | None = None
         self._hovered_look: WorldLook | None = None
         self._inspected_look: WorldLook | None = None
+        self._world_fingerprint: tuple[Any, ...] | None = None
+        self._inspection_resume: tuple[tuple[Any, ...], str] | None = None
+        self._blocked_until = 0.0
         self._rect = pygame.Rect(0, 0, 0, 0)
+        self._inspection_rect = pygame.Rect(0, 0, 0, 0)
+        self._inspection_close_rect = pygame.Rect(0, 0, 0, 0)
         self._backgrounds: dict[str, Any] = {}
         self._atlas: Any = None
+        self._motion_atlas: Any = None
+        self._depth_atlas: Any = None
+        self._depth_sprites: dict[str, list[tuple[int, Any, tuple[int, int]]]] = {}
         self._native = pygame.Surface(WORLD_SIZE)
-        self._font = pygame.font.SysFont("dejavusansmono,courier,monospace", 9)
-        self._small_font = pygame.font.SysFont("dejavusansmono,courier,monospace", 8)
+        self._font = load_font(pygame, 9)
+        self._small_font = load_font(pygame, 8)
+        self._inspection_fonts: dict[int, tuple[Any, Any]] = {}
+        self._inspection_footer_fonts: dict[int, Any] = {}
+
+    def stop_moving(self) -> None:
+        """Cancel held and planned movement when focus or a modal interrupts."""
+        self._held.clear()
+        self._path.clear()
+        self._walking = False
+        self._clicked_point = None
+        for follower in self._followers:
+            follower.path.clear()
+            follower.walking = False
 
     @property
     def active(self) -> bool:
@@ -345,46 +626,228 @@ class WorldView:
     def player_position(self) -> tuple[float, float]:
         return self._position
 
-    def set_request(self, request: Any | None) -> bool:
+    @property
+    def party_positions(self) -> dict[str, tuple[float, float]]:
+        """Companions are visible followers, never solid navigation obstacles."""
+        return {follower.name: follower.position for follower in self._followers}
+
+    @property
+    def surface_kind(self) -> str:
+        """The material under the traveler's feet, for presentation cues."""
+        if not self.spec:
+            return "stone"
+        x, y = self._tile()
+        glyph = self.spec.grid[y][x]
+        if glyph == "-" or (glyph == "." and self.spec.key == "pony"):
+            return "wood"
+        return {",": "grass", ";": "mud"}.get(glyph, "stone")
+
+    def set_request(self, request: Any | None, *, preserve_inspection: bool = False) -> bool:
+        """Suspend an inspection only for an explicitly read-only interruption.
+
+        Returning utilities may create a new request identifier. The same
+        presentation, map and heading must match, together with the same
+        options or decision token. A normal answer clears the suspension.
+        """
+        if preserve_inspection and self._inspected_look and self._world_fingerprint:
+            self._inspection_resume = (self._world_fingerprint, self._inspected_look.key)
         if self.spec:
             self._positions[self.spec.key] = self._position
+            self._directions[self.spec.key] = self._direction
+            self._follower_positions[self.spec.key] = self.party_positions
+            self._trail_maps[self.spec.key] = tuple(self._trail)
         spec = None
         if request is not None and getattr(request, "story", False) and getattr(request, "kind", None) == "choice":
             spec = map_for_request(request.label, request.options)
+        context = getattr(request, "context", {}) or {}
+        journey = context.get("journey_id")
+        presentation = context.get("presentation_id")
+        session = (journey, presentation)
+        if (journey is not None or presentation is not None) and session != self._session_identifier:
+            self._positions.clear()
+            self._directions.clear()
+            self._follower_positions.clear()
+            self._trail_maps.clear()
+            self._revealed_details.clear()
+            self._inspection_resume = None
+            self._world_fingerprint = None
+            # Reloading an earlier save creates a new presentation of the
+            # same journey. Physical positions must not leak from its future.
+            # Utilities keep the same state and therefore the same session.
+            self._session_identifier = session
+            self._walk_time = 0.0
+        self._hero_name = hero_sprite_name(context.get("origin"))
         self.spec = spec
         self.points = bind_points(spec, request.options) if spec else ()
+        if spec:
+            revealed = {bound.point.key for bound in self.points if bound.point.decoration}
+            if spec.key == "bridge" and request.label.strip().upper() == "HOW DO YOU REACH ECHO BRIDGE?":
+                # Re-entering an older save can remove the learned route.
+                # This initial menu is authoritative; the next menu keeps
+                # the already revealed stairs while choosing its objective.
+                self._revealed_details[spec.key] = revealed
+            else:
+                self._revealed_details.setdefault(spec.key, set()).update(revealed)
         companion_presence = {
             companion["name"].casefold(): companion.get("present", True)
-            for companion in getattr(request, "context", {}).get("companions", ())
+            for companion in context.get("companions", ())
         }
         self._character_points = tuple(point for point in spec.points if point.sprite and companion_presence.get(point.sprite, True)) if spec else ()
+        self._actors = tuple((name, tile) for name, tile in spec.actors if companion_presence.get(name, True)) if spec else ()
         self._navigation_spec = None
         if spec:
             navigation_grid = [list(row) for row in spec.grid]
-            occupied = [tile for _name, tile in spec.actors]
+            occupied = [tile for _name, tile in self._actors]
             occupied.extend(point.tile for point in self._character_points)
             for x, y in occupied:
                 navigation_grid[y][x] = "N"
             self._navigation_spec = replace(spec, grid=_freeze(navigation_grid))
         identifier = getattr(request, "identifier", None)
-        if identifier != self._request_identifier:
+        fingerprint = (self._session_identifier, spec.key, request.label.strip().upper(), tuple(request.options), context.get("decision_id")) if spec else None
+        if identifier != self._request_identifier or (spec and fingerprint != self._world_fingerprint):
             self._path.clear()
             self._held.clear()
             self._clicked_point = None
             self._hovered = None
             self._hovered_look = None
             self._inspected_look = None
+            self._blocked_until = 0.0
             self._walking = False
         self._request_identifier = identifier
+        if spec is None:
+            self.stop_moving()
+            self._inspected_look = None
+            if not preserve_inspection:
+                self._inspection_resume = None
+        else:
+            if self._inspection_resume:
+                saved_fingerprint, look_key = self._inspection_resume
+                if self._same_inspection_request(saved_fingerprint, fingerprint):
+                    self._inspected_look = next((look for look in spec.looks if look.key == look_key), None)
+                self._inspection_resume = None
+            self._world_fingerprint = fingerprint
+        self._followers = []
+        self._trail.clear()
         if spec:
             spawn = (spec.spawn[0] * TILE + TILE / 2, spec.spawn[1] * TILE + TILE / 2)
             self._position = self._positions.get(spec.key, spawn)
+            self._direction = self._directions.get(spec.key, 0)
+            if not self._position_clear(self._position):
+                # A companion can return while a utility has suspended the
+                # map. Never restore the traveler inside their solid tile.
+                tiles = self._reachable_tiles(spec.spawn)
+                tile = min(tiles, key=lambda tile: hypot(tile[0] * TILE + 8 - self._position[0], tile[1] * TILE + 8 - self._position[1])) if tiles else spec.spawn
+                self._position = (tile[0] * TILE + 8, tile[1] * TILE + 8)
+                self._trail_maps.pop(spec.key, None)
+            self._trail.extend(self._trail_maps.get(spec.key, (self._position,)))
+            previous_followers = self._follower_positions.get(spec.key, {})
+            taken = {self._tile()}
+            reserved = self._reserved_tiles()
+            for name in spec.followers:
+                if not companion_presence.get(name, True):
+                    continue
+                position = previous_followers.get(name)
+                if position is None or not self._position_clear(position):
+                    tiles = self._reachable_tiles(self._tile())
+                    candidates = [tile for tile in tiles if tile not in taken and tile not in reserved]
+                    if not tiles:
+                        continue
+                    tile = min(candidates or list(tiles), key=lambda tile: abs(tile[0] - spec.spawn[0]) + abs(tile[1] - spec.spawn[1]))
+                    position = (tile[0] * TILE + TILE / 2, tile[1] * TILE + TILE / 2)
+                taken.add(self._tile(position))
+                self._followers.append(_Follower(name, position))
         return self.active
+
+    @staticmethod
+    def _same_inspection_request(saved: tuple[Any, ...], current: tuple[Any, ...] | None) -> bool:
+        """Utilities can refresh live labels; Continue can renew the token."""
+        return current is not None and saved[:3] == current[:3] and (
+            saved[3] == current[3]
+            or (saved[4] is not None and current[4] is not None and saved[4] == current[4])
+        )
+
+    def _reserved_tiles(self) -> set[tuple[int, int]]:
+        if not self._navigation_spec:
+            return set()
+        return {tile for bound in self.points for tile in interaction_tiles(self._navigation_spec, bound.point)}
+
+    def _reachable_tiles(self, start: tuple[int, int]) -> set[tuple[int, int]]:
+        if not self._navigation_spec or not self._navigation_spec.passable(start):
+            return set()
+        frontier, reached = deque([start]), {start}
+        while frontier:
+            x, y = frontier.popleft()
+            for cell in ((x, y - 1), (x - 1, y), (x + 1, y), (x, y + 1)):
+                if cell not in reached and self._navigation_spec.passable(cell):
+                    reached.add(cell)
+                    frontier.append(cell)
+        return reached
+
+    def _trail_target(self, gap: float) -> tuple[int, int]:
+        previous, distance = self._position, 0.0
+        for position in reversed(self._trail):
+            distance += hypot(position[0] - previous[0], position[1] - previous[1])
+            previous = position
+            if distance >= gap:
+                return self._tile(position)
+        return self._tile(previous)
+
+    def _update_followers(self, dt: float, *, reduced_motion: bool) -> None:
+        if not self._navigation_spec or not self._followers:
+            return
+        # Reduced motion keeps decorative party motion still when the hero
+        # stands. A moving hero still has companions on the road.
+        if reduced_motion and not self._walking:
+            for follower in self._followers:
+                follower.walking = False
+            return
+        reserved, taken = self._reserved_tiles(), {self._tile()}
+        for index, follower in enumerate(self._followers):
+            target = self._trail_target(28 + index * 22)
+            if not self._walking:
+                start = self._tile(follower.position)
+                tiles = self._reachable_tiles(start)
+                nearby = [tile for tile in tiles if tile not in reserved and tile not in taken and hypot(tile[0] * TILE + 8 - self._position[0], tile[1] * TILE + 8 - self._position[1]) <= 52]
+                if nearby:
+                    target = min(nearby, key=lambda tile: abs(tile[0] - start[0]) + abs(tile[1] - start[1]))
+            taken.add(target)
+            if target != follower.target or (not follower.path and self._tile(follower.position) != target):
+                start = self._tile(follower.position)
+                route = shortest_path(self._navigation_spec, start, target)
+                follower.path.clear()
+                if route or target == start:
+                    follower.path.append((start[0] * TILE + 8, start[1] * TILE + 8))
+                    follower.path.extend((x * TILE + 8, y * TILE + 8) for x, y in route)
+                follower.target = target
+            before = follower.position
+            remaining = dt
+            while follower.path and remaining > 0:
+                step = min(remaining, 0.025)
+                remaining -= step
+                x, y = follower.position
+                tx, ty = follower.path[0]
+                dx, dy = tx - x, ty - y
+                distance = hypot(dx, dy)
+                if distance < 0.1:
+                    follower.path.popleft()
+                    continue
+                amount = min(distance, self.SPEED * 1.08 * step)
+                position = (x + dx / distance * amount, y + dy / distance * amount)
+                if not self._position_clear(position):
+                    follower.path.clear()
+                    break
+                follower.position = position
+                follower.direction = (2 if dx > 0 else 1) if abs(dx) > abs(dy) else (0 if dy > 0 else 3)
+                if amount == distance:
+                    follower.path.popleft()
+            follower.walking = before != follower.position
+            if follower.walking and not reduced_motion:
+                follower.walk_time += dt
 
     def _nearest(self) -> BoundPoint | None:
         if not self.spec:
             return None
-        nearby = [bound for bound in self.points if hypot(self._position[0] - bound.point.position[0], self._position[1] - bound.point.position[1]) <= self.INTERACTION_DISTANCE]
+        nearby = [bound for bound in self.points if self._can_interact(bound.point)]
         if not nearby:
             return None
         return min(nearby, key=lambda bound: hypot(self._position[0] - bound.point.position[0], self._position[1] - bound.point.position[1]))
@@ -392,15 +855,42 @@ class WorldView:
     def _nearest_look(self) -> WorldLook | None:
         if not self.spec:
             return None
-        nearby = [look for look in self.spec.looks if hypot(self._position[0] - look.position[0], self._position[1] - look.position[1]) <= self.INTERACTION_DISTANCE]
+        nearby = [look for look in self.spec.looks if self._can_interact(look)]
         return min(nearby, key=lambda look: hypot(self._position[0] - look.position[0], self._position[1] - look.position[1])) if nearby else None
+
+    def _can_interact(self, point: WorldPoint | WorldLook, position: tuple[float, float] | None = None) -> bool:
+        """Nearness cannot reach through a wall, table or another character."""
+        if not self._navigation_spec:
+            return False
+        start = position or self._position
+        dx, dy = point.position[0] - start[0], point.position[1] - start[1]
+        distance = hypot(dx, dy)
+        if distance > self.INTERACTION_DISTANCE:
+            return False
+        previous = self._tile(start)
+        steps = max(1, int(distance / 2) + 1)
+        for index in range(1, steps + 1):
+            tile = self._tile((start[0] + dx * index / steps, start[1] + dy * index / steps))
+            if tile != point.tile and not self._navigation_spec.passable(tile):
+                return False
+            if tile[0] != previous[0] and tile[1] != previous[1]:
+                sides = ((tile[0], previous[1]), (previous[0], tile[1]))
+                if any(side != point.tile and not self._navigation_spec.passable(side) for side in sides):
+                    return False
+            previous = tile
+        return True
 
     def _focus(self) -> BoundPoint | WorldLook | None:
         point, look = self._nearest(), self._nearest_look()
-        if look and self._clicked_point == "look:" + look.key:
-            return look
-        if point and self._clicked_point == point.point.key:
-            return point
+        if self._clicked_point and self.spec:
+            selected = next((look for look in self.spec.looks if "look:" + look.key == self._clicked_point), None)
+            if selected and self._can_interact(selected):
+                return selected
+            chosen = next((bound for bound in self.points if bound.point.key == self._clicked_point), None)
+            if chosen and self._can_interact(chosen.point):
+                return chosen
+            if self._path and (selected or chosen):
+                return None
         if point and look:
             point_distance = hypot(self._position[0] - point.point.position[0], self._position[1] - point.point.position[1])
             look_distance = hypot(self._position[0] - look.position[0], self._position[1] - look.position[1])
@@ -416,18 +906,23 @@ class WorldView:
     def hint_text(self) -> str:
         if self._inspected_look:
             return "[E / ENTER / ESC] Close inspection"
+        if self._blocked_until > self._time:
+            return "That ground cannot be crossed. Choose a clear path."
+        if self._path:
+            target = next((bound.point.name for bound in self.points if bound.point.key == self._clicked_point), None)
+            if not target and self.spec:
+                target = next((look.name for look in self.spec.looks if "look:" + look.key == self._clicked_point), None)
+            return f"Walking to {target or 'your destination'}."
         focus = self._focus()
         if isinstance(focus, BoundPoint):
-            return f"[E / ENTER] {focus.option}"
+            return f"[E / ENTER] {focus.point.name}"
         if isinstance(focus, WorldLook):
             return f"[E / ENTER] Look at {focus.name}"
         if self._hovered:
             return f"{self._hovered.point.name}: click to walk there"
         if self._hovered_look:
             return f"{self._hovered_look.name}: click to walk there"
-        if self._path:
-            return "Walking to your destination. WASD takes control."
-        return "WASD: walk   E: interact   Click: walk to a place"
+        return "Click a marked place to walk there."
 
     @property
     def inspection_text(self) -> str:
@@ -439,6 +934,15 @@ class WorldView:
         if isinstance(focus, WorldLook):
             return f"Press E to inspect {focus.name}."
         return ""
+
+    @property
+    def inspection_open(self) -> bool:
+        return self._inspected_look is not None
+
+    @property
+    def inspection_title(self) -> str:
+        """Only an opened discovery has a title for the read-only transcript."""
+        return self._inspected_look.name if self._inspected_look else ""
 
     def _tile(self, position: tuple[float, float] | None = None) -> tuple[int, int]:
         x, y = position or self._position
@@ -478,6 +982,7 @@ class WorldView:
             self._path.clear()
             self._clicked_point = None
             self._inspected_look = None
+            self._blocked_until = 0.0
         moved = False
         while remaining > 0:
             step = min(remaining, 0.025)
@@ -499,11 +1004,14 @@ class WorldView:
                 elif distance:
                     self._move(delta_x / distance * self.SPEED * step, delta_y / distance * self.SPEED * step)
             moved |= before != self._position
+            if self._position != before and (not self._trail or hypot(self._position[0] - self._trail[-1][0], self._position[1] - self._trail[-1][1]) >= 2):
+                self._trail.append(self._position)
         self._walking = moved
         if moved and not reduced_motion:
             self._walk_time += max(0.0, min(float(dt), 0.25))
         if self.spec:
             self._positions[self.spec.key] = self._position
+        self._update_followers(max(0.0, min(float(dt), 0.25)), reduced_motion=reduced_motion)
 
     def _local_position(self, screen_position: tuple[int, int]) -> tuple[float, float] | None:
         if not self._rect.width or not self._rect.collidepoint(screen_position):
@@ -530,12 +1038,15 @@ class WorldView:
         """Choose the shortest reachable adjacent tile for a marked feature."""
         if not self._navigation_spec:
             return False
+        self._path.clear()
         start = self._tile()
-        targets = interaction_tiles(self._navigation_spec, point) if point else (target,)
+        targets = tuple(tile for tile in interaction_tiles(self._navigation_spec, point) if self._can_interact(point, (tile[0] * TILE + 8, tile[1] * TILE + 8))) if point else (target,)
         routes = [(shortest_path(self._navigation_spec, start, tile), tile) for tile in targets if self._navigation_spec.passable(tile)]
         routes = [(route, tile) for route, tile in routes if route or tile == start]
         if not routes:
+            self._blocked_until = self._time + 1.6
             return False
+        self._blocked_until = 0.0
         route, _tile = min(routes, key=lambda item: len(item[0]))
         # First center within the current tile, then follow tile centers.  This
         # stops diagonal corner cutting after a manually controlled movement.
@@ -553,17 +1064,28 @@ class WorldView:
             self._held.discard(event.key)
             return True, None
         if event.type == getattr(pg, "WINDOWFOCUSLOST", -1):
-            self._held.clear()
+            self.stop_moving()
             return False, None
         if event.type == pg.KEYDOWN:
             if event.key in movement:
                 self._held.add(event.key)
                 return True, None
+            if event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE, pg.K_RIGHT):
+                if self._inspected_look:
+                    self._inspected_look = None
+                    return True, None
+                if self._path:
+                    # Generic confirmation belongs to the active walk,
+                    # rather than a previously selected side-menu choice.
+                    # Explicit menu focus is handled before world input.
+                    return True, None
             if event.key in (pg.K_e, pg.K_RETURN, pg.K_KP_ENTER):
                 if self._inspected_look:
                     self._inspected_look = None
                     return True, None
                 focus = self._focus()
+                if focus is None and event.key in (pg.K_RETURN, pg.K_KP_ENTER):
+                    return False, None
                 if isinstance(focus, WorldLook):
                     self._inspected_look = focus
                     self._path.clear()
@@ -581,6 +1103,12 @@ class WorldView:
             local = self._local_position(event.pos)
             if local is None:
                 return False, None
+            if self._inspected_look and self._inspection_rect.collidepoint(local):
+                # The visible popup owns its hit area; its prose must never
+                # click through to an obscured map choice or destination.
+                if self._inspection_close_rect.collidepoint(local):
+                    self._inspected_look = None
+                return True, None
             self._inspected_look = None
             bound = self._point_at(local)
             if bound:
@@ -590,7 +1118,7 @@ class WorldView:
                 self._clicked_point = bound.point.key
                 self.walk_to(bound.point.tile, point=bound.point)
             elif (look := self._look_at(local)) is not None:
-                if self._clicked_point == "look:" + look.key and hypot(self._position[0] - look.position[0], self._position[1] - look.position[1]) <= self.INTERACTION_DISTANCE:
+                if self._clicked_point == "look:" + look.key and self._can_interact(look):
                     self._inspected_look = look
                     self._path.clear()
                     self._held.clear()
@@ -616,6 +1144,29 @@ class WorldView:
                         self.pg.draw.rect(self._atlas, (72, 103, 91), (x + 6, y + 9, 8, 11))
                         self.pg.draw.rect(self._atlas, (197, 166, 117), (x + 7, y + 4, 6, 5))
                         self.pg.draw.rect(self._atlas, (22, 26, 29), (x + 6, y + 20, 8, 2))
+        if self._motion_atlas is None:
+            try:
+                atlas = self.pg.image.load(str(ASSET_DIRECTORY / "world-motion.png")).convert_alpha()
+                if atlas.get_size() != (20 * MOTION_FRAMES, len(MOTION_CHARACTERS) * MOTION_ROWS * 24):
+                    raise ValueError("motion atlas has an incompatible geometry")
+                self._motion_atlas = atlas
+            except (OSError, ValueError, self.pg.error):
+                self._motion_atlas = False
+        if self._depth_atlas is None:
+            try:
+                atlas = self.pg.image.load(str(ASSET_DIRECTORY / "world-depth.png")).convert_alpha()
+                rows = (len(DEPTH_OBJECTS) + DEPTH_COLUMNS - 1) // DEPTH_COLUMNS
+                if atlas.get_size() != (DEPTH_COLUMNS * DEPTH_CELL[0], rows * DEPTH_CELL[1]):
+                    raise ValueError("depth atlas has an incompatible geometry")
+                self._depth_atlas = atlas
+                for index, (key, x, y, glyph) in enumerate(DEPTH_OBJECTS):
+                    anchor = y * TILE + (20 if glyph == "W" else 14)
+                    sprite = atlas.subsurface(depth_frame_rect(index))
+                    self._depth_sprites.setdefault(key, []).append((anchor, sprite, (x * TILE - 8, y * TILE - 16)))
+                for sprites in self._depth_sprites.values():
+                    sprites.sort(key=lambda prop: prop[0])
+            except (OSError, ValueError, self.pg.error):
+                self._depth_atlas = False
         if self.spec and self.spec.key not in self._backgrounds:
             try:
                 self._backgrounds[self.spec.key] = self.pg.image.load(str(ASSET_DIRECTORY / f"world-{self.spec.key}.png")).convert()
@@ -627,13 +1178,23 @@ class WorldView:
                         self.pg.draw.rect(background, color, (x * TILE, y * TILE, TILE - 1, TILE - 1))
                 self._backgrounds[self.spec.key] = background
 
-    def _sprite(self, name: str, direction: int = 0, frame: int = 0) -> Any:
-        return self._atlas.subsurface(character_frame_rect(name, direction=direction, frame=frame))
+    def _sprite(self, name: str, direction: int = 0, frame: int = 0, pose: str = "idle") -> Any:
+        if self._motion_atlas and name in MOTION_CHARACTERS:
+            return self._motion_atlas.subsurface(motion_frame_rect(name, direction=direction, frame=frame, pose=pose))
+        name = {"wayfarer": "traveler", "scout": "traveler", "healer": "traveler", "ned": "patron", "captive": "patron", "warg": "orc_scout", "orc_sapper": "orc", "orc_archer": "orc_scout"}.get(name, name)
+        name = name if name == "traveler" or name in CHARACTER_ATLAS_ROWS else "traveler"
+        return self._atlas.subsurface(character_frame_rect(name, direction=direction, frame=frame // 2 if pose == "walk" else 0))
 
-    def _draw_character(self, name: str, position: tuple[float, float], *, direction: int = 0, frame: int = 0) -> None:
+    def _draw_character(self, name: str, position: tuple[float, float], *, direction: int = 0, frame: int = 0, pose: str = "idle") -> None:
         x, y = round(position[0]), round(position[1])
         self.pg.draw.ellipse(self._native, (12, 17, 19), (x - 6, y - 3, 12, 5))
-        self._native.blit(self._sprite(name, direction, frame), (x - 10, y - 21))
+        self._native.blit(self._sprite(name, direction, frame, pose), (x - 10, y - 21))
+
+    def _face_player(self, position: tuple[float, float], default: int = 0) -> int:
+        dx, dy = self._position[0] - position[0], self._position[1] - position[1]
+        if hypot(dx, dy) > 54:
+            return default
+        return (2 if dx > 0 else 1) if abs(dx) > abs(dy) else (0 if dy > 0 else 3)
 
     def _ambient(self, reduced_motion: bool) -> None:
         if not self.spec:
@@ -642,50 +1203,123 @@ class WorldView:
         tick = 0 if reduced_motion else int(self._time * 1000)
         overlay = pg.Surface(WORLD_SIZE, pg.SRCALPHA)
         for index, (x, y) in enumerate(self.spec.lights):
-            cx, cy = x * TILE + 8, y * TILE + (5 if self.spec.key != "lantern" else -10)
+            offset = -10 if self.spec.key == "lantern" else 9 if self.spec.key == "camp" else 5
+            cx, cy = x * TILE + 8, y * TILE + offset
             shimmer = 0 if reduced_motion else ((tick // 190 + index * 3) % 4)
             for radius, alpha in ((26, 9), (18, 14), (11, 22), (5, 38)):
                 pg.draw.circle(overlay, (235, 164, 69, alpha + shimmer), (cx, cy), radius)
-            pg.draw.rect(overlay, (255, 215, 125, 235), (cx, cy - shimmer // 2, 1, 3))
+            if self.spec.key != "camp":
+                pg.draw.rect(overlay, (255, 215, 125, 235), (cx, cy - shimmer // 2, 1, 3))
         if self.spec.ambience == "rain" and not reduced_motion:
             for index in range(25):
                 x = (index * 83 + tick // 70) % WORLD_SIZE[0]
                 y = (index * 47 + tick // 35 * 3) % WORLD_SIZE[1]
                 pg.draw.line(overlay, (120, 161, 170, 65), (x, y), (x - 1, y + 3))
-        elif self.spec.ambience == "water":
+        elif self.spec.ambience in {"water", "marsh"}:
             for y, row in enumerate(self.spec.grid):
                 for x, cell in enumerate(row):
                     if cell == "~":
                         offset = (tick // 390 + x + y) % 7
                         pg.draw.line(overlay, (126, 164, 164, 70), (x * TILE + 3, y * TILE + offset + 4), (x * TILE + 10, y * TILE + offset + 4))
+            if self.spec.ambience == "marsh":
+                for index in range(5):
+                    x = (index * 67 + tick // 310) % 360 - 32
+                    y = 61 + (index * 37) % 150
+                    pg.draw.line(overlay, (160, 184, 171, 14), (x, y), (x + 29, y))
+                    pg.draw.line(overlay, (160, 184, 171, 8), (x + 5, y + 1), (x + 23, y + 1))
+        elif self.spec.ambience == "gulf":
+            for index in range(3):
+                x = 87 + (index * 37 + tick // 480) % 132
+                y = 171 + index * 13
+                pg.draw.line(overlay, (100, 131, 136, 14), (x, y), (min(247, x + 24), y))
+                pg.draw.line(overlay, (70, 102, 111, 9), (x + 3, y + 1), (min(247, x + 19), y + 1))
         elif self.spec.ambience == "dust" and not reduced_motion:
             for index in range(9):
                 x = (index * 43 + tick // 210) % 286 + 16
                 y = (index * 31 + tick // 380) % 190 + 22
                 pg.draw.rect(overlay, (190, 178, 133, 110), (x, y, 1, 1))
+        elif self.spec.ambience == "ash" and not reduced_motion:
+            for index in range(12):
+                x = (index * 71 + tick // 250) % 284 + 18
+                y = (index * 39 + tick // 430) % 188 + 25
+                pg.draw.rect(overlay, (149, 155, 147, 52), (x, y, 1, 1))
+        if not reduced_motion and self.spec.ambience in {"rain", "marsh"}:
+            for y, row in enumerate(self.spec.grid):
+                for x, cell in enumerate(row):
+                    if cell in {"V", "E"}:
+                        sway = ((tick // 530 + x + y) % 3) - 1
+                        cx, cy = x * TILE + (8 if cell == "V" else 11), y * TILE + (1 if cell == "V" else 3)
+                        pg.draw.line(overlay, (116, 139, 97, 115), (cx + sway, cy), (cx + sway + 2, cy))
         self._native.blit(overlay, (0, 0))
 
-    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False) -> Any:
+    def _scene_details(self) -> None:
+        """Known routes can reveal art; unknown optional routes remain hidden."""
+        if not self.spec:
+            return
+        for point in self.spec.points:
+            if point.key in self._revealed_details.get(self.spec.key, ()) and point.decoration == "stairs":
+                px, py = point.tile[0] * TILE, point.tile[1] * TILE
+                self.pg.draw.rect(self._native, (12, 17, 21), (px + 1, py, 14, 15))
+                for index in range(5):
+                    self.pg.draw.line(self._native, (113 - index * 8, 123 - index * 8, 111 - index * 8), (px + 2 + index // 2, py + index * 3), (px + 13 - index // 2, py + index * 3))
+
+    def _foreground(self) -> None:
+        if not self.spec or self.spec.key != "sluice":
+            return
+        # Cage bars belong in front of the people inside them. They remain
+        # static collision geometry and never cover an approach marker.
+        for y, row in enumerate(self.spec.grid):
+            for x, glyph in enumerate(row):
+                if glyph == "K":
+                    px, py = x * TILE, y * TILE
+                    for offset in (1, 6, 11):
+                        self.pg.draw.line(self._native, (72, 84, 82), (px + offset, py + 1), (px + offset, py + 14))
+                    self.pg.draw.line(self._native, (98, 105, 99), (px, py + 13), (px + 15, py + 13))
+
+    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False, text_size: str = "standard") -> Any:
         if not self.spec:
             return self.pg.Rect(rect)
         self._assets()
         pg = self.pg
         self._native.blit(self._backgrounds[self.spec.key], (0, 0))
+        self._scene_details()
         self._ambient(reduced_motion)
         for x, y in self._path:
             pg.draw.rect(self._native, (74, 116, 109), (round(x), round(y), 1, 1))
-        frame = int(self._walk_time * 8) % 4 if self._walking and not reduced_motion else 0
-        characters = [(self._position[1], "traveler", self._position, self._direction, frame)]
-        for name, tile in self.spec.actors:
+        if self._path:
+            x, y = map(round, self._path[-1])
+            color = (139, 184, 170) if reduced_motion or int(self._time * 2) % 2 == 0 else (82, 128, 117)
+            pg.draw.ellipse(self._native, color, (x - 3, y - 2, 7, 4), 1)
+        pose = "walk" if self._walking else "idle"
+        frame = 0 if reduced_motion else int((self._walk_time * 16) if self._walking else (self._time * 1.6)) % MOTION_FRAMES
+        characters = [(self._position[1], self._hero_name, self._position, self._direction, frame, pose)]
+        for follower in self._followers:
+            follower_pose = "walk" if follower.walking else "idle"
+            follower_frame = 0 if reduced_motion else int((follower.walk_time * 16) if follower.walking else (self._time * 1.4)) % MOTION_FRAMES
+            direction = follower.direction if follower.walking else self._face_player(follower.position, follower.direction)
+            characters.append((follower.position[1], follower.name, follower.position, direction, follower_frame, follower_pose))
+        for name, tile in self._actors:
             position = (tile[0] * TILE + TILE / 2, tile[1] * TILE + TILE / 2)
-            sprite_frame = 0 if reduced_motion else int(self._time * 1.3) % 4
-            characters.append((position[1], name, position, 0, sprite_frame))
+            sprite_frame = 0 if reduced_motion else int(self._time * 1.3) % MOTION_FRAMES
+            actor_pose = "snared" if name in {"ned", "captive"} else "guard" if name.startswith("orc") else "idle"
+            # Ned hangs against the watch-stone rather than behind its face.
+            depth = position[1] + 8 if name == "ned" else position[1]
+            characters.append((depth, name, position, self._face_player(position), sprite_frame, actor_pose))
         for point in self._character_points:
             # Conversations can finish while their companions remain here.
-            idle_frame = 0 if reduced_motion or point.sprite == "edrin" else int(self._time * 1.4) % 4
-            characters.append((point.position[1], point.sprite, point.position, 0, idle_frame))
-        for _y, name, position, direction, sprite_frame in sorted(characters):
-            self._draw_character(name, position, direction=direction, frame=sprite_frame)
+            idle_frame = 0 if reduced_motion or point.sprite == "edrin" else int(self._time * 1.4) % MOTION_FRAMES
+            characters.append((point.position[1], point.sprite, point.position, self._face_player(point.position), idle_frame, point.pose))
+        props = self._depth_sprites.get(self.spec.key, ())
+        prop_index = 0
+        for character_y, name, position, direction, sprite_frame, character_pose in sorted(characters):
+            while prop_index < len(props) and props[prop_index][0] <= character_y:
+                _anchor, sprite, prop_position = props[prop_index]
+                self._native.blit(sprite, prop_position)
+                prop_index += 1
+            self._draw_character(name, position, direction=direction, frame=sprite_frame, pose=character_pose)
+        for _anchor, sprite, prop_position in props[prop_index:]:
+            self._native.blit(sprite, prop_position)
+        self._foreground()
         focus = self._focus()
         nearest = focus if isinstance(focus, BoundPoint) else None
         for bound in self.points:
@@ -707,7 +1341,7 @@ class WorldView:
             pg.draw.polygon(self._native, color, ((x, y - 13), (x + 3, y - 10), (x, y - 7), (x - 3, y - 10)), 1)
         # Native-size labels stay crisp after the same nearest-neighbor scale
         # as the map.  Opaque slim bands keep names legible over busy artwork.
-        pg.draw.rect(self._native, (13, 18, 22), (7, 7, min(306, len(self.spec.name) * 6 + 12), 15))
+        pg.draw.rect(self._native, (13, 18, 22), (7, 7, min(306, self._font.size(self.spec.name)[0] + 12), 15))
         self._native.blit(self._font.render(self.spec.name, False, (220, 186, 115)), (13, 10))
         bound = self._hovered or self._hovered_look or focus
         if isinstance(bound, BoundPoint):
@@ -715,31 +1349,45 @@ class WorldView:
         elif isinstance(bound, WorldLook):
             caption = f"LOOK  {bound.name}"
         else:
-            caption = "WASD WALK    E INTERACT    CLICK TO WALK"
-        label = self._small_font.render(caption, False, (225, 216, 184))
-        strip = label.get_rect(midbottom=(160, 235)).inflate(12, 8)
-        pg.draw.rect(self._native, (13, 18, 22), strip)
-        self._native.blit(label, label.get_rect(center=strip.center))
+            caption = ""
+        self._inspection_rect = pg.Rect(0, 0, 0, 0)
+        self._inspection_close_rect = pg.Rect(0, 0, 0, 0)
         if self._inspected_look:
-            words = self._inspected_look.text.split()
-            lines: list[str] = []
-            current = ""
-            for word in words:
-                candidate = f"{current} {word}".strip()
-                if self._small_font.size(candidate)[0] > 266 and current:
-                    lines.append(current)
-                    current = word
-                else:
-                    current = candidate
-            if current:
-                lines.append(current)
-            bubble = pg.Rect(20, 211 - (len(lines) + 3) * 10, 280, (len(lines) + 3) * 10)
+            caption = ""
+        if caption:
+            label = self._small_font.render(caption, False, (225, 216, 184))
+            strip = label.get_rect(midbottom=(160, 235)).inflate(12, 8)
+            pg.draw.rect(self._native, (13, 18, 22), strip)
+            self._native.blit(label, label.get_rect(center=strip.center))
+        if self._inspected_look:
+            font_size = {"large": 14, "larger": 16}.get(text_size, 12)
+            if font_size not in self._inspection_fonts:
+                self._inspection_fonts[font_size] = (load_font(pg, font_size), load_font(pg, font_size, bold=True))
+            body_font, title_font = self._inspection_fonts[font_size]
+            footer_size = font_size - 2
+            if footer_size not in self._inspection_footer_fonts:
+                self._inspection_footer_fonts[footer_size] = load_font(pg, footer_size)
+            footer_font = self._inspection_footer_fonts[footer_size]
+            lines = wrap_text(self._inspected_look.text, body_font, 266)
+            title_lines = wrap_text(self._inspected_look.name.upper(), title_font, 250)
+            line_height = body_font.get_linesize() + 1
+            body_top = len(title_lines) * title_font.get_linesize() + 12
+            footer_height = footer_font.get_linesize() + 10
+            height = body_top + len(lines) * line_height + footer_height
+            bubble = pg.Rect(20, 211 - height, 280, height)
+            self._inspection_rect = bubble.copy()
+            self._inspection_close_rect = pg.Rect(bubble.right - 18, bubble.top + 4, 13, 13)
             pg.draw.rect(self._native, (13, 19, 24), bubble)
             pg.draw.rect(self._native, (115, 145, 125), bubble, 1)
-            self._native.blit(self._font.render(self._inspected_look.name.upper(), False, (222, 185, 111)), (bubble.left + 7, bubble.top + 5))
+            pg.draw.rect(self._native, (115, 145, 125), self._inspection_close_rect, 1)
+            close = self._inspection_close_rect
+            pg.draw.line(self._native, (222, 185, 111), (close.left + 4, close.top + 4), (close.right - 5, close.bottom - 5))
+            pg.draw.line(self._native, (222, 185, 111), (close.right - 5, close.top + 4), (close.left + 4, close.bottom - 5))
+            for index, title in enumerate(title_lines):
+                self._native.blit(title_font.render(title, False, (222, 185, 111)), (bubble.left + 7, bubble.top + 6 + index * title_font.get_linesize()))
             for index, text in enumerate(lines):
-                self._native.blit(self._small_font.render(text, False, (220, 214, 186)), (bubble.left + 7, bubble.top + 17 + index * 10))
-            self._native.blit(self._small_font.render("E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - 10))
+                self._native.blit(body_font.render(text, False, (220, 214, 186)), (bubble.left + 7, bubble.top + body_top + index * line_height))
+            self._native.blit(footer_font.render("Click X / E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - footer_font.get_linesize() - 6))
         target_rect = pg.Rect(rect)
         scale = min(target_rect.width / WORLD_SIZE[0], target_rect.height / WORLD_SIZE[1])
         if scale >= 2:

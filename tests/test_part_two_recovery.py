@@ -4,18 +4,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from roads_beneath_shadow.app import Game
 from roads_beneath_shadow.combat import CombatDifficulty
 from roads_beneath_shadow.content import ORIGINS
 from roads_beneath_shadow.models import Character, GameState
 from roads_beneath_shadow.part_two import PartTwoEpisode
 from roads_beneath_shadow.savegame import SaveManager
+from roads_beneath_shadow.settings import UserSettings
 from roads_beneath_shadow.ui import TerminalUI
 
 
 class LanternRecoveryTests(unittest.TestCase):
     @staticmethod
     def state():
-        state = GameState(Character.from_origin("Arin", ORIGINS[0]), chapter=2, scene="part2_vigil")
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]), chapter=2, scene="part2_vigil", visited=["part2_vigil"])
         state.character.hp = 1
         state.character.focus = 0
         state.character.hope = 4
@@ -42,6 +44,74 @@ class LanternRecoveryTests(unittest.TestCase):
             lambda *_: self.fail("Rest must not start combat"),
             difficulty_provider=lambda: difficulty,
         )
+
+    def test_settings_return_refreshes_the_rest_cap_without_spending_a_rest(self):
+        menus = []
+
+        class SettingsUtilityUI(TerminalUI):
+            def __init__(self):
+                super().__init__(color=False, fast=True, output_fn=lambda _: None)
+                self.pause_choices = iter((3, None))
+                self.setting_choices = iter((6, None))
+
+            def choose_story(self, _heading, options):
+                menus.append(tuple(options))
+                return "p" if len(menus) == 1 else None
+
+            def choose(self, title, _options, **_kwargs):
+                return next(self.pause_choices if title == "JOURNEY PAUSED" else self.setting_choices)
+
+        game = Game(SettingsUtilityUI(), user_settings=UserSettings(difficulty="shadow"))
+        game.state = self.state()
+        before = game.state.to_dict()
+        rng_before = game.combat.rng.getstate()
+
+        self.assertFalse(game.part_two.run_scene(game.state))
+
+        self.assertIn("up to 9 Health", " ".join(menus[0]))
+        self.assertIn("up to 28 Health", " ".join(menus[1]))
+        self.assertEqual(game.user_settings.difficulty, "story")
+        self.assertEqual(game.state.to_dict(), before)
+        self.assertEqual(game.combat.rng.getstate(), rng_before)
+        self.assertEqual(tuple(game._active_decision["options"]), menus[1])
+
+    def test_inventory_healing_refreshes_rest_availability_and_selected_topic(self):
+        menus = []
+
+        class InventoryUtilityUI(TerminalUI):
+            def __init__(self):
+                super().__init__(color=False, fast=True, output_fn=lambda _: None)
+                self.actions = iter(({"action": "use", "item_id": "healing_herb"}, {"action": "close"}))
+
+            def choose_story(self, _heading, options):
+                menus.append(tuple(options))
+                if len(menus) == 1:
+                    return "i"
+                return next(index + 1 for index, option in enumerate(options) if option == "Enter the Last Seal")
+
+            def show_panel(self, kind, _data):
+                if kind != "inventory":
+                    raise AssertionError(f"Unexpected panel {kind}")
+                return next(self.actions)
+
+        game = Game(InventoryUtilityUI())
+        game.state = self.state()
+        game.state.character.hp = game.state.character.max_hp - 2
+        game.state.character.focus = game.state.character.max_focus
+        before = game.state.to_dict()
+        rng_before = game.combat.rng.getstate()
+
+        self.assertTrue(game.part_two.run_scene(game.state))
+
+        self.assertTrue(any(option.startswith("Rest and tend") for option in menus[0]))
+        self.assertFalse(any(option.startswith("Rest and tend") for option in menus[1]))
+        self.assertEqual(game.state.scene, "part2_last_seal")
+        self.assertEqual(game.state.character.hp, game.state.character.max_hp)
+        self.assertNotIn("healing_herb", game.state.character.inventory)
+        self.assertFalse(game.state.flags.get("part2_vigil_rest", False))
+        self.assertEqual(game.state.play_minutes, before["play_minutes"])
+        self.assertEqual(game.state.journal, before["journal"])
+        self.assertEqual(game.combat.rng.getstate(), rng_before)
 
     def test_recovery_has_an_explicit_once_only_choice_and_difficulty_amount(self):
         for difficulty, expected_health in (

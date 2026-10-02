@@ -1,4 +1,8 @@
-"""PyInstaller entry point for the pixel-art macOS release."""
+"""PyInstaller entry point for the pixel-art desktop releases."""
+
+import os
+
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from roads_beneath_shadow.__main__ import main
 

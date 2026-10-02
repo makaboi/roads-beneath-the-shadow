@@ -3,13 +3,18 @@
 
 The game loads the resulting PNGs directly; Pillow is a development tool only.
 Run with --environment-atlas PATH and optionally --encounter-atlas PATH.
+Use --battle-background NAME=PATH to convert a standalone battle backdrop
+without rebuilding existing atlases or props.
 """
 
 from __future__ import annotations
 
 import argparse
+from datetime import date, datetime, timezone
+import hashlib
 import json
 import random
+import re
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -20,6 +25,7 @@ DEST = ROOT / "roads_beneath_shadow" / "pixel_assets"
 SIZE = (320, 240)
 ENVIRONMENTS = ("title", "tavern", "marsh", "camp", "rider", "seal")
 ENCOUNTERS = ("orc", "warg", "ghorak", "troll", "ranger", "tavern-interior")
+PROPS = ("key", "broken-key", "sword", "map", "lantern", "cages")
 PALETTE = {
     "black": "#080b0b", "dark": "#121a1a", "teal": "#253b3b",
     "mist": "#48605c", "stone": "#645b43", "bronze": "#9f7842",
@@ -41,6 +47,44 @@ def slice_atlas(path: Path, names: tuple[str, ...], palette: Image.Image | None 
         panel = atlas.crop(bounds).resize(SIZE, Image.Resampling.NEAREST)
         panel = panel.quantize(palette=palette, dither=Image.Dither.NONE)
         panel.save(DEST / f"{name}.png", optimize=True)
+
+
+def background_source(value: str) -> tuple[str, Path]:
+    """Keep standalone backgrounds separate from the fixed 3x2 atlases."""
+    name, separator, source = value.partition("=")
+    if not separator or not source or re.fullmatch(r"[a-z0-9-]+", name) is None:
+        raise argparse.ArgumentTypeError("Use NAME=PATH with a lowercase pixel background name")
+    if name in (*ENVIRONMENTS, *ENCOUNTERS, *PROPS) or name.startswith("world-"):
+        raise argparse.ArgumentTypeError("A battle background cannot replace an existing atlas or world asset")
+    return name, Path(source)
+
+
+def build_background(name: str, source: Path, generated_on: str) -> dict:
+    """Use the atlas pipeline's native nearest resize and undithered palette."""
+    source_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    with Image.open(source) as original:
+        image = original.convert("RGB")
+    source_size = image.size
+    palette = image.quantize(colors=32, method=Image.Quantize.MEDIANCUT)
+    native = image.resize(SIZE, Image.Resampling.NEAREST)
+    native = native.quantize(palette=palette, dither=Image.Dither.NONE)
+    destination = DEST / f"{name}.png"
+    native.save(destination, optimize=True)
+    return {
+        "generator": "OpenAI image generation",
+        "source_name": source.name,
+        "source_sha256": source_digest,
+        "source_dimensions": list(source_size),
+        "generated_on": generated_on,
+        "conversion": {
+            "script": "scripts/generate_pixel_assets.py",
+            "resize": "nearest-neighbor",
+            "palette": "median-cut",
+            "colors": 32,
+            "dither": "none",
+        },
+        "native_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+    }
 
 
 def prop_stage() -> tuple[Image.Image, ImageDraw.ImageDraw]:
@@ -152,6 +196,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--environment-atlas", type=Path)
     parser.add_argument("--encounter-atlas", type=Path)
+    parser.add_argument("--battle-background", type=background_source, action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--source-date", type=date.fromisoformat, default=datetime.now(timezone.utc).date(), metavar="YYYY-MM-DD")
     args = parser.parse_args()
     DEST.mkdir(parents=True,exist_ok=True)
     palette = None
@@ -160,17 +206,26 @@ def main() -> None:
         slice_atlas(args.environment_atlas,ENVIRONMENTS,palette)
     if args.encounter_atlas:
         slice_atlas(args.encounter_atlas,ENCOUNTERS,palette)
-    draw_props()
-    manifest = {
+    if not args.battle_background or args.environment_atlas or args.encounter_atlas:
+        draw_props()
+    manifest_path = DEST / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+    manifest.update({
         "format": 1, "resolution": list(SIZE), "scaling": "nearest-neighbor",
         "palette_colors_per_scene": 32,
         "environment_scenes": list(ENVIRONMENTS),
         "encounter_scenes": list(ENCOUNTERS),
-        "original_pixel_props": ["key", "broken-key", "sword", "map", "lantern", "cages"],
+        "original_pixel_props": list(PROPS),
         "art_direction": "Gothic dark fantasy: charcoal, sepia, bone, amber and muted teal",
         "source_atlases": "Generated with OpenAI image generation; original atlases retained outside the package.",
-    }
-    (DEST / "manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+    })
+    backgrounds = manifest.setdefault("battle_backgrounds", [])
+    provenance = manifest.setdefault("battle_background_sources", {})
+    for name, source in args.battle_background:
+        provenance[name] = build_background(name, source, args.source_date.isoformat())
+        if name not in backgrounds:
+            backgrounds.append(name)
+    manifest_path.write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 
 
 if __name__ == "__main__":

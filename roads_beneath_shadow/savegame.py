@@ -66,8 +66,11 @@ class SaveManager:
         path = self._path(slot)
         if path.stat().st_size > MAX_SAVE_BYTES:
             raise ValueError("Save file is too large")
-        with path.open("r", encoding="utf-8") as source:
-            payload = json.load(source)
+        try:
+            with path.open("r", encoding="utf-8") as source:
+                payload = json.load(source)
+        except RecursionError as error:
+            raise ValueError("Save file is too deeply nested") from error
         if not isinstance(payload, dict) or not isinstance(payload.get("state"), dict):
             raise ValueError("Save file is malformed")
         state = GameState.from_dict(payload["state"])
@@ -108,7 +111,7 @@ class SaveManager:
     @staticmethod
     def _validate_state(state: GameState) -> None:
         """Validate semantic constraints that depend on the game's content catalog."""
-        from .content import ENDING_TEXT, ITEMS, ORIGINS
+        from .content import ENDING_TEXT, ITEMS, ORIGINS, PART_ONE_ENDINGS
 
         character = state.character
         origin_ids = {origin.origin_id for origin in ORIGINS}
@@ -165,5 +168,11 @@ class SaveManager:
             raise ValueError("chapter must be between 1 and 1000")
         if state.scene.startswith("part2_") and state.chapter != 2:
             raise ValueError("Part II scenes require chapter 2")
+        if state.scene != "complete" and not state.scene.startswith("part2_") and state.chapter != 1:
+            raise ValueError("Part I scenes require chapter 1")
+        if state.ending in PART_ONE_ENDINGS and state.chapter != 1:
+            raise ValueError("Part I endings require chapter 1")
+        if state.ending is not None and state.ending not in PART_ONE_ENDINGS and state.chapter != 2:
+            raise ValueError("Part II endings require chapter 2")
         if not 0 <= state.play_minutes <= 10_000_000:
             raise ValueError("play_minutes must be between 0 and 10000000")

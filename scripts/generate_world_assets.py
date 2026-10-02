@@ -15,7 +15,11 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from roads_beneath_shadow.pixel_world import TILE, WORLD_MAPS, WORLD_SIZE  # noqa: E402
+from roads_beneath_shadow.pixel_world import (  # noqa: E402
+    TILE, WORLD_MAPS, WORLD_SIZE, MOTION_CHARACTERS, MOTION_ROWS,
+    MOTION_FRAMES, ORIGIN_PORTRAITS, motion_frame_rect,
+    DEPTH_OBJECTS, DEPTH_COLUMNS, DEPTH_CELL, depth_frame_rect,
+)
 
 DESTINATION = ROOT / "roads_beneath_shadow" / "pixel_assets"
 
@@ -55,7 +59,7 @@ def line(draw: ImageDraw.ImageDraw, points: tuple[int, ...], name: str) -> None:
 
 def _floor(draw: ImageDraw.ImageDraw, x: int, y: int, glyph: str, key: str, rng: random.Random) -> None:
     px, py = x * TILE, y * TILE
-    if key == "pony":
+    if key == "pony" or glyph == "-":
         rect(draw, (px, py, px + 15, py + 15), "wood1")
         for row in range(0, 16, 5):
             shade = rng.choice(("wood1", "wood1", "wood2", "wood0"))
@@ -66,7 +70,15 @@ def _floor(draw: ImageDraw.ImageDraw, x: int, y: int, glyph: str, key: str, rng:
         seam = 3 if (x + y) % 2 else 12
         line(draw, (px + seam, py, px + seam, py + 3), "wood0")
         draw.point((px + seam + 2, py + 2), fill=color("wood4"))
-    elif key == "bree" and glyph not in "=+":
+    elif glyph == ";":
+        rect(draw, (px, py, px + 15, py + 15), "wood0")
+        for _ in range(13):
+            ax, ay = px + rng.randrange(14), py + rng.randrange(14)
+            line(draw, (ax, ay, min(px + 15, ax + rng.randrange(2, 5)), ay), rng.choice(("wood1", "grass0", "stone0")))
+        if rng.randrange(3) == 0:
+            draw.ellipse((px + 2, py + 7, px + 10, py + 10), fill=color("water0"))
+            line(draw, (px + 3, py + 8, px + 7, py + 8), "water1")
+    elif glyph in {",", "V", "E", "s", "C", "r"} and key in {"bree", "north-gate", "road-fork", "camp", "watch-post"}:
         rect(draw, (px, py, px + 15, py + 15), "grass0")
         for _ in range(12):
             ax, ay = px + rng.randrange(14), py + rng.randrange(14)
@@ -90,7 +102,7 @@ def _floor(draw: ImageDraw.ImageDraw, x: int, y: int, glyph: str, key: str, rng:
         if key == "bree" and rng.randrange(3) == 0:
             draw.ellipse((px + 3, py + 5, px + 12, py + 9), fill=color("water1"))
             line(draw, (px + 5, py + 6, px + 9, py + 6), "water2")
-        if key in {"hall", "wayhouse", "lantern"} and rng.randrange(5) == 0:
+        if key in {"hall", "wayhouse", "lantern", "drowned-mile", "sluice", "refuge"} and rng.randrange(5) == 0:
             draw.point((px + 2, py + 11), fill=color("moss"))
 
 
@@ -245,6 +257,86 @@ def _prop(draw: ImageDraw.ImageDraw, x: int, y: int, glyph: str, key: str, grid:
             line(draw, (ax, ay, ax + rng.randrange(1, 4), ay), "water1")
         if x > 0 and grid[y][x - 1] != "~":
             line(draw, (px, py, px, py + 15), "water3")
+        if y > 0 and grid[y - 1][x] != "~":
+            line(draw, (px, py, px + 15, py), "water2")
+    elif glyph == "X":
+        rect(draw, (px, py, px + 15, py + 15), "shadow")
+        if rng.randrange(4) == 0:
+            line(draw, (px + 4, py + 8, px + 10, py + 8), "void")
+    elif glyph == "E":
+        # Reed clumps have narrow stems, broad dark roots and seed heads.
+        draw.ellipse((px - 1, py + 9, px + 16, py + 16), fill=color("grass0"))
+        for ax in range(2, 15, 3):
+            height = rng.randrange(8, 17)
+            lean = rng.choice((-2, -1, 1, 2))
+            line(draw, (px + ax, py + 13, px + ax + lean, py + 13 - height), "grass2")
+            line(draw, (px + ax, py + 9, px + ax - 3, py + 4), "grass3")
+            rect(draw, (px + ax + lean, py + 10 - height, px + ax + lean + 1, py + 13 - height), "straw1")
+    elif glyph in {"s", "n", "L"}:
+        draw.ellipse((px + 1, py + 9, px + 16, py + 16), fill=color("shadow"))
+        top = py - (8 if glyph == "s" else 3)
+        draw.polygon(((px + 4, py + 13), (px + 2, top + 5), (px + 5, top), (px + 12, top + 1), (px + 14, py + 12)), fill=color("stone1"))
+        draw.polygon(((px + 4, py + 12), (px + 3, top + 5), (px + 6, top + 1), (px + 11, top + 2), (px + 11, py + 12)), fill=color("stone3"))
+        line(draw, (px + 5, top + 2, px + 10, top + 2), "stone5")
+        line(draw, (px + 7, top + 6, px + 5, top + 10, px + 7, py + 10), "stone0")
+        if glyph == "L":
+            line(draw, (px + 8, py + 1, px + 8, py + 7), "teal2")
+            line(draw, (px + 5, py + 4, px + 11, py + 4), "teal2")
+            for dx, dy in ((-2, -2), (2, -2), (-2, 2), (2, 2)):
+                line(draw, (px + 8, py + 4, px + 8 + dx, py + 4 + dy), "silver")
+        elif glyph == "n":
+            for yy in (py + 2, py + 5, py + 8):
+                line(draw, (px + 6, yy, px + 10, yy), "stone0")
+        rect(draw, (px + 3, py + 11, px + 6, py + 13), "moss")
+    elif glyph == "C":
+        # A sheltered ember is low and smokeless, unlike the Pony's fire.
+        draw.ellipse((px + 1, py + 5, px + 14, py + 14), fill=color("shadow"))
+        for ax, ay in ((3, 7), (7, 6), (11, 8), (4, 12), (10, 12)):
+            rect(draw, (px + ax, py + ay, px + ax + 2, py + ay + 1), "stone2")
+        line(draw, (px + 5, py + 9, px + 10, py + 10), "wood0")
+        for ax in (6, 8, 10):
+            draw.point((px + ax, py + 9), fill=color("amber1"))
+        draw.point((px + 8, py + 10), fill=color("amber2"))
+    elif glyph == "r":
+        # Buried roots curl around masonry without occupying extra tiles.
+        for offset in (0, 4, 8):
+            points = (px + 1, py + 1 + offset, px + 6, py + 4 + offset, px + 8, py + 10, px + 14, py + 14)
+            draw.line(points, fill=color("wood0"), width=3)
+            line(draw, points, "wood2")
+        line(draw, (px + 7, py + 6, px + 3, py + 11, px + 1, py + 14), "wood3")
+    elif glyph == "K":
+        rect(draw, (px, py + 1, px + 15, py + 15), "shadow")
+        for yy in (py + 2, py + 13):
+            line(draw, (px, yy, px + 15, yy), "stone3")
+            line(draw, (px, yy + 1, px + 15, yy + 1), "stone0")
+        for ax in (1, 6, 11):
+            line(draw, (px + ax, py + 1, px + ax, py + 14), "stone2")
+            draw.point((px + ax, py + 2), fill=color("amber0"))
+    elif glyph == "W":
+        cx, cy = px + 8, py + 6
+        draw.ellipse((cx - 14, cy - 14, cx + 14, cy + 14), fill=color("shadow"), outline=color("wood4"), width=2)
+        draw.ellipse((cx - 11, cy - 11, cx + 11, cy + 11), outline=color("wood1"))
+        for dx, dy in ((0, -12), (0, 12), (-12, 0), (12, 0), (-8, -8), (8, 8), (-8, 8), (8, -8)):
+            draw.line((cx, cy, cx + dx, cy + dy), fill=color("wood2"), width=2)
+            draw.point((cx + dx, cy + dy), fill=color("wood5"))
+        rect(draw, (cx - 2, cy - 2, cx + 2, cy + 2), "stone3")
+        draw.point((cx, cy), fill=color("silver"))
+    elif glyph == "b":
+        rect(draw, (px - 1, py + 3, px + 18, py + 12), "wood0")
+        for yy in (py + 3, py + 7, py + 10):
+            line(draw, (px, yy, px + 15, yy), "wood3")
+        for xx in (px + 1, px + 6, px + 11):
+            line(draw, (xx, py - 5, xx, py + 9), "stone2")
+        draw.ellipse((px - 4, py + 7, px + 4, py + 15), outline=color("wood4"))
+        line(draw, (px, py + 8, px, py + 14), "wood2")
+        line(draw, (px - 3, py + 11, px + 3, py + 11), "wood2")
+        line(draw, (px + 13, py + 12, px + 20, py + 15), "wood3")
+    elif glyph == "d":
+        rect(draw, (px + 1, py + 2, px + 14, py + 14), "shadow")
+        rect(draw, (px + 2, py + 3, px + 13, py + 12), "stone1")
+        for xx in range(px + 3, px + 14, 3):
+            line(draw, (xx, py + 4, xx, py + 12), "stone3")
+        line(draw, (px + 1, py + 2, px + 14, py + 2), "stone4")
     elif glyph in {"T", "B", "A"}:
         # Joined table cells share their upper surface while retaining planks.
         rect(draw, (px, py + 3, px + 15, py + 15), "shadow")
@@ -328,7 +420,7 @@ def _prop(draw: ImageDraw.ImageDraw, x: int, y: int, glyph: str, key: str, grid:
 def _decorations(image: Image.Image, key: str) -> None:
     draw = ImageDraw.Draw(image)
     spec = WORLD_MAPS[key]
-    for x, y in spec.lights if key != "lantern" else ():
+    for x, y in spec.lights if key not in {"lantern", "camp"} else ():
         px, py = x * TILE + 8, y * TILE + 5
         rect(draw, (px - 2, py + 2, px + 2, py + 6), "wood0")
         rect(draw, (px - 1, py, px + 1, py + 3), "amber2")
@@ -474,6 +566,132 @@ def _decorations(image: Image.Image, key: str) -> None:
         rect(draw, (210, 165, 226, 171), "teal0")
         line(draw, (211, 165, 224, 165), "teal1")
         rect(draw, (210, 164, 214, 172), "cloth1")
+    elif key == "north-gate":
+        # The road passes between massive gate piers; the cache stones sit
+        # outside the wall and have individually readable weathered faces.
+        for xx in (142, 186):
+            rect(draw, (xx, 49, xx + 7, 78), "stone0")
+            rect(draw, (xx + 1, 49, xx + 5, 73), "stone3")
+            line(draw, (xx, 48, xx + 7, 48), "stone5")
+        line(draw, (149, 54, 186, 54), "wood3")
+        line(draw, (150, 57, 185, 57), "wood0")
+        for xx in range(154, 184, 6):
+            line(draw, (xx, 52, xx, 62), "wood2")
+        # A star-shaped old mark on the third face, not an extra choice.
+        cx, cy = 103, 99
+        line(draw, (cx - 2, cy, cx + 2, cy), "stone0")
+        line(draw, (cx, cy - 2, cx, cy + 2), "stone0")
+        line(draw, (cx - 1, cy - 1, cx + 1, cy + 1), "stone4")
+    elif key == "road-fork":
+        # Track types make the story's three approaches visible at a glance.
+        for yy in range(27, 218, 7):
+            line(draw, (154, yy, 154, yy + 4), "stone0")
+            line(draw, (180, yy, 180, yy + 4), "stone0")
+        for xx, yy in ((188, 113), (202, 115), (218, 111), (232, 116), (250, 120), (266, 126)):
+            rect(draw, (xx, yy, xx + 2, yy + 3), "shadow")
+            rect(draw, (xx + 7, yy + 6, xx + 9, yy + 8), "shadow")
+            for dx, dy in ((0, -2), (2, -3), (4, -2)):
+                draw.point((xx + dx, yy + dy), fill=color("wood3"))
+        for xx, yy in ((66, 60), (90, 71), (113, 79)):
+            line(draw, (xx, yy, xx + 2, yy - 3), "bone")
+            line(draw, (xx + 2, yy - 3, xx + 4, yy - 1), "bone")
+    elif key == "camp":
+        # Reeds and low, broken walls shelter two bedrolls and a tiny ember.
+        for xx, yy in ((25, 96), (44, 100), (241, 157), (262, 161)):
+            rect(draw, (xx, yy, xx + 14, yy + 4), "stone1")
+            line(draw, (xx + 1, yy, xx + 12, yy), "stone3")
+            line(draw, (xx + 7, yy, xx + 7, yy + 4), "stone0")
+        for xx, yy in ((94, 145), (174, 145)):
+            rect(draw, (xx, yy, xx + 19, yy + 9), "shadow")
+            rect(draw, (xx + 1, yy + 1, xx + 17, yy + 7), "cloth1")
+            line(draw, (xx + 2, yy + 2, xx + 15, yy + 2), "cloth2")
+    elif key == "watch-post":
+        # Fallen masonry gives the isolated watch post a broken silhouette.
+        for xx, yy in ((221, 136), (232, 133), (257, 137)):
+            rect(draw, (xx, yy, xx + 12, yy + 4), "stone1")
+            line(draw, (xx + 1, yy, xx + 10, yy), "stone4")
+        line(draw, (215, 134, 229, 130), "stone3")
+        for yy in range(102, 176, 12):
+            line(draw, (147, yy, 187, yy), "stone3")
+            line(draw, (151, yy + 2, 183, yy + 2), "stone0")
+        # Snapped watch banner, washed far below its original bracket.
+        line(draw, (219, 130, 228, 139), "wood3")
+        draw.polygon(((221, 133), (230, 139), (226, 143), (220, 137)), fill=color("teal0"))
+    elif key == "bridge":
+        # Thin ropes run continuously from the west anchors to the east bank.
+        for yy in (96, 146):
+            line(draw, (71, yy - 12, 107, yy - 3, 163, yy + 2, 218, yy - 3, 256, yy - 12), "wood0")
+            line(draw, (71, yy - 13, 107, yy - 4, 163, yy + 1, 218, yy - 4, 256, yy - 13), "wood4")
+            for xx in range(85, 247, 17):
+                line(draw, (xx, yy - 2, xx, yy + 9), "wood2")
+        # Ancient stone arches are visible as broken edges above the gulf.
+        for cx in (104, 168, 232):
+            draw.arc((cx - 29, 129, cx + 29, 181), 0, 180, fill=color("stone1"), width=3)
+            draw.arc((cx - 28, 128, cx + 28, 177), 0, 180, fill=color("stone3"), width=1)
+        for xx in range(96, 231, 23):
+            line(draw, (xx, 187, xx + 10, 191), "void")
+    elif key == "drowned-mile":
+        for yy in (34, 68, 102, 136):
+            line(draw, (161, yy, 208, yy), "stone3")
+            for xx in (174, 190):
+                draw.point((xx, yy + 2), fill=color("moss"))
+        # A low roadside parapet appears only along the water-facing edge.
+        for yy in range(20, 144, 15):
+            rect(draw, (212, yy, 217, yy + 8), "stone1")
+            line(draw, (212, yy, 217, yy), "stone4")
+        for xx in range(233, 294, 17):
+            rect(draw, (xx, 169, xx + 8, 172), "stone2")
+            line(draw, (xx, 169, xx + 8, 169), "stone4")
+    elif key == "sluice":
+        for left in (48, 112):
+            rect(draw, (left - 2, 44, left + 49, 48), "stone0")
+            line(draw, (left, 44, left + 47, 44), "stone4")
+            for xx in (left - 2, left + 46):
+                rect(draw, (xx, 46, xx + 2, 80), "stone3")
+            rect(draw, (left + 1, 81, left + 5, 85), "wood3")
+            rect(draw, (left + 2, 82, left + 4, 84), "amber0")
+        # Shallow channel cuts lead from the closed drain toward the water.
+        for yy in range(146, 174, 5):
+            line(draw, (179, yy, 189, yy), "stone0")
+            line(draw, (181, yy + 1, 187, yy + 1), "water1")
+        line(draw, (226, 65, 226, 103), "wood1")
+        line(draw, (232, 65, 232, 103), "wood3")
+        for yy in range(169, 178, 4):
+            line(draw, (18, yy, 250, yy), "stone1")
+    elif key == "refuge":
+        # An intact house sits among the ruined dormitory. It is cold; no
+        # warm windows or hearth promise comfort the scene does not give.
+        _gable_roof(draw, (112, 48, 207, 127))
+        rect(draw, (112, 113, 207, 127), "stone0")
+        for yy in (114, 120):
+            offset = 0 if yy == 114 else 6
+            for xx in range(112 - offset, 208, 12):
+                rect(draw, (max(112, xx), yy, min(207, xx + 10), yy + 4), "stone2")
+                line(draw, (max(112, xx), yy, min(207, xx + 10), yy), "stone3")
+        rect(draw, (142, 114, 176, 127), "wood0")
+        rect(draw, (147, 113, 170, 126), "wood1")
+        for xx in (122, 181):
+            rect(draw, (xx, 115, xx + 9, 124), "shadow")
+            line(draw, (xx + 4, 115, xx + 4, 124), "wood1")
+        # Massive overhead roots cradle the surviving stone house. Branches
+        # are broad angular pixel strokes, with fine tendrils at their ends.
+        for points in ((18, 22, 70, 25, 99, 41, 113, 49, 164, 43, 219, 47, 271, 29, 313, 20), (24, 15, 51, 24, 70, 44, 91, 62, 87, 80), (304, 19, 281, 36, 259, 49, 240, 61, 230, 81)):
+            draw.line(points, fill=color("wood0"), width=7)
+            draw.line(points, fill=color("wood2"), width=3)
+            line(draw, points, "wood3")
+        for points in ((91, 58, 103, 57, 109, 65), (92, 65, 96, 77, 102, 82), (253, 52, 249, 67, 255, 73), (244, 61, 230, 65, 224, 69)):
+            draw.line(points, fill=color("wood1"), width=2)
+            line(draw, points, "wood3")
+        for xx, yy in ((43, 44), (62, 53), (76, 61), (259, 73), (268, 94), (268, 119)):
+            rect(draw, (xx, yy, xx + 2, yy + 3), "bone")
+            for dx in (0, 2, 4):
+                draw.point((xx + dx, yy - 1), fill=color("stone4"))
+        for xx, yy in ((31, 158), (63, 185), (187, 184), (244, 155), (266, 177)):
+            rect(draw, (xx, yy + 2, xx + 16, yy + 6), "shadow")
+            rect(draw, (xx, yy, xx + 13, yy + 4), "stone2")
+            line(draw, (xx, yy, xx + 12, yy), "stone4")
+        draw.ellipse((99, 137, 106, 143), outline=color("stone3"))
+        line(draw, (102, 141, 110, 145, 116, 143), "stone2")
 
 
 def generate_map(key: str) -> Image.Image:
@@ -487,7 +705,7 @@ def generate_map(key: str) -> Image.Image:
     # Props are painted north to south, with feet anchored to collision tiles.
     for y, row in enumerate(spec.grid):
         for x, glyph in enumerate(row):
-            if glyph not in ".,=:":
+            if glyph not in ".,=:;-":
                 _prop(draw, x, y, glyph, key, spec.grid, random.Random(f"prop-{key}-{x}-{y}"))
     _decorations(image, key)
     return image
@@ -623,12 +841,204 @@ def generate_characters() -> Image.Image:
     return atlas
 
 
+def _replace_colors(image: Image.Image, replacements: dict[str, str]) -> None:
+    lookup = {tuple(int(color(source)[index:index + 2], 16) for index in (1, 3, 5)): tuple(int(color(target)[index:index + 2], 16) for index in (1, 3, 5)) for source, target in replacements.items()}
+    pixels = image.get_flattened_data() if hasattr(image, "get_flattened_data") else image.getdata()
+    image.putdata([(*lookup.get(pixel[:3], pixel[:3]), pixel[3]) for pixel in pixels])
+
+
+def _warg(image: Image.Image, direction: int, frame: int, pose: str) -> None:
+    draw = ImageDraw.Draw(image)
+    stride = (-1, 0, 1, 1, 0, -1, -1, 0)[frame] if pose == "walk" else 0
+    if pose == "sleep":
+        draw.ellipse((3, 13, 17, 21), fill=color("cloth0"))
+        rect(draw, (2, 15, 7, 19), "cloth1")
+        line(draw, (4, 16, 6, 16), "shadow")
+        return
+    if direction in (1, 2):
+        draw.ellipse((5, 10, 17, 17), fill=color("cloth0"))
+        rect(draw, (5, 11, 15, 14), "cloth1")
+        draw.polygon(((2, 9), (6, 6), (9, 11), (6, 15), (1, 14)), fill=color("cloth1"))
+        draw.polygon(((3, 9), (4, 4), (6, 9)), fill=color("cloth0"))
+        rect(draw, (1, 12, 5, 13), "stone0")
+        draw.point((4, 10), fill=color("amber2" if frame != 7 else "shadow"))
+        line(draw, (16, 11, 18, 8, 18, 6), "cloth2")
+        for x, swing in ((6, stride), (9, -stride), (13, -stride), (16, stride)):
+            line(draw, (x, 15, x + swing, 21), "cloth0")
+            draw.point((x + swing - 1, 21), fill=color("stone3"))
+        if direction == 2:
+            image.paste(image.transpose(Image.Transpose.FLIP_LEFT_RIGHT))
+    else:
+        draw.ellipse((5, 9, 15, 19), fill=color("cloth0"))
+        rect(draw, (7, 12, 12, 18), "cloth1")
+        for x, swing in ((6, stride), (12, -stride)):
+            rect(draw, (x, 17, x + 2, 20 + swing), "cloth0")
+        draw.polygon(((5, 7), (6, 3), (9, 6), (12, 6), (14, 3), (15, 10), (13, 14), (7, 14)), fill=color("cloth1"))
+        if direction == 0:
+            rect(draw, (8, 11, 12, 13), "stone0")
+            for x in (7, 12):
+                draw.point((x, 9), fill=color("amber2" if frame != 7 else "shadow"))
+            draw.point((10, 12), fill=color("shadow"))
+        else:
+            line(draw, (9, 5, 11, 12, 10, 17), "cloth2")
+
+
+def _motion_character(name: str, direction: int, frame: int, pose: str) -> Image.Image:
+    cell = Image.new("RGBA", (20, 24), (0, 0, 0, 0))
+    if name == "warg":
+        _warg(cell, direction, frame, pose)
+        return cell
+    base = {"wayfarer": "traveler", "scout": "traveler", "healer": "traveler", "ned": "patron", "captive": "patron", "orc_sapper": "orc", "orc_archer": "orc_scout"}.get(name, name)
+    # Sixteen poses per second give eight gentle walking frames. Idle uses
+    # frame zero's planted boots, then changes only breath, eyes and lantern.
+    walk_frame = (0, 0, 1, 1, 2, 2, 3, 3)[frame] if pose == "walk" else 0
+    _human(cell, base, direction, walk_frame, (0, 0))
+    draw = ImageDraw.Draw(cell)
+    if name == "wayfarer":
+        _replace_colors(cell, {"teal0": "wood1", "teal1": "wood2", "teal2": "wood4"})
+        line(draw, (3, 5, 3, 21), "wood3")
+        draw.point((3, 5), fill=color("wood5"))
+        rect(draw, (6, 3, 13, 5), "wood1")
+        line(draw, (5, 5, 14, 5), "wood3")
+    elif name == "scout":
+        _replace_colors(cell, {"teal0": "grass0", "teal1": "grass2", "teal2": "moss"})
+        draw.polygon(((6, 7), (6, 3), (10, 1), (14, 4), (14, 9), (12, 8), (12, 5), (8, 5), (8, 8)), fill=color("grass1"))
+        line(draw, (7, 4, 10, 2, 12, 4), "grass3")
+        draw.arc((1, 6, 9, 22), 80, 280, fill=color("wood4"))
+        line(draw, (4, 7, 4, 21), "wood0")
+        for x in (13, 15):
+            line(draw, (x, 7, x - 2, 14), "wood3")
+            line(draw, (x - 1, 6, x + 1, 6), "bone")
+    elif name == "healer":
+        _replace_colors(cell, {"teal0": "stone4", "teal1": "bone", "teal2": "stone5"})
+        rect(draw, (12, 13, 17, 18), "wood1")
+        rect(draw, (13, 14, 16, 17), "wood3")
+        line(draw, (8, 10, 14, 15), "wood0")
+        rect(draw, (14, 14, 15, 16), "bone")
+        rect(draw, (13, 15, 16, 15), "bone")
+        line(draw, (5, 17, 8, 18), "stone5")
+    elif name in {"ned", "captive"}:
+        rect(draw, (6, 3, 13, 5), "wood0")
+        rect(draw, (5, 5, 6, 5), (0, 0, 0, 0))
+        rect(draw, (13, 5, 14, 5), (0, 0, 0, 0))
+        _replace_colors(cell, {"cloth0": "wood0", "cloth1": "wood1", "cloth2": "wood2"} if name == "captive" else {"cloth0": "teal0", "cloth1": "teal1", "cloth2": "teal2"})
+        line(draw, (8, 15, 10, 16, 9, 18), "stone0")
+    elif name == "orc_sapper":
+        # A pitch jar replaces the captain's weapon in the sapper silhouette.
+        rect(draw, (0, 10, 4, 21), (0, 0, 0, 0))
+        draw.ellipse((1, 12, 6, 19), fill=color("wood0"), outline=color("wood3"))
+        rect(draw, (2, 11, 5, 12), "stone2")
+        line(draw, (3, 13, 4, 13), "amber0")
+        _replace_colors(cell, {"cloth1": "wood1", "stone3": "wood3"})
+    elif name == "orc_archer":
+        rect(draw, (2, 11, 4, 19), (0, 0, 0, 0))
+        draw.arc((0, 7, 8, 22), 85, 275, fill=color("wood4"))
+        line(draw, (3, 8, 3, 21), "wood0")
+        line(draw, (14, 9, 16, 3), "wood3")
+        line(draw, (15, 4, 17, 4), "bone")
+    if name.startswith("orc"):
+        _replace_colors(cell, {"skin1": "grass2", "skin2": "moss"})
+    if pose == "walk":
+        bob = 1 if walk_frame == 2 else 0
+        cell.paste((0, 0, 0, 0), (5, 19 + bob, 15, 24))
+        # Eight separate foot placements turn the old four poses into a
+        # complete plant, lift, pass and settle gait at the native resolution.
+        left_x = (-1, -1, 0, 1, 1, 1, 0, -1)[frame]
+        right_x = (1, 1, 0, -1, -1, -1, 0, 1)[frame]
+        left_y = (0, 1, 0, 1, 0, -1, 0, 0)[frame]
+        right_y = (0, -1, 0, 0, 0, 1, 0, 1)[frame]
+        for x, offset_y in ((7 + left_x, left_y), (11 + right_x, right_y)):
+            top = 19 + bob + offset_y
+            rect(draw, (x, top, x + 2, min(23, top + 2)), "shadow")
+            line(draw, (x, top, x + 1, top), "wood3")
+        if frame % 2:
+            draw.point((6 if direction != 2 else 13, 16 + bob), fill=color("cloth2"))
+        if frame in (2, 6):
+            draw.point((4 if frame == 2 else 15, 12), fill=color("moss" if name.startswith("orc") else "skin1"))
+    if pose == "idle" and frame in (3, 4) and direction != 3:
+        # Breath shifts one coat highlight, never the shadow or boots.
+        line(draw, (8, 11, 11, 11), {"mara": "purple1", "tobin": "wood4", "healer": "stone5"}.get(name, "cloth2"))
+    if pose == "idle" and frame == 7 and direction == 0:
+        shade = "moss" if name.startswith("orc") else "skin1"
+        line(draw, (8, 7, 11, 7), shade)
+    if name == "tobin" and pose == "idle":
+        draw.point((15, 15), fill=color("amber3" if frame in (2, 3, 6) else "amber2"))
+    if pose == "guard":
+        rect(draw, (4, 11, 6, 13), "cloth1")
+        line(draw, (5, 12, 12, 12), "skin1" if not name.startswith("orc") else "moss")
+        if frame in (3, 4):
+            draw.point((13, 11), fill=color("silver"))
+    if pose == "sleep":
+        coat = {"mara": "purple0", "tobin": "wood2", "calenor": "grass0", "healer": "bone"}.get(name, "teal0")
+        cell = Image.new("RGBA", (20, 24), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(cell)
+        rect(draw, (1, 15, 18, 21), "shadow")
+        rect(draw, (6, 15, 17, 19), coat)
+        line(draw, (7, 15, 15, 15), "cloth2")
+        rect(draw, (2, 14, 6, 18), "skin1")
+        rect(draw, (1, 13, 5, 15), "wood0")
+        line(draw, (3, 16, 5, 16), "skin0")
+        rect(draw, (16, 17, 18, 20), "wood0")
+        if frame in (3, 4):
+            line(draw, (8, 16, 12, 16), "cloth1")
+    elif pose == "snared":
+        # Kneeling, tied hands read clearly without animating a walk in place.
+        cell.paste((0, 0, 0, 0), (0, 18, 20, 24))
+        draw = ImageDraw.Draw(cell)
+        rect(draw, (6, 17, 14, 20), "cloth0")
+        rect(draw, (7, 12, 12, 13), "skin1")
+        line(draw, (8, 12, 11, 12), "wood4")
+        rect(draw, (6, 20, 8, 21), "shadow")
+        if name == "ned":
+            # The watchman hangs in black rope above fallen masonry.
+            line(draw, (10, 0, 10, 8, 7, 10, 7, 16, 13, 16, 13, 10, 10, 8), "shadow")
+            line(draw, (11, 1, 11, 8), "cloth0")
+            line(draw, (7, 15, 12, 10), "cloth0")
+            line(draw, (8, 19, 12, 18), "stone3")
+    return cell
+
+
+def generate_motion() -> Image.Image:
+    atlas = Image.new("RGBA", (20 * MOTION_FRAMES, len(MOTION_CHARACTERS) * MOTION_ROWS * 24), (0, 0, 0, 0))
+    for name in MOTION_CHARACTERS:
+        for pose, directions in (("walk", range(4)), ("idle", range(4)), ("guard", (0,)), ("sleep", (0,)), ("snared", (0,))):
+            for direction in directions:
+                for frame in range(MOTION_FRAMES):
+                    x, y, _width, _height = motion_frame_rect(name, direction=direction, frame=frame, pose=pose)
+                    atlas.paste(_motion_character(name, direction, frame, pose), (x, y))
+    return atlas
+
+
+def generate_portraits() -> Image.Image:
+    atlas = Image.new("RGBA", (len(ORIGIN_PORTRAITS) * 20, 24), (0, 0, 0, 0))
+    for index, name in enumerate(ORIGIN_PORTRAITS):
+        atlas.paste(_motion_character(name, 0, 0, "idle"), (index * 20, 0))
+    return atlas
+
+
+def generate_depth() -> Image.Image:
+    rows = (len(DEPTH_OBJECTS) + DEPTH_COLUMNS - 1) // DEPTH_COLUMNS
+    atlas = Image.new("RGBA", (DEPTH_COLUMNS * DEPTH_CELL[0], rows * DEPTH_CELL[1]), (0, 0, 0, 0))
+    for index, (key, x, y, glyph) in enumerate(DEPTH_OBJECTS):
+        # Use the same authored shape and seed as the map, with transparent
+        # space around it. Its shadow is anchored to the collision tile.
+        layer = Image.new("RGBA", WORLD_SIZE, (0, 0, 0, 0))
+        _prop(ImageDraw.Draw(layer), x, y, glyph, key, WORLD_MAPS[key].grid, random.Random(f"prop-{key}-{x}-{y}"))
+        tile = layer.crop((x * TILE - 8, y * TILE - 16, x * TILE + 24, y * TILE + 24))
+        ax, ay, _width, _height = depth_frame_rect(index)
+        atlas.paste(tile, (ax, ay))
+    return atlas
+
+
 def main() -> None:
     DESTINATION.mkdir(parents=True, exist_ok=True)
     for key in WORLD_MAPS:
         generate_map(key).save(DESTINATION / f"world-{key}.png", optimize=True)
     generate_characters().save(DESTINATION / "world-characters.png", optimize=True)
-    print("Generated five 320x240 worlds and a four-direction animated character atlas.")
+    generate_motion().save(DESTINATION / "world-motion.png", optimize=True)
+    generate_portraits().save(DESTINATION / "world-portraits.png", optimize=True)
+    generate_depth().save(DESTINATION / "world-depth.png", optimize=True)
+    print(f"Generated {len(WORLD_MAPS)} native pixel worlds, legacy sprites, movement/depth atlases and origin portraits.")
 
 
 if __name__ == "__main__":

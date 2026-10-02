@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 — More Roads, Clearer Choices
+
+- Expanded exploration from five to thirteen walkable locations and from thirteen to thirty-five optional look spots, covering Bree's north gate, Midgewater, Echo Bridge, the Drowned Mile, the prisoners' sluice, and the refuge.
+- Added origin-specific traveler portraits and animated clothing, companion followers, directional movement and idle poses, and foreground foliage and pillars that characters can walk behind. Nearby markers retain the same numbered story choices.
+- Bundled unmodified DejaVu fonts for consistent readable text, added Standard/Large/Larger reading sizes, and made the initial window fit common laptop displays.
+- Added a searchable story archive of narration, chosen answers, and inspected world details, with source-anchored scrolling and Unicode search editing. Starting or loading a journey clears the prior transcript; Continue retains the live record. Help and Archive preserve the pending choice and reading position.
+- Added F1 Controls and a shared in-game guide. Escape/P opens a safe-story Pause menu for saves, Settings, and Controls; utility panels preserve the selected answer when returning.
+- Added caret editing, click and keyboard selection, Unicode input-method handling, and cancellation for traveler names. Canceling creation keeps the current journey and removes its unaccepted background preview from Archive.
+- Improved paragraph pagination and preserved partially revealed text during resizing; changing reading size after a finished page keeps the decision ready.
+- Improved character, inventory, and journal panels with measured text, equipment comparisons, readable selection, and faithful companion whereabouts. Mara departures, Tobin/Ned returns, and Calenor’s binding or escape follow their earned flags.
+- Added compact turn summaries, visible-impact Health updates, enemy phase announcements, and battle text that follows reading-size preferences on small and large displays. Intent tooltips keep enemy Health and Armor visible, and queued inventory/quest banners wait until battle ends. Rider encounters state Cannot be wounded and the survival goal.
+- Matched battle environments to the Pony, Teren's seal-door, and the Last Seal while retaining the original story illustrations; added an underground Echo Bridge backdrop.
+- Refreshed Lantern recovery labels and availability after Settings or Inventory, and removed Ned’s Herb route when its supply is consumed. Completed Lantern conversations stay resolved.
+- Kept confirmation keys from submitting a story choice during click-walking or an open inspection. Numeric-looking keys and oversized pasted numbers leave menus usable, and manual-save and checkpoint failures stay visible when the story page is restored.
+- Unified optional story cues, ambient music, and quiet effects under the same mute and volume settings. Added terrain footsteps and distinct battle impact, guard, healing, and escape cues, with bounded channels, cue priorities, music ducking, and audio-device recovery. Sound remains off by default.
+- Preserved Hall and Calenor question progress across saves and restored exact choices when returning from utilities. Ending recaps distinguish deliberate claims from corruption overriding another seal choice, and preserve the costs of battle defeats.
+- Hardened save/Chronicle validation and unreadable settings recovery while retaining existing manual saves and automatic checkpoints. Screen-reader output now uses numeric Health/Focus, full enemy names, and plain text even with Color on.
+- Added --version and native runtime diagnostics that decode every packaged PNG, TTF, and WAV without opening a display or playing audible sound.
+- Added four-platform native preview builds for pull requests and manual preview runs, without creating releases or tags. Regular installed-wheel and extracted-archive checks exercise bundled assets and player launchers outside the source checkout, including folders containing spaces. Corrected virtualenv selection and launcher argument forwarding.
+- Packaged persistent runtime libraries with their licenses, matching LGPL sources, and a hashed third-party inventory. Publication checks the inventory inside each archive and rejects unresolved notices.
+- Targeted the standalone Windows x64 download at Windows 10/11, using its system Universal C Runtime and retaining the required bundled Visual C++ runtime.
+- Made publication require all eight Python/platform Quality Gate cells on the exact commit and the full four-platform download set with matching SHA-256 digests. Published releases and tags remain immutable; failed checks keep a draft private.
+
 ## 0.4.0 — A Living Pixel World
 
 - Added five walkable locations: the Prancing Pony, Bree, the buried wayhouse, the Warden hall, and the Last Lantern. WASD movement, collision, nearby prompts, and E interactions lead to the same choices offered by the side menu.

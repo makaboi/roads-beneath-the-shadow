@@ -25,8 +25,9 @@ from .content import (
     QUEST_PRISONERS_ASH,
     QUEST_REACH_CALENOR,
 )
-from .models import Enemy, GameState
+from .models import VALID_SCENE_IDS, Enemy, GameState
 from .journey_artwork import LAST_LANTERN_ART
+from .story_choices import RefreshingOptions
 from .ui import Color, TerminalUI
 
 
@@ -77,6 +78,8 @@ class PartTwoEpisode:
 
     def run_scene(self, state: GameState) -> bool:
         scene = state.scene
+        if scene in VALID_SCENE_IDS and scene.startswith("part2_"):
+            state.visit(scene)
         if scene == "part2_descent":
             return self._descent(state)
         elif scene == "part2_pursuit":
@@ -246,7 +249,9 @@ class PartTwoEpisode:
                     "between your footsteps grow."
                 )
         elif rear_response == 3:
+            state.flags["part2_star_guided_descent"] = True
             state.character.corruption += 1
+            state.add_journal("I let the star-mark choose my steps down the sealed stair.")
             self.ui.narrate(
                 "The mark finds each stair before your boot does. For a moment, surrender "
                 "feels so much like safety that you almost forget to be afraid."
@@ -432,16 +437,6 @@ class PartTwoEpisode:
         self.ui.narrate(
             "We were wardens, not kings, says the dust. A road is kept by those who return."
         )
-        self.ui.art(
-            artwork.FIRST_WARDEN_TESTIMONY_ART,
-            Color.SILVER,
-            alt_text="A ghostly Warden raises an open hand above a stone seal.",
-        )
-        self.ui.art(
-            artwork.HIDDEN_WARDEN_STAIR_ART,
-            Color.YELLOW,
-            alt_text="A narrow hidden stair opens beneath a split crown emblem.",
-        )
         chambers = (
             (
                 "archive",
@@ -461,7 +456,16 @@ class PartTwoEpisode:
                 "Dust speaks through the empty seat: We kept no crown. We kept the returning road.",
             ),
         )
-        chosen: list[str] = []
+        chamber_flags = {
+            "archive": "part2_cipher_archive",
+            "statue": "part2_erased_statue",
+            "testimony": "part2_hall_testimony_heard",
+        }
+        chosen = [
+            key for key, flag in chamber_flags.items()
+            if state.flags.get(flag)
+            or (key == "testimony" and state.flags.get("part2_testimony_first"))
+        ]
         while True:
             choices = [(key, label, prose) for key, label, prose in chambers if key not in chosen]
             if len(chosen) >= 2:
@@ -476,20 +480,37 @@ class PartTwoEpisode:
             if key == "leave":
                 break
             chosen.append(key)
+            state.flags[chamber_flags[key]] = True
             if key == "testimony" and not state.flags.get("part2_spoke_road_name", False):
                 prose = (
                     "The empty seat gives back only your last footstep. Without the road-name, "
                     "the testimony remains unanswered."
                 )
+            elif key == "testimony":
+                self.ui.art(
+                    artwork.FIRST_WARDEN_TESTIMONY_ART,
+                    Color.SILVER,
+                    alt_text="A ghostly Warden raises an open hand above a stone seal.",
+                )
             self.ui.narrate(prose)
-
-        if "archive" in chosen:
-            state.flags["part2_cipher_archive"] = True
-        if "statue" in chosen:
-            state.flags["part2_erased_statue"] = True
-        if "testimony" in chosen and state.flags.get("part2_spoke_road_name", False):
-            state.flags["part2_testimony_first"] = True
-            state.add_quest(QUEST_NAMES_LOST)
+            if key == "archive":
+                state.add_journal(
+                    "The Cipher Archive's road marks hide commands in letters turned sideways."
+                )
+            elif key == "statue":
+                state.add_journal(
+                    "The Eighth Warden's face, name, and crown were carefully erased from the Hall."
+                )
+            elif state.flags.get("part2_spoke_road_name", False):
+                state.flags["part2_testimony_first"] = True
+                state.add_quest(QUEST_NAMES_LOST)
+                state.add_journal(
+                    "The first Warden testimony answered my road-name: the Wardens kept the returning road, not a crown."
+                )
+            else:
+                state.add_journal(
+                    "The Hall's empty seat returned only my footsteps; its testimony remained unanswered."
+                )
         state.play_minutes += 10 + (4 if len(chosen) == 3 else 0)
         state.scene = "part2_echo_bridge"
         return True
@@ -537,6 +558,14 @@ class PartTwoEpisode:
         if approach == "stair":
             state.flags["part2_testimony_first"] = True
             state.add_quest(QUEST_NAMES_LOST)
+            state.add_journal(
+                "A silver oath beneath Echo Bridge carried the first Warden testimony: it belongs to anyone who returns by the road."
+            )
+            self.ui.art(
+                artwork.HIDDEN_WARDEN_STAIR_ART,
+                Color.YELLOW,
+                alt_text="A narrow hidden stair opens beneath a split crown emblem.",
+            )
             self.ui.narrate(
                 "The hidden stair passes a silver oath cut beneath the bridge. Its first testimony "
                 "belongs to anyone who returns by the road."
@@ -607,12 +636,6 @@ class PartTwoEpisode:
             "A sluice horn sounds beyond the bend. Two trails cross the flooded stones before "
             "both vanish under the rising water."
         )
-        if state.flags.get("part_two_mara_present", False):
-            self.ui.art(
-                artwork.MARA_SHACKLE_FORGE_ART,
-                Color.MAGENTA,
-                alt_text="An open shackle rests on a forge anvil while Mara faces it.",
-            )
         priority = self.story_choice(
             "WHO DO YOU REACH FIRST?",
             [
@@ -784,8 +807,7 @@ class PartTwoEpisode:
         )
         if result == CombatResult.VICTORY:
             self.ui.narrate(
-                "The floodgate opens. Water carries the great chained shape into the dark, and "
-                "the second Warden testimony sounds through every link."
+                "The floodgate opens. Water carries the great chained shape into the dark."
             )
         else:
             state.character.hp = 1
@@ -826,7 +848,12 @@ class PartTwoEpisode:
                 "A ghostly armored Warden holds a broken chain above a flooded road marker."
             ),
         )
+        self.ui.narrate("The second Warden testimony sounds through every link of the oath-chain.")
         state.flags["part2_testimony_second"] = True
+        state.add_quest(QUEST_NAMES_LOST)
+        state.add_journal(
+            "The floodgate's oath-chain carried the second Warden testimony through the Drowned Mile."
+        )
         state.play_minutes += 9
         state.scene = "part2_house_under_ash"
         return True
@@ -841,9 +868,14 @@ class PartTwoEpisode:
             ),
         )
         self.ui.title("THE HOUSE UNDER ASH")
-        self.ui.narrate("The house has burned for years. Its ash still knows your step.")
+        self.ui.narrate("The house burned years ago. Its ash still knows your step.")
         mara_present = state.flags.get("part_two_mara_present", False)
         if mara_present:
+            self.ui.art(
+                artwork.MARA_SHACKLE_FORGE_ART,
+                Color.MAGENTA,
+                alt_text="An open shackle on a forge anvil recalls the chain Mara once wore.",
+            )
             self.ui.narrate(
                 "Mara finds a cold shackle in the ash. Ghorak's ash-hand stamp matches the chain "
                 "she once wore."
@@ -877,6 +909,7 @@ class PartTwoEpisode:
             if truth_choice == 1:
                 state.flags["part2_shared_mara_truth"] = True
                 state.character.mara_trust += 1
+                state.add_journal("Ghorak's ash-hand stamp marked the forge that once held Mara; she chose to name its truth with me.")
                 self.ui.narrate(
                     "Mara closes the shackle in both hands. 'That forge made my chain. It does "
                     "not get to make my silence.'"
@@ -898,7 +931,7 @@ class PartTwoEpisode:
             state.flags["part2_mara_left"] = True
             self.ui.narrate(
                 "At the refuge arch, Mara stops. 'I will not follow another keeper who leaves "
-                "chains unnamed.' Her steps turn back toward the prisoners' road."
+                "chains unnamed.' She turns away, intent on finding the prisoners."
             )
 
         state.play_minutes += 6
@@ -952,6 +985,7 @@ class PartTwoEpisode:
 
         if search_choice == 1:
             state.flags["part2_memory_complete"] = True
+            state.add_journal("The burning memory showed road-ciphers hidden by my mother, and Calenor abandoning the pursuit to carry me from the fire.")
             self.ui.narrate(
                 "You search every room. The woman hid road-ciphers, never a spoken name; Calenor "
                 "broke from the pursuit to carry the child out."
@@ -968,6 +1002,7 @@ class PartTwoEpisode:
             )
 
         if floor_choice == 1:
+            state.add_journal("Beneath the remembered floorboard lay an Eighth-house road cipher cut in silver ash.")
             self.ui.narrate("Beneath the board lies an Eighth-house road cipher cut in silver ash.")
         elif floor_choice == 2:
             self.ui.narrate("She cannot answer, but she turns toward the sound of your voice.")
@@ -1036,6 +1071,7 @@ class PartTwoEpisode:
         )
         if confession:
             state.flags["part2_teren_confessed"] = True
+            state.add_journal("Teren confessed to exposing the Eighth household to protect the Ranger network; Calenor broke from the pursuit to save me.")
             self.ui.narrate(
                 "The proofs close every retreat. Teren admits he exposed the Eighth household, "
                 "believing one sacrificed door would protect the wider Ranger network. Calenor "
@@ -1216,7 +1252,10 @@ class PartTwoEpisode:
                 "What you promise is yours too. Keep those truths apart, whatever it tells you.'",
             ),
         ]
-        remaining = list(questions)
+        remaining = [
+            question for question in questions
+            if not state.flags.get(f"part2_calenor_truth_{question[0]}")
+        ]
         while remaining:
             question_choice = self.story_choice(
                 "ASK CALENOR THE THREE TRUTHS",
@@ -1224,8 +1263,15 @@ class PartTwoEpisode:
             )
             if question_choice is None:
                 return False
-            _key, _label, answer = remaining.pop(question_choice - 1)
+            key, _label, answer = remaining.pop(question_choice - 1)
             self.ui.narrate(answer)
+            state.flags[f"part2_calenor_truth_{key}"] = True
+            truths = {
+                "hidden_name": "Calenor hid my birth-name from the Shadow, but admitted that his fear also kept me from choosing for myself.",
+                "teren": "Teren exposed the Eighth household to protect the Ranger network; Calenor abandoned the pursuit to carry me from the fire.",
+                "rider": "The silver star was the last seal. The Eighth Name is a Warden oath-title, distinct from my birth-name; the Rider needs my willing voice.",
+            }
+            state.add_journal(truths[key])
         judgment_choice = self.story_choice(
             "HOW DO YOU JUDGE CALENOR?",
             [
@@ -1255,6 +1301,9 @@ class PartTwoEpisode:
             alt_text="A final ghostly Warden offers an eight-pointed seal to the traveler.",
         )
         state.flags["part2_testimony_third"] = True
+        state.add_journal(
+            "Calenor entrusted me with the third Warden testimony beside the opened spoke."
+        )
         if all(
             state.flags.get(flag, False)
             for flag in (
@@ -1292,17 +1341,13 @@ class PartTwoEpisode:
             )
         while True:
             topics: list[tuple[str, str]] = []
-            if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
-                topics.append(("mara", "Speak with Mara about the road after this one"))
-            if state.flags.get("part_two_tobin_present") and not state.flags.get("part2_vigil_tobin"):
-                topics.append(("tobin", "Help Tobin tend the lantern"))
-            if not state.flags.get("part2_vigil_calenor"):
-                topics.append(("calenor", "Sit beside Calenor for a moment"))
-            if self._can_rest_at_lantern(state):
-                amount = self._lantern_recovery(state)
-                topics.append(("rest", f"Rest and tend your wounds (recover up to {amount} Health and all Focus)"))
-            topics.append(("leave", "Enter the Last Seal"))
-            choice = self.story_choice("BEFORE THE LAST SEAL", [label for _key, label in topics])
+
+            def options() -> tuple[str, ...]:
+                nonlocal topics
+                topics = self._vigil_topics(state)
+                return tuple(label for _key, label in topics)
+
+            choice = self.story_choice("BEFORE THE LAST SEAL", RefreshingOptions(options))
             if choice is None:
                 return False
             topic = topics[choice - 1][0]
@@ -1313,6 +1358,20 @@ class PartTwoEpisode:
                 return False
             state.flags[f"part2_vigil_{topic}"] = True
             state.play_minutes += 6 if topic == "rest" else 2
+
+    def _vigil_topics(self, state: GameState) -> list[tuple[str, str]]:
+        topics: list[tuple[str, str]] = []
+        if state.flags.get("part_two_mara_present") and not state.flags.get("part2_vigil_mara"):
+            topics.append(("mara", "Speak with Mara about the road after this one"))
+        if state.flags.get("part_two_tobin_present") and not state.flags.get("part2_vigil_tobin"):
+            topics.append(("tobin", "Help Tobin tend the lantern"))
+        if not state.flags.get("part2_vigil_calenor"):
+            topics.append(("calenor", "Sit beside Calenor for a moment"))
+        if self._can_rest_at_lantern(state):
+            amount = self._lantern_recovery(state)
+            topics.append(("rest", f"Rest and tend your wounds (recover up to {amount} Health and all Focus)"))
+        topics.append(("leave", "Enter the Last Seal"))
+        return topics
 
     @staticmethod
     def _can_rest_at_lantern(state: GameState) -> bool:
@@ -1526,9 +1585,30 @@ class PartTwoEpisode:
         )
         if star_choice is None:
             return False
-        state.flags.pop("part2_ritual_collapse_prepared", None)
-        if ritual_choice == 3:
+        for ritual_flag in (
+            "part2_ritual_calenor_anchor",
+            "part2_ritual_shared_voices",
+            "part2_ritual_collapse_prepared",
+        ):
+            state.flags.pop(ritual_flag, None)
+        if ritual_choice == 1:
+            state.flags["part2_ritual_calenor_anchor"] = True
+            self.ui.narrate(
+                "Calenor takes the failing spoke's weight while you ready the oath. "
+                "His chain is open; this time you have asked him to stand there."
+            )
+        elif ritual_choice == 2:
+            state.flags["part2_ritual_shared_voices"] = True
+            self.ui.narrate(
+                "You ask the company to answer only in voices they freely offer. "
+                "Calenor begins the oath, leaving room for the others to join."
+            )
+        else:
             state.flags["part2_ritual_collapse_prepared"] = True
+            self.ui.narrate(
+                "You mark the vault's cracked supports and the fault-lines between the spokes. "
+                "If you choose to destroy the road, the company will know where to strike."
+            )
         if star_choice == 1:
             state.flags["part2_star_rejected"] = True
             state.character.hope += 1
@@ -1932,12 +2012,15 @@ def part_two_ending_breakdown(state: GameState) -> list[tuple[str, str]]:
         else:
             guardians += " You sat beside him without giving an answer."
 
-    if state.ending == "shadows_name":
+    if state.ending == "shadows_name" and flags.get("part2_seal_choice_claim", False):
+        road_text = (
+            "You claimed the road in your own voice and opened part of its buried network to the Shadow."
+        )
+    elif state.ending == "shadows_name":
         attempted_choice = next(
             (
                 wording
                 for flag, wording in (
-                    ("part2_seal_choice_claim", "control the road"),
                     ("part2_seal_choice_destroy", "destroy the road"),
                     ("part2_seal_choice_remake", "remake the seal"),
                 )
@@ -1955,6 +2038,12 @@ def part_two_ending_breakdown(state: GameState) -> list[tuple[str, str]]:
             "last_warden": "The ancient seal was renewed under one final guardian.",
             "road_in_ruin": "The Dead Road was destroyed to deny its buried network to the Rider.",
         }.get(state.ending, "The Last Seal waits for its final judgment.")
+    if flags.get("part2_ritual_calenor_anchor"):
+        road_text += " For the ritual, you asked Calenor to anchor the failing spoke."
+    elif flags.get("part2_ritual_shared_voices"):
+        road_text += " For the ritual, you invited the willing company to share its voices."
+    elif flags.get("part2_ritual_collapse_prepared"):
+        road_text += " Before the battle, you prepared the vault's fault-lines for collapse."
     return [
         ("The Eighth Name", name),
         ("Mara", mara),

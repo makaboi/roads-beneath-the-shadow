@@ -10,7 +10,9 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from roads_beneath_shadow.pixel_panels import PanelView, _wrap
-from roads_beneath_shadow.player_view import chronicle_snapshot
+from roads_beneath_shadow.content import ORIGINS, QUEST_REACH_CALENOR
+from roads_beneath_shadow.models import Character, GameState
+from roads_beneath_shadow.player_view import background_snapshot, chronicle_snapshot, player_snapshot
 from roads_beneath_shadow.profile import PlayerProfile
 
 
@@ -135,13 +137,15 @@ class PixelPanelTests(unittest.TestCase):
         self.assertGreater(selected_hit.height, 0)
         self.assertTrue(self.panel.content_rect.contains(selected_hit))
 
-    def test_long_description_scrolling_keeps_offscreen_actions_unclickable(self):
+    def test_long_description_scrolls_while_its_action_stays_reachable(self):
         supplied = deepcopy(SNAPSHOT)
         supplied["items"][2]["description"] = "Old roads remember every footstep. " * 100
         self.panel.open("inventory", supplied)
         self.select_item("cleaver")
         self.assertGreater(self.panel.max_detail_scroll, 0)
-        self.assertFalse(any(target == "item_action" for _, target, _ in self.panel.hit_targets))
+        action_rect = next(rect for rect, target, _ in self.panel.hit_targets if target == "item_action")
+        self.assertTrue(self.panel.detail_rect.contains(action_rect))
+        self.assertFalse(action_rect.colliderect(self.panel.detail_body_rect))
         self.key(self.pg.K_PAGEDOWN, mod=self.pg.KMOD_SHIFT)
         self.assertGreater(self.panel.detail_scroll, 0)
         self.panel.detail_scroll = self.panel.max_detail_scroll
@@ -155,6 +159,8 @@ class PixelPanelTests(unittest.TestCase):
         supplied["route"] = [{"name": f"Road {index}", "visited": index < 8, "current": index == 8} for index in range(20)]
         for kind in ("character", "journal", "map"):
             self.panel.open(kind, supplied)
+            if kind == "map":
+                self.key(self.pg.K_TAB)
             self.draw()
             self.assertGreater(self.panel.max_scroll, 0, kind)
             self.key(self.pg.K_END)
@@ -162,6 +168,33 @@ class PixelPanelTests(unittest.TestCase):
             self.assertEqual(self.panel.scroll, self.panel.max_scroll)
             self.assertEqual(self.key(self.pg.K_RETURN), (True, {"action": "close"}))
             self.assertFalse(self.panel.active)
+
+    def test_character_fate_cards_show_recorded_whereabouts_and_close_without_changing_the_journey(self):
+        state = GameState(Character.from_origin("Mira", ORIGINS[1]), scene="complete", chapter=2)
+        state.completed_quests.append(QUEST_REACH_CALENOR)
+        state.flags.update({"part2_mara_left": True, "tobin_stays_at_threshold": True, "part2_calenor_rebound": True})
+        before = state.to_dict()
+        drawn = []
+        paragraph = self.panel._paragraph
+
+        def capture(screen, text, *args, **kwargs):
+            drawn.append(str(text))
+            return paragraph(screen, text, *args, **kwargs)
+
+        self.panel._paragraph = capture
+        for size in ((760, 560), (1920, 1080)):
+            with self.subTest(size=size):
+                self.screen = self.pg.Surface(size)
+                self.rect = self.screen.get_rect()
+                self.panel.open("character", player_snapshot(state))
+                self.panel.draw(self.screen, self.rect, text_size="larger")
+                self.key(self.pg.K_END)
+                self.panel.draw(self.screen, self.rect, text_size="larger")
+                for fact in ("Left at the burned refuge to seek the prisoners", "Remained at the threshold with Ned's lantern", "Bound again at the Last Seal"):
+                    self.assertTrue(any(fact in text for text in drawn), fact)
+                self.assertFalse(any("Elsewhere on the road" in text for text in drawn))
+                self.assertEqual(self.click("close"), (True, {"action": "close"}))
+                self.assertEqual(state.to_dict(), before)
 
     def test_journal_tabs_show_active_completed_and_clues_with_aliases(self):
         self.panel.open("journal", {"active_quests": ["Active"], "completed_quests": ["Done"], "journal": ["Clue"]})
@@ -260,14 +293,14 @@ class PixelPanelTests(unittest.TestCase):
         self.panel._text = record_visible
         self.draw()
         self.assertGreater(self.panel.max_scroll, 0)
-        self.assertIn("Completed journeys: 5", visible)
+        self.assertIn("Completed episodes: 5", visible)
         visible.clear()
         self.key(self.pg.K_END)
         self.draw()
         self.assertEqual(self.panel.scroll, self.panel.max_scroll)
         self.assertIn("No Name for the Shadow", visible)
         self.assertIn("UNDISCOVERED", visible)
-        self.assertNotIn("Completed journeys: 5", visible)
+        self.assertNotIn("Completed episodes: 5", visible)
         self.assertEqual(self.panel.data, before)
         self.assertEqual(self.key(self.pg.K_ESCAPE), (True, {"action": "close"}))
 
@@ -291,6 +324,303 @@ class PixelPanelTests(unittest.TestCase):
             lines = _wrap(source, self.panel.font, 70)
             self.assertTrue(all(self.panel.font.size(line)[0] <= 70 for line in lines))
             self.assertEqual("".join(lines).replace(" ", ""), source.replace(" ", ""))
+
+    def test_inventory_action_is_visible_at_the_actual_minimum_overlay_size(self):
+        self.panel.open("inventory", SNAPSHOT)
+        self.panel.selected = 1
+        screen = self.pg.Surface((760, 560))
+        overlay = self.pg.Rect(23, 75, 714, 447)
+        self.panel.draw(screen, overlay)
+        rect = next(rect for rect, target, _ in self.panel.hit_targets if target == "item_action")
+        self.assertTrue(overlay.contains(rect))
+        self.assertTrue(self.panel.detail_rect.contains(rect))
+        self.assertEqual(self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=rect.center)), (True, {"action": "equip", "item_id": "cleaver"}))
+
+    def test_full_health_disables_healing_with_keyboard_and_pointer(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["character"]["hp"] = supplied["character"]["max_hp"]
+        self.panel.open("inventory", supplied)
+        self.select_item("herb")
+        self.assertEqual(self.key(self.pg.K_RETURN), (True, None))
+        self.assertEqual(self.panel._recovery_amount(self.panel._selected_item()), 0)
+        self.assertFalse(any(target == "item_action" for _, target, _ in self.panel.hit_targets))
+        self.assertEqual(self.panel.data["items"][4]["count"], 3)
+
+    def test_inventory_filter_and_item_survive_engine_refresh_and_last_stack_removal(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["journey_id"] = "first-journey"
+        self.panel.open("inventory", supplied)
+        self.key(self.pg.K_TAB)
+        self.key(self.pg.K_TAB)
+        self.select_item("herb")
+        self.panel.close()
+        supplied["items"][4]["count"] -= 1
+        supplied["character"]["hp"] += 2
+        self.panel.open("inventory", supplied)
+        self.assertEqual(self.panel.tab, "supplies")
+        self.assertEqual(self.panel._selected_item()["id"], "herb")
+        self.assertEqual(self.panel._selected_item()["count"], 2)
+        self.panel.close()
+        supplied["items"] = [item for item in supplied["items"] if item["id"] != "herb"]
+        self.panel.open("inventory", supplied)
+        self.assertEqual(self.panel.tab, "supplies")
+        self.assertEqual(self.panel._selected_item()["id"], "smoke")
+        self.panel.close()
+        supplied["journey_id"] = "a-new-journey"
+        self.panel.open("inventory", supplied)
+        self.assertEqual(self.panel.tab, "all")
+        self.assertEqual(self.panel.selected, 0)
+
+    def test_current_decision_is_read_only_in_journal_and_map(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied.update({"location": "Bree", "chapter": 1, "decision": {"heading": "WHERE WILL YOU INVESTIGATE?", "options": ["Search the stable yard", "Go to the north gate"]}})
+        for kind in ("journal", "map"):
+            self.panel.open(kind, supplied)
+            if kind == "journal":
+                for _ in range(3):
+                    self.key(self.pg.K_TAB)
+            self.draw()
+            self.assertFalse(any(target not in {"tab", "close"} for _, target, _ in self.panel.hit_targets))
+            self.assertEqual(self.key(self.pg.K_2), (True, None))
+            self.assertTrue(self.panel.active)
+            self.assertEqual(self.key(self.pg.K_ESCAPE), (True, {"action": "close"}))
+
+    def test_chronicle_filters_earned_and_open_deeds_without_changing_profile(self):
+        supplied = chronicle_snapshot(PlayerProfile(completed_runs=1, achievements=["part_one"], endings={"fellowship": 1}))
+        self.panel.open("chronicle", supplied)
+        self.key(self.pg.K_TAB)
+        self.draw()
+        self.assertEqual(self.panel.tab, "earned")
+        before = deepcopy(self.panel.data)
+        self.key(self.pg.K_TAB)
+        self.draw()
+        self.assertEqual(self.panel.tab, "open")
+        self.assertEqual(self.panel.data, before)
+
+    def test_chronicle_filters_show_deeds_immediately_at_minimum_window_size(self):
+        supplied = chronicle_snapshot(PlayerProfile(completed_runs=2, origins_completed=["healers_apprentice"], achievements=["part_one"], endings={"fellowship": 1, "living_road": 1}))
+        self.screen = self.pg.Surface((760, 560))
+        self.rect = self.pg.Rect(23, 75, 714, 447)
+        visible = []
+        original_text = self.panel._text
+
+        def record_visible(screen, text, x, y, *args, **kwargs):
+            if self.panel.content_rect.collidepoint(x, y):
+                visible.append(str(text))
+            return original_text(screen, text, x, y, *args, **kwargs)
+
+        self.panel._text = record_visible
+        self.panel.open("chronicle", supplied)
+        self.key(self.pg.K_TAB)
+        self.draw()
+        self.assertIn("The Road Opens", visible)
+        self.assertNotIn("Completed episodes: 2", visible)
+        visible.clear()
+        self.key(self.pg.K_TAB)
+        self.draw()
+        self.assertIn("None Left Behind", visible)
+        self.assertEqual(self.panel.scroll, 0)
+
+    def test_unreadable_chronicle_notice_is_visible_on_every_section(self):
+        supplied = chronicle_snapshot(PlayerProfile())
+        supplied["notice"] = "The Chronicle could not be read. Its existing file has been kept; your journey saves are still available."
+        self.screen = self.pg.Surface((760, 560))
+        self.rect = self.pg.Rect(23, 75, 714, 447)
+        visible = []
+        original_text = self.panel._text
+
+        def record_visible(screen, text, x, y, *args, **kwargs):
+            if self.panel.content_rect.collidepoint(x, y):
+                visible.append(str(text))
+            return original_text(screen, text, x, y, *args, **kwargs)
+
+        self.panel._text = record_visible
+        self.panel.open("chronicle", supplied)
+        for _ in range(3):
+            visible.clear()
+            self.draw()
+            self.assertIn(supplied["notice"], " ".join(visible))
+            self.assertTrue(any(target == "close" for _, target, _ in self.panel.hit_targets))
+            self.key(self.pg.K_TAB)
+
+    def test_scrollbar_track_click_and_thumb_drag_reach_the_same_text_as_keyboard(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["clues"] = [f"Recorded note {index}: " + "Old roads remember. " * 4 for index in range(40)]
+        self.panel.open("journal", supplied)
+        self.key(self.pg.K_TAB)
+        self.key(self.pg.K_TAB)
+        self.draw()
+        track, thumb, maximum = self.panel._scrollbars["main"]
+        self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=(track.centerx, thumb.centery)))
+        self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=(track.centerx, track.bottom + 100), rel=(0, 100), buttons=(1, 0, 0)))
+        self.assertEqual(self.panel.scroll, maximum)
+        self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONUP, button=1, pos=(track.centerx, track.bottom)))
+        self.assertIsNone(self.panel._dragging)
+        self.draw()
+        self.key(self.pg.K_HOME)
+        self.assertEqual(self.panel.scroll, 0)
+        self.draw()
+        track, thumb, maximum = self.panel._scrollbars["main"]
+        self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=(track.centerx, track.bottom - 2)))
+        self.assertGreater(self.panel.scroll, maximum // 2)
+        self.panel.handle_event(self.pg.event.Event(self.pg.WINDOWFOCUSLOST))
+        self.assertIsNone(self.panel._dragging)
+
+    def test_inventory_detail_rail_does_not_move_pack_selection(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["items"][2]["description"] = "Old roads remember every footstep. " * 100
+        self.panel.open("inventory", supplied)
+        self.select_item("cleaver")
+        before = self.panel.selected
+        track, thumb, maximum = self.panel._scrollbars["detail"]
+        self.panel.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=(track.centerx, track.bottom - 2)))
+        self.assertGreater(self.panel.detail_scroll, maximum // 2)
+        self.assertEqual(self.panel.selected, before)
+        self.assertEqual(self.panel.scroll, 0)
+
+    def test_resizing_a_journal_at_its_end_draws_the_last_clue_immediately(self):
+        self.panel.open("journal", {"clues": [f"NOTE {index}: " + "This recorded clue remembers the road and the silver star. " * 12 for index in range(30)]})
+        self.panel.tab_index = 2
+        self.screen = self.pg.Surface((760, 560))
+        self.rect = self.pg.Rect(23, 75, 714, 447)
+        self.draw()
+        self.key(self.pg.K_END)
+        self.draw()
+        old_scroll = self.panel.scroll
+        self.screen = self.pg.Surface((1920, 1080))
+        self.rect = self.pg.Rect(23, 75, 1874, 967)
+        visible = []
+        original_text = self.panel._text
+
+        def record_visible(screen, text, x, y, *args, **kwargs):
+            if self.panel.content_rect.collidepoint(x, y):
+                visible.append(str(text))
+            return original_text(screen, text, x, y, *args, **kwargs)
+
+        self.panel._text = record_visible
+        self.draw()
+        self.assertLess(self.panel.scroll, old_scroll)
+        self.assertEqual(self.panel.scroll, self.panel.max_scroll)
+        self.assertTrue(any("NOTE 0:" in line for line in visible))
+        self.assertTrue(any(target == "close" for _, target, _ in self.panel.hit_targets))
+
+    def test_healing_preview_caps_recovery_and_includes_healer_bonus(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["character"]["origin"] = "healers_apprentice"
+        supplied["character"]["hp"] = 12
+        self.panel.open("inventory", supplied)
+        self.select_item("herb")
+        self.assertEqual(self.panel._recovery_amount(self.panel._selected_item()), 11)
+        supplied["character"]["hp"] = 25
+        self.panel.open("inventory", supplied)
+        self.select_item("herb")
+        self.assertEqual(self.panel._recovery_amount(self.panel._selected_item()), 1)
+
+    def test_background_preview_preserves_engine_identity_and_requires_a_choice(self):
+        supplied = background_snapshot()
+        before = deepcopy(supplied)
+        self.panel.open("background", supplied)
+        self.draw()
+        self.assertEqual(self.click("origin", 2), (True, None))
+        self.assertTrue(self.panel.active)
+        self.draw()
+        self.assertEqual(self.click("origin_action"), (True, {"action": "choose_origin", "origin_id": "healers_apprentice"}))
+        self.assertEqual(supplied, before)
+        self.assertEqual(self.panel.data, before)
+        self.key(self.pg.K_LEFT)
+        self.assertEqual(self.key(self.pg.K_RETURN), (True, {"action": "choose_origin", "origin_id": "north_road_scout"}))
+        self.key(self.pg.K_1)
+        self.assertEqual(self.key(self.pg.K_RETURN), (True, {"action": "choose_origin", "origin_id": "bree_wayfarer"}))
+
+    def test_background_small_and_large_layouts_keep_choices_and_details_reachable(self):
+        supplied = background_snapshot()
+        supplied["origins"][0]["description"] += " The old roads remember. " * 80
+        self.panel.open("background", supplied)
+        for size, rect in (((760, 560), self.pg.Rect(23, 75, 714, 447)), ((1440, 900), self.pg.Rect(23, 75, 1394, 787))):
+            screen = self.pg.Surface(size)
+            self.panel.draw(screen, rect)
+            cards = [(hit, value) for hit, target, value in self.panel.hit_targets if target == "origin"]
+            self.assertEqual([value for _, value in cards], [0, 1, 2])
+            self.assertTrue(all(self.panel.content_rect.contains(hit) for hit, _ in cards))
+            action = next(hit for hit, target, _ in self.panel.hit_targets if target == "origin_action")
+            self.assertTrue(rect.contains(action))
+            self.assertGreater(self.panel.max_scroll, 0)
+            self.key(self.pg.K_END)
+            self.panel.draw(screen, rect)
+            self.assertEqual(self.panel.scroll, self.panel.max_scroll)
+            self.assertEqual(self.key(self.pg.K_RETURN), (True, {"action": "choose_origin", "origin_id": "bree_wayfarer"}))
+            self.key(self.pg.K_HOME)
+        self.assertEqual(self.key(self.pg.K_ESCAPE), (True, {"action": "close"}))
+
+    def test_empty_backgrounds_do_not_return_an_invalid_character_selection(self):
+        self.panel.open("background", {"origins": []})
+        self.draw()
+        self.assertEqual(self.key(self.pg.K_RETURN), (True, None))
+        self.assertFalse(any(target == "origin_action" for _, target, _ in self.panel.hit_targets))
+
+    def test_largest_text_keeps_inventory_and_background_buttons_readable_and_actionable(self):
+        original_button = self.panel._button
+
+        def readable_button(screen, rect, label, *args, **kwargs):
+            rendered = self.panel.bold_font.render(label, False, (255, 255, 255))
+            self.assertTrue(rect.contains(rendered.get_rect(center=rect.center)), label)
+            return original_button(screen, rect, label, *args, **kwargs)
+
+        self.panel._button = readable_button
+        for size in ((760, 560), (1920, 1080)):
+            screen = self.pg.Surface(size)
+            rect = self.pg.Rect(23, 75, size[0] - 46, size[1] - 113)
+            self.panel.open("inventory", SNAPSHOT)
+            self.panel.selected = 1
+            self.panel.draw(screen, rect, text_size="larger")
+            action = next(hit for hit, target, _ in self.panel.hit_targets if target == "item_action")
+            self.assertTrue(rect.contains(action))
+            self.assertFalse(action.colliderect(self.panel.detail_body_rect))
+            self.assertEqual(self.click("item_action"), (True, {"action": "equip", "item_id": "cleaver"}))
+            self.panel.open("background", background_snapshot())
+            self.panel.draw(screen, rect, text_size="larger")
+            self.assertEqual(self.click("origin", 2), (True, None))
+            self.panel.draw(screen, rect, text_size="larger")
+            self.assertEqual(self.click("origin_action"), (True, {"action": "choose_origin", "origin_id": "healers_apprentice"}))
+
+    def test_enlarged_background_prose_can_be_read_to_its_end_without_choosing(self):
+        self.panel.open("background", background_snapshot())
+        self.panel.selected = 2
+        self.screen = self.pg.Surface((760, 560))
+        self.rect = self.pg.Rect(23, 75, 714, 447)
+        self.panel.draw(self.screen, self.rect, text_size="larger")
+        self.assertGreater(self.panel.max_scroll, 0)
+        self.key(self.pg.K_END)
+        visible = []
+        original_text = self.panel._text
+
+        def record_visible(screen, text, x, y, *args, **kwargs):
+            if self.panel.detail_body_rect.collidepoint(x, y):
+                visible.append(str(text))
+            return original_text(screen, text, x, y, *args, **kwargs)
+
+        self.panel._text = record_visible
+        self.panel.draw(self.screen, self.rect, text_size="larger")
+        self.assertIn("Will strengthens Field Remedy.", " ".join(visible))
+        self.assertEqual(self.panel.scroll, self.panel.max_scroll)
+        self.assertTrue(self.panel.active)
+        self.assertEqual(self.panel.selected, 2)
+
+    def test_absent_feedback_does_not_show_a_none_message(self):
+        supplied = deepcopy(SNAPSHOT)
+        supplied["notice"] = None
+        drawn = []
+        original_text = self.panel._text
+
+        def record_text(screen, text, *args, **kwargs):
+            drawn.append(str(text))
+            return original_text(screen, text, *args, **kwargs)
+
+        self.panel._text = record_text
+        for kind in ("inventory", "chronicle"):
+            self.panel.open(kind, supplied)
+            self.draw()
+            self.assertNotIn("None", drawn)
 
 
 if __name__ == "__main__":

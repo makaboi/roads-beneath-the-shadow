@@ -1,0 +1,910 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "licenses/modern/brotli-1.2.0/LICENSE",
+      "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/zlib-ng-2.3.3/LICENSE.md",
+      "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libjpeg-turbo-3.1.4.1/LICENSE.md",
+      "sha256": "e10114e6e40f3d0311c401ca25245ac5ef459a43c20f976fd63f03e816f5741f",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libjpeg-turbo-3.1.4.1/README.ijg",
+      "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libtiff-4.7.2/LICENSE.md",
+      "sha256": "0e27c2382d7b8147972bbb746e04059a1152c8d0fda9d03ef1399d1a433c4ade",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libtiff-4.2.0/COPYRIGHT",
+      "sha256": "fbd6fed7938541d2c809c0826225fc85e551fdbfa8732b10f0c87e0847acafd7",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libpng-1.6.58/LICENSE",
+      "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libpng-1.6.58/png.h",
+      "sha256": "81501c268ec5c3dc79efc6ac9fddb63b22a25e4931360ddd7b29b1744d6cb6b8",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libwebp-1.6.0/COPYING",
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libwebp-1.6.0/PATENTS",
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libwebp-1.6.0/AUTHORS",
+      "sha256": "f251be89fd442bd9d701360730aea163cc8e2076ff03528f59267dc2c4f8b60a",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/LICENSE.TXT",
+      "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/docs/FTL.TXT",
+      "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/docs/GPLv2.TXT",
+      "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/LICENSE.TXT",
+      "sha256": "c85e842b7ff04d95dab7d68e812773de0f8b67940e5449d35b42c66eb0f619fe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/docs/FTL.TXT",
+      "sha256": "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/docs/GPLv2.TXT",
+      "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/harfbuzz-14.3.0/COPYING",
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/flac-1.5.0/COPYING.Xiph",
+      "sha256": "7866ee98760fc1f0156b4fe6bf530257e02be487ab3fd94e2b63799dd32d6b2c",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/flac-1.5.0/COPYING.GPL",
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/flac-1.5.0/COPYING.LGPL",
+      "sha256": "5df07007198989c622f5d41de8d703e7bef3d0e79d62e24332ee739a452af62a",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/flac-1.5.0/AUTHORS",
+      "sha256": "89d44b9c876a8a5cbfc886348a151abd74eeb49e4b690b0cfe96d44a9afe8118",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/ogg-1.3.6/COPYING",
+      "sha256": "d2ab5758336489da61c12cc5bb757da5339c4ae9001f9bb0562b4370249af814",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/vorbis-1.3.7/COPYING",
+      "sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/opus-1.6.1/COPYING",
+      "sha256": "01e1167d54a096d123cf6dfbbeb19587278845c6481d2d66d545669846079551",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/opus-1.6.1/AUTHORS",
+      "sha256": "f9fd849e652219ce98e008303370b352d37663d0ffb27b8dc514ad93c9c7438b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/opusfile-0.12/COPYING",
+      "sha256": "0267ae795ab744c4e0f9c45e249440fdf2e75dac8c804f36066b28649bf74aaf",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/opusfile-0.12/AUTHORS",
+      "sha256": "7bafd4ec8a8f284cce7a8c9dab476f141ed0de91f38947c145e49929d0922071",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/wavpack-5.9.0/license.txt",
+      "sha256": "1703dd391c9b422910287add8483a27d9bead0b0b5ccd6d5017e995a7192b3e2",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/portmidi-2.0.7/license.txt",
+      "sha256": "8d187c40c782da0e24489c4c4bf7590635e072dc0b70b0afda7b0652d290c1ea",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/portmidi-2.0.7/README.md",
+      "sha256": "03b0315be0f065037db1d104cbcf59937cec1ec0c61c54c6f6bfed09af58e260",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libsamplerate-0.2.2/COPYING",
+      "sha256": "2c1f76ce2effdddb425018405d5690c0b1ab4e6976e35296b0a6db65c5e1a55d",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/bzip2-1.0.8/LICENSE",
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/AUTHORS",
+      "sha256": "87fb43b0172262d21a4d39eb1598f8337491d2559ab7039b7aa7c1311e8ddb4e",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/LICENSE",
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/README.cmake.md",
+      "sha256": "b2d24c719dd0ddc546b2140ac351f534e1f167caa69de92a3a01f563285b0ff2",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/README.md",
+      "sha256": "31100a121d1b88953d306796175d75be7376b9c11a79aeb28f0fc740479b2ee1",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/cmake_admin/README.md",
+      "sha256": "0b1b8f61a434da33cc5bb517d24bcddada93d6a0a7cb63ba26efd6da23c071ca",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/doc/README",
+      "sha256": "132676b8044cdff64a74c68a0318964916c3a2eaabaeb2de317f5e11d12dcacd",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/doc/android/README.md",
+      "sha256": "0b16c8f76650cd26fba6b227239b957e85ecff605339f21a2b210a95647ad016",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/doc/polymono/readme.txt",
+      "sha256": "e9e6e1633e6a741bf86dc677b1389b9e26c333c9df36097b8c7c9f4f57ec7188",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/sf2/COPYRIGHT.txt",
+      "sha256": "766f8b6f5716dae672ab3cab74c3d6e3ad452beb49cfef81c82b79970c2601d6",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/test-android/README.md",
+      "sha256": "b85504bebc3e5a96c696f3f763bf2b78f528a4ebc7d604a35c876d40aa1a1db5",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/test/README.md",
+      "sha256": "412108ae6f23abe6edd78c011fcb7ececfb69af5d86092ce7b8bc5a6e3f63268",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/test/cmake/README.md",
+      "sha256": "1b5e2da17f924517b39133e0ec6e07d522f47ce40505303060ea7636f33ae73e",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/src/G72x/README",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/src/G72x/README.original",
+      "sha256": "c5bda7e76d4054c8a7d2c2a05c9d51e98d87376a5b003f4f739537eb1eeb6485",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/src/GSM610/README",
+      "sha256": "7eaaf8be6e2b19ebae14f5c9cfe23f576bac1150565f19b75c34d73f7e4be8da",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/src/GSM610/COPYRIGHT",
+      "sha256": "1bbe7119b1bcd1489e0f36cb95b8902f7f0ceec9a2f3a67394bc9f4709a4e0a7",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/AUTHORS",
+      "sha256": "373fb9abaa154db5da8ab692853da32ced8977b817a713913953c63e50eb4499",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/COPYING",
+      "sha256": "ad01ea5cd2755f6048383c8d54c88459cd6fcb17757c5c8892f8c5ea060f6140",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/README",
+      "sha256": "1f279a0475740356655768d80a8f19f305927fc47e0d273207103a187f9588fa",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/alsa-1.2.16.1/COPYING",
+      "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/alsa-1.2.16.1/README.md",
+      "sha256": "52e4b1f472cd942690cd9e61d2baea9d61e777bba68f1a694b1f68fe23df1e39",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/alsa-1.2.16.1/aserver/COPYING",
+      "sha256": "bfe16cf823bcff261fc6a062c07ee96660e3c39678f42f39a788a68dbc234ced",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/alsa-1.2.16.1/doc/README.1st",
+      "sha256": "011fa0412ddf64c9f505f7421e442dbc123ad7abbb839e7a1a561c07bd446a78",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/libxmp-4.7.2/COPYING",
+      "sha256": "caa07d94f957b93108e599508d39dbe763cf32e29b75970ff08de66b1a8d1996",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/ports/README",
+      "sha256": "4f17bcfb603af6fd0e9004bf2b5d9edc76b3df3e800fa3143d8c73c88900d187",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/AUTHORS",
+      "sha256": "fb18c9abae864a20f691e949e4c7871c79f5f0861b3a3dcaf5881c3c02cf5cc2",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/COPYING",
+      "sha256": "c22482728a634a8dfdb4ff72a96d4c1ed64cd8f3e79335c401751ac591609366",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/README",
+      "sha256": "2460fe239649aa87cedc83a1014548852d1c4b6292d2cbecc7d7ed4796c49b40",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/doc/README.gain",
+      "sha256": "d50ab8bbe448a7b491a51eab8f0766e953eac35c5247f9d1d4e7556624ddaf7d",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/doc/LICENSE",
+      "sha256": "cca79ea6fc0a7715e52450df2d86311f990e85067dd13f4d7f5a88d4fd23a07c",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/doc/README.remote",
+      "sha256": "66e9150003af1aef389d11cb719943872a2ab2e2a2e13b21899ec7ad3c3b4ffb",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/mpg123-1.33.7/doc/README.3DNOW",
+      "sha256": "913c6661d01495929fd84bf1decbb312a05191342ef3df62f51cfdf0354be093",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/src/bdf/README",
+      "sha256": "7984455e7e5a9faba3797c8bf095fbe10cc846316b7320aff8c58402e22b82fe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/src/pcf/README",
+      "sha256": "18d9782898d9eac04476e2f744678137b2a889689ed3e923e052fc396a86f86b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/src/gzip/zlib.h",
+      "sha256": "c86a25c27f74cb97b8fa07b175f479f063d5064ace9995b4684063643c81cf1b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/src/base/fthash.c",
+      "sha256": "693e5a54b3ce30140975a94a3369dbe706eb1f280c69e80da426d39cc45b94ef",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.14.3/include/freetype/internal/fthash.h",
+      "sha256": "023d88d49d29ecf3833db7717a3f7ae223c17ec2012bdb5bf33bb67abaf616c4",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/src/bdf/README",
+      "sha256": "46a6b868ce86a88b7485a0ac88408c1111996ee93172bc7c11219c1af17084fe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/src/pcf/README",
+      "sha256": "18d9782898d9eac04476e2f744678137b2a889689ed3e923e052fc396a86f86b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/src/gzip/zlib.h",
+      "sha256": "cbea6fd5786004f24ffe1ba9897716bdc6e40b7d14229ca7886c21069a9c5f85",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/src/base/fthash.c",
+      "sha256": "4f5cdba2e32de7d4822bcbe5b652a24941c6ac523244330a1a8925a19552f188",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/freetype-2.11.1/include/freetype/internal/fthash.h",
+      "sha256": "351299f86d56190d44c829deb70256c3343b9da416f0451c6aabd4586b174dbe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/LICENSE.TXT",
+      "sha256": "2e3bbb7d7c5c396368dd0853a790ec29ce5b8647163dde42a0493fb0d6556b2b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/docs/FTL.TXT",
+      "sha256": "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/docs/GPLv2.TXT",
+      "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/src/bdf/README",
+      "sha256": "7984455e7e5a9faba3797c8bf095fbe10cc846316b7320aff8c58402e22b82fe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/src/pcf/README",
+      "sha256": "18d9782898d9eac04476e2f744678137b2a889689ed3e923e052fc396a86f86b",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/src/gzip/zlib.h",
+      "sha256": "611f309346ae31781d4cf8f795f8c79092eee6c8a0c273c8ba81c6beeb0ecf92",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/src/base/fthash.c",
+      "sha256": "73fca7e875ea7bfc7496dc9eb84abe9f16844ebd7589f0e4eafd9b1d1df137e3",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/freetype-SDL2_ttf-2.24.0-static/include/freetype/internal/fthash.h",
+      "sha256": "351299f86d56190d44c829deb70256c3343b9da416f0451c6aabd4586b174dbe",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows-static/harfbuzz-SDL2_ttf-2.24.0-static/COPYING",
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/SDL-2.32.10/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/SDL_image-2.8.12/LICENSE.txt",
+      "sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/SDL_mixer-2.8.2/LICENSE.txt",
+      "sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/SDL_ttf-2.24.0/LICENSE.txt",
+      "sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/fluidsynth-2.5.7/COPYRIGHT-NOTICE.txt",
+      "sha256": "056210177ffb79047684972c2866ede97139db569ac4ee5d3b79b3858a0c8b82",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/sndfile-1.2.2/COPYRIGHT-NOTICE.txt",
+      "sha256": "b132c896f821f81e65d5f4000b4c67e3e9b4a52c2e4f321d30f37b60788120be",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/alsa-1.2.16.1/COPYRIGHT-NOTICE.txt",
+      "sha256": "410821f77b8925787e6bf067f342ec9844c0a0783eb881c135518258c348e6e8",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/pygame-ce-2.5.8/docs/licenses/LICENSE.sdl_gfx.txt",
+      "sha256": "63744690fa28ecf2a9dedacafb08d1209031e7eff1820430d952264f678a1bcf",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/pygame-ce-2.5.8/docs/licenses/LICENSE.sse2neon-h.txt",
+      "sha256": "ada11c843d252c0b70837629ac7a54a525ecb7d8c0932ebccf863c55dbd32cb1",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/pygame-ce-2.5.8/src_c/SDL_gfx/SDL_gfxPrimitives.c",
+      "sha256": "ca79a457f9360d532d3c792e94a09f07b725daaa098eee1532e517ebb8a575a0",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/modern/pygame-ce-2.5.8/src_c/include/sse2neon.h",
+      "sha256": "774e9d19dc89792347742048ada2dd8892be9d7af834aeceab68f6af7da9a4b1",
+      "provenance_manifest": "modern-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/README-SDL.txt",
+      "sha256": "f17d8919136f9627468b4dffbd7bddd188ef2aaa8ed21914d2107d1c759e99d7",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/LICENSE.txt",
+      "sha256": "97f35b302b361680ec1e891e95d2d52097bb95abff361434916d99dc1305f127",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/README.md",
+      "sha256": "333de1a6fab2433571809e62195d32bb90b95e016fda16292a34d8abb18d9113",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-android.md",
+      "sha256": "074fafc40c431ea653262d99f08e19b394d84d2c15ae637518decb64dd8ace12",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-cmake.md",
+      "sha256": "0613616aff6312fbda8cfc9a435047549df24b6c8c452b6ae51cbe6e5b4aa9d5",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-directfb.md",
+      "sha256": "f82dd522a2e831e54d4c852449f50f707c4295d2cd77454c4ec4dccb2232b5bd",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-dynapi.md",
+      "sha256": "48c22497f377716e846658bcf9cc7b80282da8ad534c5a2a0548d6615b5eac5e",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-emscripten.md",
+      "sha256": "ea1195db51168d6f15fc756b6ceea2cb4d528acb8d407150e917b5c0a544ac2a",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-gdk.md",
+      "sha256": "9f8797c58f7bae80170e9a33cb07954160f4e0a30c9c46bf5048d33fd9b0e542",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-gesture.md",
+      "sha256": "4b3e0c2458d0a5282a9b69fee1bc2f389acddd6c83399e9befc9fbba29e70e10",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-git.md",
+      "sha256": "7403077de99ca417cce4a22a76c111db7754379ecfeaa54d00d50f4f6028787e",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-hg.md",
+      "sha256": "64f55f234ba48c12cbb0a658ddbb30d33767193f48ee2b244ece07fc91a43ee6",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ios.md",
+      "sha256": "2b75d58110290f81daf803f5a18930736ee17962c9737ab08178346796c34f16",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-kmsbsd.md",
+      "sha256": "06ca195be8f5e3a9fc0d1ee69fba40aa8e809e21a9dcdb56623e537421d0183e",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-linux.md",
+      "sha256": "c39149ceda9b253a3cc768d32b68173fe780286171294c75e5c2173abbbb05af",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-macos.md",
+      "sha256": "27e97f72782123f0622657b8b63fe26570b0ff3329d518fa7a6637cf3a2f6bba",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-n3ds.md",
+      "sha256": "d1f0c8ad5df145db078af542b382d9cb000b01348601b832c468fb6325695631",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-nacl.md",
+      "sha256": "df7230132f952237d4f9d594ffd14195fe733afd5e341fe201336c4acb293615",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ngage.md",
+      "sha256": "a2cc7220a601e49f7bd06f6c37ba91b01c92a12290d694a959ce9422ec452067",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-os2.md",
+      "sha256": "c68e15947d11c892b45db6568855eab69c54dfbd770ee02ae250109af0ac36ad",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-pandora.md",
+      "sha256": "5b22799dd3cecbef00dc60187ee0275031db96df1aa5fb1e1fade8db76013ceb",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-platforms.md",
+      "sha256": "4d4a47f2df9a497f3545a95c292495b973001f4fc0cf396443ba45eb54da47fb",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-porting.md",
+      "sha256": "4cf4bdd5450752e330212226323c1f45396643efe99ec39a2d605a231a9850df",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-ps2.md",
+      "sha256": "fa675c3b8a51475d5e47a2d90e5648273c239258bbe0e15ec1d6cbd73b76d77f",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-psp.md",
+      "sha256": "69f05ed70d33073c754b0c2663c977c108b7624ce1bf61197e5bd95366df1e2d",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-raspberrypi.md",
+      "sha256": "ea9df735373108ecb8e8ee60d00812ac1fb93dc510fb0c2af3e4705f4011e50b",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-riscos.md",
+      "sha256": "a203c06f6e72d999d3285a69c1c681ad812a9bbe5779b4c535aed39bcf91fc59",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-touch.md",
+      "sha256": "745dbd1a617d9434027d6d2178c0811c4a6ae44996fad2dede0a4cb8bf8fde56",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-versions.md",
+      "sha256": "fd920274217eaf101fc1e1a35fe09f21fe32c46e74c362c805e3b4d478c806e1",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-visualc.md",
+      "sha256": "5218149424d1878cd233ee575ca50391c5a3f8239fec35ec6c4d4ba1f1a391be",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-vita.md",
+      "sha256": "959858256d8ad8d2c4fc38924da4858fa269be04bdea604ac3ef42cb5db586fd",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-wince.md",
+      "sha256": "fe622040f83d896dc8edd5b54ac57deba3323f6ca4904d05b47b2879551565c3",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-windows.md",
+      "sha256": "0ba502be95d335510d1ae1e06c00a50207f5a7469682ad4dec8c621d94cbfbe9",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README-winrt.md",
+      "sha256": "56ee99cf71ed74af666a2d6ab0ce11c18d05b9d3422b63c93b3999b222bc3e5f",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/docs/README.md",
+      "sha256": "2614a9acee12b42ccddca53c9773d04d8640244145db52d9c88b903aae80b43d",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2-devel-2.32.10-VC/SDL2-2.32.10/include/SDL_copying.h",
+      "sha256": "3f90be470c18f99f4aef39444e9374edba166cfeb1b90f99f35286cc33924642",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.avif.txt",
+      "sha256": "5a6e603c08d02a173954aced9957fa7e5fcd72c43ff78775b758fc7109da18a6",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.dav1d.txt",
+      "sha256": "b19d87106bf153f6233927d95347b54e7bec089fbfb49e3c36133b56e45b1571",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.libjpegturbo.md",
+      "sha256": "cff8701dc999e39b5044ece8f22ed65b3a10d6a8dbddca8ffb802d24580181db",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.tiff.txt",
+      "sha256": "8f859efd8916b7df374bd39dc9eeea9d53dbcf35e62fcf670d2b3b4c4d8f251a",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x64/optional/LICENSE.webp.txt",
+      "sha256": "17c029a902ad45a199dfe8e3a1c39305ab28d302b0703360c4a27351a4673dcb",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.avif.txt",
+      "sha256": "5a6e603c08d02a173954aced9957fa7e5fcd72c43ff78775b758fc7109da18a6",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.dav1d.txt",
+      "sha256": "b19d87106bf153f6233927d95347b54e7bec089fbfb49e3c36133b56e45b1571",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.tiff.txt",
+      "sha256": "8f859efd8916b7df374bd39dc9eeea9d53dbcf35e62fcf670d2b3b4c4d8f251a",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/lib/x86/optional/LICENSE.webp.txt",
+      "sha256": "17c029a902ad45a199dfe8e3a1c39305ab28d302b0703360c4a27351a4673dcb",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/LICENSE.txt",
+      "sha256": "bed1d84d6aa7abbe0a7a675ca43f1e76e518064ce88954f2fe815be777a6f709",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_image-devel-2.8.12-VCpgce/SDL2_image-2.8.12/README.txt",
+      "sha256": "12a177f2b777d82c867ac7b2191f0b63db6500eaa940e5acf06e1d2ab79a2cb9",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_ttf-devel-2.24.0-VC/SDL2_ttf-2.24.0/LICENSE.txt",
+      "sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_ttf-devel-2.24.0-VC/SDL2_ttf-2.24.0/README.txt",
+      "sha256": "e8ab44d739979785d407b7b0f5de12be161b4a5dbb9c14295b665cdfec66692d",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/LICENSE.txt",
+      "sha256": "7826eca0a0f7e591f38dd844e207a200aac81a59b20d8a30c3af8c6282af13e6",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/README.txt",
+      "sha256": "3edf4716645f6893a1086f2c08cd19e74f88576c5ed151de250570effaac401c",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.gme.txt",
+      "sha256": "319daefe38ebeead3df178e5937898a52d67c0c795f54f1c0bb10ac3b9cffb63",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.ogg-vorbis.txt",
+      "sha256": "1300208dc709bce1f7b1bf5295acb4df8eca42a67a301ce4317c9b901560092a",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opus.txt",
+      "sha256": "fde149f902d124a8c02a218527c440ee2fab6884323f180061b1405fb06af60e",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.opusfile.txt",
+      "sha256": "54e125c8250361407b34322e0f328f6bdf7fd30cd4f2941a321e47b41f9c159d",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.wavpack.txt",
+      "sha256": "c580b15e1391e59164d17c642df7019cb11946ab89281b5d781b43c732d4bf97",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x86/optional/LICENSE.xmp.txt",
+      "sha256": "02962db795b4b5dd0b23102bb449fe97fec9c71993d1c06d4e0657303cf759fe",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.gme.txt",
+      "sha256": "319daefe38ebeead3df178e5937898a52d67c0c795f54f1c0bb10ac3b9cffb63",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.ogg-vorbis.txt",
+      "sha256": "1300208dc709bce1f7b1bf5295acb4df8eca42a67a301ce4317c9b901560092a",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opus.txt",
+      "sha256": "fde149f902d124a8c02a218527c440ee2fab6884323f180061b1405fb06af60e",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.opusfile.txt",
+      "sha256": "54e125c8250361407b34322e0f328f6bdf7fd30cd4f2941a321e47b41f9c159d",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.wavpack.txt",
+      "sha256": "c580b15e1391e59164d17c642df7019cb11946ab89281b5d781b43c732d4bf97",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/SDL2_mixer-devel-2.8.2-VC/SDL2_mixer-2.8.2/lib/x64/optional/LICENSE.xmp.txt",
+      "sha256": "02962db795b4b5dd0b23102bb449fe97fec9c71993d1c06d4e0657303cf759fe",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/freetype/config/ftoption.h",
+      "sha256": "3679c267bc813769e141a445e272e29aad631feef9a4dc61ec2c7d402f359e27",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/freetype/freetype.h",
+      "sha256": "fb864eb73c0441fae861d0a4e43a6ab3ce91e97c53da31094259df166a27380b",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/portmidi.h",
+      "sha256": "ae2cd25acc382f80c1939f6e8a87e6442be569c721fb922e74a7f22637258ab9",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/windows/prebuilt-x64-pygame-2.1.4-20220319_2/prebuilt-x64/include/LICENSE.portmidi.txt",
+      "sha256": "bfe3bd5105cc0b09d677f06878720244525f66b289717ee9c768c24eee728632",
+      "provenance_manifest": "windows-license-file-manifest.json"
+    },
+    {
+      "path": "licenses/LICENSE.sse2neon-h.txt",
+      "sha256": "ada11c843d252c0b70837629ac7a54a525ecb7d8c0932ebccf863c55dbd32cb1",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.sse2neon-h.txt"
+    },
+    {
+      "path": "licenses/LICENSE.sdl2_image.txt",
+      "sha256": "45079362e2230154205413a6940544ca94e3479ccf76205c71c4f542a6815d25",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.sdl2_image.txt"
+    },
+    {
+      "path": "licenses/LICENSE.jpeg.txt",
+      "sha256": "2899a194cc43af0cfbeff33cdecfad20de8bbf784155b0cd0217d27c37609a28",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.jpeg.txt"
+    },
+    {
+      "path": "licenses/LICENSE.sdl2_mixer.txt",
+      "sha256": "113727180e7956cb9718b03b41da85b63ea54743a33047071a623bf672895a10",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.sdl2_mixer.txt"
+    },
+    {
+      "path": "licenses/LGPL-2.1.txt",
+      "sha256": "a190dc9c8043755d90f8b0a75fa66b9e42d4af4c980bf5ddc633f0124db3cee7",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/LGPL.txt"
+    },
+    {
+      "path": "licenses/LICENSE.mpg123.txt",
+      "sha256": "892cd7e1c0b23374c8a82c244f64c30297c1feada0143cfdd9f6a25f445b0dd6",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.mpg123.txt"
+    },
+    {
+      "path": "licenses/LICENSE.tiff.txt",
+      "sha256": "8eeab3915f97f6f7b62a8008bf77e7ac3bfbb034b04d93cd63aafa10b2dd6614",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.tiff.txt"
+    },
+    {
+      "path": "licenses/LICENSE.png.txt",
+      "sha256": "0ad3bfee8be10e5519949e7af492e36bc349376b75fbeb412229a5967e3e9434",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.png.txt"
+    },
+    {
+      "path": "licenses/LICENSE.opus.txt",
+      "sha256": "fde149f902d124a8c02a218527c440ee2fab6884323f180061b1405fb06af60e",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.opus.txt"
+    },
+    {
+      "path": "licenses/LICENSE.sdl2.txt",
+      "sha256": "ae4df3759a726538607b84c00ab8f8a5567d9f38ad5397486eb9b5c5f626caef",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.sdl2.txt"
+    },
+    {
+      "path": "licenses/LICENSE.ogg-vorbis.txt",
+      "sha256": "776b6f6ab87afa263d534ad4061b6180149de0fed90e2e18e1592992922327ce",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.ogg-vorbis.txt"
+    },
+    {
+      "path": "licenses/LICENSE.zlib.txt",
+      "sha256": "31010e0bc26df3001c7bb3c1b7a7094a8972bf6d37a5d0c59d3d3c98fbfaf463",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.zlib.txt"
+    },
+    {
+      "path": "licenses/LICENSE.fluidsynth.txt",
+      "sha256": "9b872a8a070b8ad329c4bd380fb1bf0000f564c75023ec8e1e6803f15364b9e9",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.fluidsynth.txt"
+    },
+    {
+      "path": "licenses/LICENSE.webp.txt",
+      "sha256": "17c029a902ad45a199dfe8e3a1c39305ab28d302b0703360c4a27351a4673dcb",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.webp.txt"
+    },
+    {
+      "path": "licenses/LICENSE.freetype.txt",
+      "sha256": "650737ec7589c35600de73b0db88dafb314f7e32e7e3cf38d0c87ceb1a7ed31b",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.freetype.txt"
+    },
+    {
+      "path": "licenses/LICENSE.sdl_gfx.txt",
+      "sha256": "63744690fa28ecf2a9dedacafb08d1209031e7eff1820430d952264f678a1bcf",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.sdl_gfx.txt"
+    },
+    {
+      "path": "licenses/LICENSE.portmidi.txt",
+      "sha256": "eb5d0724b2ae76a94ae804c44b3d6cfaaca822b7d42907aefa9256cb93db6fe0",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.portmidi.txt"
+    },
+    {
+      "path": "licenses/LICENSE.opusfile.txt",
+      "sha256": "54e125c8250361407b34322e0f328f6bdf7fd30cd4f2941a321e47b41f9c159d",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.opusfile.txt"
+    },
+    {
+      "path": "licenses/LICENSE.FLAC.txt",
+      "sha256": "349b7bdbf2de10e1303fc3e8aa81f944fd2832fe40270e1b805e20b1b131187c",
+      "source_url": "https://raw.githubusercontent.com/pygame-community/pygame-ce/c8200a9eaa530f884a0a4c3384cefc48006e58be/docs/licenses/LICENSE.FLAC.txt"
+    }
+  ]
+}
