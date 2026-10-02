@@ -1552,7 +1552,7 @@ class PartTwoEpisode:
                 artwork.FINAL_SEAL_BATTLE_ART,
                 Color.RED,
                 alt_text=(
-                    "A towering Rider presses against three defenders holding a blazing seal circle."
+                    "Three travelers face a towering hooded figure across an eight-pointed seal beneath a stone arch."
                 ),
             )
         result = self.combat(

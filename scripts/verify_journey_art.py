@@ -16,7 +16,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from roads_beneath_shadow import artwork, journey_artwork  # noqa: E402
+from roads_beneath_shadow import artwork, journey_artwork, part_two_artwork  # noqa: E402
+
+ART_MODULES = {"artwork": artwork, "part_two_artwork": part_two_artwork}
 
 
 def clean_output(output: str) -> str:
@@ -41,6 +43,7 @@ def verify_manifest(converter: str, source_dir: Path, module) -> None:
     if version.stdout.strip() != expected:
         raise ValueError(f"Expected converter {expected}, got {version.stdout.strip()!r}")
     for entry in manifest["entries"]:
+        owning_module = ART_MODULES[entry["module"]] if "module" in entry else module
         source = source_dir / entry["filename"]
         if hashlib.sha256(source.read_bytes()).hexdigest() != entry["source_sha256"]:
             raise ValueError(f"Reference changed: {source.name}")
@@ -51,14 +54,17 @@ def verify_manifest(converter: str, source_dir: Path, module) -> None:
                 command.append("--negative")
             result = subprocess.run(command, check=True, text=True, capture_output=True)
             body = clean_output(result.stdout)
+            stage_top = next((index for index, row in enumerate(result.stdout.splitlines()) if row.strip()), 0)
             density = sum(character not in " \n" for character in body)
-            candidates.append((density, negative, body))
-        _density, negative, body = min(candidates)
-        committed = getattr(module, entry["raw_constant"]).strip("\n")
+            candidates.append((density, negative, body, stage_top))
+        _density, negative, body, stage_top = min(candidates)
+        committed = getattr(owning_module, entry["raw_constant"]).strip("\n")
         if body != committed or negative != entry["negative"]:
             raise ValueError(f"Art is not the exact sparse conversion: {entry['raw_constant']}")
         if hashlib.sha256(body.encode()).hexdigest() != entry["raw_sha256"]:
             raise ValueError(f"Raw art checksum changed: {entry['raw_constant']}")
+        if "stage_top" in entry and stage_top != entry["stage_top"]:
+            raise ValueError(f"Animation origin changed: {entry['raw_constant']}")
         print(f"Verified {entry['raw_constant']}: exact {expected} output, negative={negative}")
 
 

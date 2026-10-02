@@ -24,6 +24,117 @@
       "negative": false,
       "source_sha256": "0457d865d558d9b6a06e0cc7d5485549069918bf733cfcc5a3c318da1f9408b2",
       "raw_sha256": "2b31e6e00827dd552f8780fb7d7c3498be6f52ba68e43b33c54190ca8a120535"
+    },
+    {
+      "raw_constant": "TITLE_ART_EXPANDED",
+      "public_art": "TITLE_ART_EXPANDED",
+      "scene": "The Silver Star",
+      "alt_text": "An eight-pointed star shines above a winding road between two mountain peaks.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: A memorable dark-fantasy title illustration: one large eight-pointed silver star suspended above a winding road passing between two mountains.\nScene/backdrop: pure black night, only two broad white angular mountain shapes in the lower half. The mountains must read as two separate simple jagged peaks with black gaps, not intricate mountain chains. Subject: the single solid-white eight-pointed star at the upper center is big and immediately recognizable, four long rays and four shorter diagonal rays, no additional stars. A thick white S-shaped road ribbon starts wide at bottom center and narrows into the black valley between the two mountains. Road separated from both mountains by generous black gaps. No people, trees, clouds, horizon texture, or buildings.\nConstraints: strong three-part emblem: star, two mountains, winding road. Main star fills a quarter of image height, mountain peaks fill lower two-fifths, road shape clearly separate and entirely within black valley. Avoid thin outlines and thin rays.",
+      "negative": false,
+      "stage_top": 1,
+      "filename": "title-screen.png",
+      "source_sha256": "d5ebf7b5946ca0fbfcc2f4e34f9f4c78318ce5a4f55aa056b1da1f3570d96b2e",
+      "raw_sha256": "24cee8c4162d051f4bdee58d68e32ca756500c62df705a3e948f69c1282634d1"
+    },
+    {
+      "raw_constant": "PRANCING_PONY_EXTERIOR_STILL",
+      "public_art": "PRANCING_PONY_EXTERIOR_ART",
+      "scene": "Arrival at the Inn",
+      "alt_text": "A steep-roofed timber inn has a smoking chimney, a dark doorway, and a hanging horse sign.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: A cozy medieval wayside inn exterior that is immediately recognizable at tiny terminal scale.\nScene/backdrop: absolute pure black night. Subject: ONE compact three-quarter-view medieval timber inn. A broad solid white steep gabled roof, one stout white chimney to the left with a SINGLE broad curved white smoke plume, two chunky side wings, a large dark doorway cut out in white building front. Four large pure-black square window openings arranged two upstairs, two downstairs, with simple thick white central mullions. One clearly separated white hanging tavern sign to the right showing a black horse silhouette icon (NO LETTERS). Broad white walls with only two or three wide black timber beam cutouts. Whole inn occupies 70 percent of canvas width and 75 percent of height, centered. No people, trees, hills, moon, rain, cobbles, fences, stools, landscape textures, or background buildings.\nConstraints: roof, chimney, doorway and four windows are huge clean shapes. Solid white building, black windows. Avoid brick texture, roof tile texture, fine beam patterns, small doors, outline-only illustration, and a giant sign dominating the actual inn.",
+      "negative": false,
+      "stage_top": 0,
+      "filename": "prancing-pony.png",
+      "source_sha256": "bdf4756ec519ad57e0ab5df71a29eede74206dab080df3fbc97f6c1d6a8b426b",
+      "raw_sha256": "712f59e22ade5745e8b4ab5e08579e6a06a4675323c4943633b874d54a4ddf39"
+    },
+    {
+      "raw_constant": "BLACK_RIDER_SPRITE",
+      "public_art": "BLACK_RIDER_CLIFFHANGER_ART",
+      "scene": "The Black Rider",
+      "alt_text": "A faceless hooded Rider raises a sword from the saddle of a broadside horse.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: An instantly recognizable sinister hooded Black Rider seated on a powerful horse in full side profile.\nScene/backdrop: absolute pure black empty night, no ground line or architecture. Subject: ONE large solid-white filled horse and ONE mounted hooded rider. Horse faces LEFT; broad horse head with pointed ears, long curved neck, barrel chest, body, long tail sweeping right, four clearly separated thick legs and hooves. Visible black gaps between all four legs. Hooded rider sits upright in the saddle with broad triangular white cloak, one large black empty face opening in the hood and simple white arm holding a single thick diagonal sword forward. Hood at upper center, horse takes middle and lower thirds. Show complete horse and rider, everything fits with clear black margins. The horse silhouette is the dominant form, not a collection of thin outline strokes.\nConstraints: compact portrait fills 75 percent of canvas width and 80 percent of height. No bones, skeleton horse, skull face, armor detail, reins, buckles, saddle texture, tiny hair strands, decorative cloth or particles. Large pure-black cutouts separate horse legs and the rider's sword from the horse head. Avoid a frontal horse, tiny body under a huge head, or any outline-only drawing.",
+      "negative": false,
+      "stage_top": 1,
+      "filename": "black-rider.png",
+      "source_sha256": "9bafe5f6fb68816bde99b0939d28ef1c92db89db7b217e12268a3ec0cad19a2b",
+      "raw_sha256": "8e4908a3e0f008b336adee0d9c88dc34aadacad80b8d9e365384b4a9c6f13cf5"
+    },
+    {
+      "raw_constant": "MARSH_WARG_SPRITE",
+      "public_art": "MARSH_WARG_INTRO_ART",
+      "scene": "The Marsh Warg",
+      "alt_text": "A wolf-like marsh Warg bares long fangs above four braced paws.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: A huge predatory marsh wolf with a recognizable canine silhouette and open jaws, facing LEFT in full side profile.\nScene/backdrop: pure black empty night, no reeds, water line or terrain. Subject: one stocky wolf monster. Pointed ears, heavy long muzzle, huge shoulder hump, broad muscular body, one raised thick tail, four clearly separated bent legs with heavy paws. Big pure-black triangular eye and black mouth opening containing exactly two large white triangular fangs. The muzzle is clearly wolf-like, long and squared, NOT a lion or saber-tooth cat. One broad angular white mane on its neck, without strands or furry texture. Wolf occupies 80 percent canvas width, 70 percent height, entire body and paws visible within black margins.\nConstraints: broad flat WHITE FILLED body with simple large black separations and mouth cutout. No thin outline, stripes, fur details, bones, harness, armor, skull, splashing water or extra creatures. Avoid realistic detail and fine line engraving.",
+      "negative": false,
+      "stage_top": 2,
+      "filename": "marsh-warg.png",
+      "source_sha256": "3c90807a97cf073fbb0569939a91f06e755dd58b4d65b0a58c8ec61df609e14b",
+      "raw_sha256": "d76eaf0f18c1d61155731df61f637886304c0513defbe39ca48c12721b3886d8"
+    },
+    {
+      "raw_constant": "GHORAK_ASH_HAND_SPRITE",
+      "public_art": "GHORAK_ASH_HAND_INTRO_ART",
+      "scene": "Ghorak Ash-Hand",
+      "alt_text": "A broad armored Orc commander holds a cleaver beside an oversized gauntlet.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: A towering Orc warlord called Ghorak Ash-Hand, recognizable as a brutal armored commander carrying a broad cleaver and a heavy blackened left gauntlet.\nScene/backdrop: absolute pure black empty space. Subject: ONE front-facing massive Orc with a squat wide stance. Huge solid-white blocky armored shoulders, broad torso, thick bent legs and large boots, legs separated by a large black gap. Heavy pointed ears, square helmet, black face opening with one big squared nose shape and two simple white tusks. On the LEFT of the image the Orc holds a large wide upright cleaver, clearly separated from the head and torso; cleaver is broad, not a long narrow sword. On RIGHT of the image a huge square gauntlet, WHITE thick silhouette but BLACK broad knuckle cutouts, arm extended slightly away from the body so it reads clearly. A simple black belt gap and one angular chest plate gap. Commander dominates center, fills 70 percent width and 85 percent height.\nConstraints: icon-simple solid white body. No detailed armor rivets, tiny fingers, fur trim, chain mesh, decorative filigree, blood, background creatures or stone ruins. Every limb broad and spaced. Avoid skinny warrior, skeletal face, outline-only drawing.",
+      "negative": false,
+      "stage_top": 0,
+      "filename": "ghorak-ash-hand.png",
+      "source_sha256": "aa20a6579bcce6bdd343b90d1e3a61fb8e45e7fae62d7931e6256fe86ad6254f",
+      "raw_sha256": "e090e4d3c425356eccebb65c73e1cf9487b46508eabd296f81b5f6ecc4bf9707"
+    },
+    {
+      "raw_constant": "FINAL_SEAL_BATTLE_SPRITE",
+      "public_art": "FINAL_SEAL_BATTLE_ART",
+      "scene": "Final Seal battle",
+      "alt_text": "Three travelers face a towering hooded figure across an eight-pointed seal beneath a stone arch.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: An immediately readable final confrontation at a great star-shaped magical seal, deep below ground.\nScene/backdrop: pure black cavern, framed only by a single very thick angular white arch across the top and far sides. Subject: a huge ominous faceless HOODED FIGURE at upper center behind the seal, half body looming in the arch. Large triangular white hood with a large black face opening and a broad white cloak, no face details. In lower foreground exactly THREE small separate white traveler silhouettes seen from behind stand facing the figure, evenly spaced with large black gaps: a broad sword-bearer on left, a woman with two thick short blades in center, and a bow-bearer on right. A single large eight-pointed WHITE floor star lies between the three foreground figures and the hooded figure. All parts separated by pure-black gaps. Hooded figure and star are the primary forms; companions unmistakably smaller but thick.\nComposition correction: five clear shapes in uncluttered black space: enormous hooded figure above, single star below it, three small travelers along bottom. No extra radial lines or floor details. Only the broad outer arch suggests architecture.\nConstraints: fully visible composition, no overlap between travelers and star, no horse or extra figures, no stair treads, chairs, circles, debris, weapons scattered on the floor, fine texture, or magic particles. Avoid tiny realistic people and thin rim light.",
+      "negative": false,
+      "stage_top": 0,
+      "filename": "part-two/final-seal-battle.png",
+      "source_sha256": "07bc02fe9391edb135e71601e34a7047d4039c92369f49b3455d91301c69f8cd",
+      "raw_sha256": "77fcf652d644a15330e2eea1b16ea8dabd868f6aa25fa46a62e59623a32c238e",
+      "module": "part_two_artwork"
+    },
+    {
+      "raw_constant": "PRANCING_PONY_EXTERIOR_DIM_ART",
+      "public_art": "PRANCING_PONY_EXTERIOR_ART",
+      "scene": "Arrival at the Inn",
+      "alt_text": "A steep-roofed timber inn has a smoking chimney, a dark doorway, and a hanging horse sign.",
+      "prompt": "Edit this exact image by changing illumination only. Preserve every shape, edge, location, proportion, silhouette, window, smoke plume, tavern sign, and black negative-space pixel as precisely as possible. The same medieval inn must remain identically positioned in an unchanged 1536x1024 canvas. Change all solid WHITE foreground ink to flat medium gray (#888888), without texture, detail, gradients, outlines, new objects, rain, glow or added marks. Keep every BLACK region solid BLACK. This is the dim-light frame of a two-frame terminal animation; camera or geometry must not change. No crop or rescale. Render as an exact recoloring of the reference.",
+      "negative": false,
+      "stage_top": 1,
+      "filename": "prancing-pony-dim.png",
+      "source_sha256": "ff0d3c470e1edb1e638eae818c5453d824e9a743b2d22f799303708df309aae3",
+      "raw_sha256": "4b443827c7d0365b9f7c63e6c18b8f0e71df00cbb577670ddc8df928eedb113c",
+      "reference_filename": "prancing-pony.png"
+    },
+    {
+      "raw_constant": "BLACK_RIDER_DIM_SPRITE",
+      "public_art": "BLACK_RIDER_CLIFFHANGER_ART",
+      "scene": "The Black Rider",
+      "alt_text": "A faceless hooded Rider raises a sword from the saddle of a broadside horse.",
+      "prompt": "Edit this exact image by changing illumination only. Preserve every shape, edge, location, proportion, silhouette, hood, sword, mane, horse leg, hoof, tail, and black negative-space pixel as precisely as possible. The same horse and mounted hooded Rider must remain identically positioned in an unchanged 1536x1024 canvas. Change all solid WHITE foreground ink to flat medium gray (#888888), without texture, detail, gradients, outlines, new objects, glow or added marks. Keep every BLACK region solid BLACK. This is the dim-light frame of a two-frame terminal animation; camera or geometry must not change. No crop or rescale. Render as an exact recoloring of the reference.",
+      "negative": false,
+      "stage_top": 1,
+      "filename": "black-rider-dim.png",
+      "source_sha256": "2112b1423939bd9f50db8473265b955e77c7b88a86bfad2ebf3e9b31415ae2c3",
+      "raw_sha256": "d2f666a0fbd3fb3e599f6b4b3e8e75a72758e252f28453fe71c0f61fdac43847",
+      "reference_filename": "black-rider.png"
+    },
+    {
+      "raw_constant": "FINAL_RUINS_BATTLE_SPRITE",
+      "public_art": "FINAL_RUINS_BATTLE_ART",
+      "scene": "The Ruined Gateway",
+      "alt_text": "A sword-bearing traveler faces a cleaver-wielding Orc warlord between two ruined pillars.",
+      "prompt": "Use case: stylized-concept\nAsset type: monochrome reference for 72-column, 20-row terminal game artwork\nStyle/medium: flat two-color screenprint pictogram. Extremely clean vector-like shapes: solid pure white foreground on solid pure black background. No internal gray shading, stippling, scratches, engraving, sketch lines, grain, rim lighting, fog, or gradient. The subjects are SOLID WHITE FILLED SILHOUETTES, with only a few very large pure-black cutout features. Think an elegant fantasy book chapter symbol, not a detailed illustration. Each important feature must survive reduction to 72 pixels wide and 20 pixels tall.\nComposition/framing: 3:2 landscape canvas, 1536x1024. All subjects fully visible with large black outer margins. White marks occupy roughly 25 to 35 percent of canvas; pure black negative space dominates. Bold shapes at least 50 pixels thick. No frame, border, labels, letters, logo, watermark, stars sprinkled in the sky, or extraneous props.\nColor palette: exactly black and white. Lighting/mood: ominous dark fantasy communicated through shape rather than shading.\nPrimary request: An epic but very simple final battle inside a ruined stone gateway, with one monstrous Orc warlord facing a lone sword-bearing traveler.\nScene/backdrop: pure black night. Only two large separated BROKEN WHITE stone pillars at far left and right with a single angular white lintel overhead. No rubble, inscriptions or textures. Subject: an enormous broad-shouldered Orc warlord in the center-right, squat white armored silhouette with one large cleaver held upright away from his head, a black helmet face opening with two white tusks. In the lower LEFT foreground, one much smaller cloaked traveler with a short white sword held diagonally toward the Orc. A wide pure-black gap clearly separates both figures. Huge difference in size communicates the confrontation. The Orc occupies the central half of the image height and at least a third of its width; the traveler occupies a third of image height. Full bodies and feet visible with large black gaps between their legs.\nConstraints: exactly TWO figures, one Orc and one traveler, fully visible and separated, no extra guards or companions. The warlord, traveler and simple gateway are the only subjects. Every limb and sword broad, solid-white filled, without fine detail. No magic particles, bats, decorative tiles, realistic textures, thin outlines or gray shading.\nAvoid: crowd scenes, tiny people, intricate architecture, face details, fine armor etching and overlapping shapes.",
+      "negative": false,
+      "stage_top": 0,
+      "filename": "final-ruins-battle.png",
+      "source_sha256": "52f79a9d09aac0affec6fccb5a81b157c3d95d2c4960617bcb77768a90dd3e94",
+      "raw_sha256": "2b36b9da48da4d7d108bd4c7114571af47a1e440fdc044ee75fb7724b79946a1"
     }
   ]
 }

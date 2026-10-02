@@ -3,6 +3,7 @@ import os
 import re
 from unittest.mock import Mock, PropertyMock, patch
 
+from roads_beneath_shadow.artwork import AnimatedArtwork
 from roads_beneath_shadow.lighting import ART_PALETTES, Color
 from roads_beneath_shadow.ui import InputClosed, TerminalUI
 
@@ -135,6 +136,26 @@ class TerminalUITests(unittest.TestCase):
 
         self.assertNotIn("FIRST", "\n".join(output))
         self.assertIn("FINAL", "\n".join(output))
+
+    def test_animation_offsets_keep_trimmed_frames_on_the_same_stage(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=False, output_fn=output.append, sleep_fn=lambda _: None)
+        animation = AnimatedArtwork("LIT\nBASE", ("DIM", "LIT\nBASE"), frame_offsets=(1, 0))
+        with patch.object(TerminalUI, "_interactive_terminal", new_callable=PropertyMock, return_value=True):
+            with patch.object(ui, "clear", side_effect=lambda: output.append("<next>")):
+                ui.art(animation)
+        marker = output.index("<next>")
+        dim, lit = output[:marker], output[marker + 1:]
+        self.assertEqual(len(dim), len(lit))
+        self.assertEqual(dim[0], "")
+        self.assertEqual(dim[-1].strip(), "DIM")
+        self.assertEqual(lit[-1].strip(), "BASE")
+
+    def test_reduced_motion_uses_the_lit_still_without_animation_padding(self) -> None:
+        output: list[str] = []
+        ui = TerminalUI(color=False, reduced_motion=True, output_fn=output.append)
+        ui.art(AnimatedArtwork("LIT", ("DIM", "LIT"), frame_offsets=(1, 0)))
+        self.assertEqual([line.strip() for line in output], ["LIT"])
 
     def test_screen_reader_replaces_art_with_short_alt_text(self) -> None:
         output: list[str] = []

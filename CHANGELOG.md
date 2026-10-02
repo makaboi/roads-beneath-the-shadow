@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Bold Silhouettes
+
+- Rebuilt the title, Prancing Pony exterior, mounted Black Rider, Marsh Warg, Ghorak, ruined-gateway battle, and final-seal confrontation from new flat, high-contrast references that stay recognizable at terminal size.
+- Replaced the inn and Rider's changing compositions with dim and bright versions of the same silhouettes. Anchored the dim inn frame to prevent a one-row jump after conversion trimming.
+- Recorded exact generation and edit prompts, parent references, image and ASCII checksums, converter polarity, and frame origins; the verification script checks all twelve refreshed references.
+- Updated screen-reader descriptions to match the new illustrations and retained the portable 72-column stage, no-color output, and reduced-motion stills.
+- Expanded the gameplay GIF to eleven scenes and 33 frames, added four encounter screenshots, and refreshed scene and animation sheets with the same colors used in the game.
+
 ## Unreleased — The Last Lantern
 
 - Added four-tone lighting to converted ASCII scenes without changing their raw characters, no-color output, or screen-reader descriptions.

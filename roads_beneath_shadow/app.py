@@ -133,7 +133,7 @@ class Game:
             self.ui.art(
                 TITLE_ART_EXPANDED,
                 Color.SILVER,
-                alt_text="An eight-pointed star hangs over a road descending between dark hills.",
+                alt_text="An eight-pointed star shines above a winding road between two mountain peaks.",
             )
             self.ui.write(
                 "R O A D S   B E N E A T H   T H E   S H A D O W".center(min(72, self.ui.width)),
@@ -326,7 +326,7 @@ class Game:
         self.ui.art(
             PRANCING_PONY_EXTERIOR_ART,
             Color.BLUE,
-            alt_text="The Prancing Pony glows through heavy rain beneath a crooked sign.",
+            alt_text="A steep-roofed timber inn has a smoking chimney, a dark doorway, and a hanging horse sign.",
         )
         self.ui.title("PART I — THE BLACK RIDER'S LETTER")
         self.ui.write("Chapter 1 — Blood at the Prancing Pony", color=Color.RED, bold=True)
@@ -1405,7 +1405,7 @@ class Game:
         self.ui.art(
             MARSH_WARG_INTRO_ART,
             Color.YELLOW,
-            alt_text="A lean marsh warg emerges beside its handler, teeth pale in the fog.",
+            alt_text="A wolf-like marsh Warg bares long fangs above four braced paws.",
         )
         enemies = [orc_scout("Ghorak's Tracker"), marsh_warg()]
         surprise = any(
@@ -1649,7 +1649,7 @@ class Game:
         self.ui.art(
             GHORAK_ASH_HAND_INTRO_ART,
             Color.RED,
-            alt_text="Ghorak Ash-Hand stands in scorched armor with a vast cleaver raised.",
+            alt_text="A broad armored Orc commander holds a cleaver beside an oversized gauntlet.",
         )
         self.ui.narrate(
             "Ghorak Ash-Hand steps from the eastern arch wearing Calenor's broken sword across his "
@@ -1700,7 +1700,7 @@ class Game:
         self.ui.art(
             FINAL_RUINS_BATTLE_ART,
             Color.YELLOW,
-            alt_text="The companions make their final stand among firelit ruins.",
+            alt_text="A sword-bearing traveler faces a cleaver-wielding Orc warlord between two ruined pillars.",
         )
         result = self.combat.run(
             self.state,
@@ -1740,7 +1740,7 @@ class Game:
         self.ui.art(
             BLACK_RIDER_CLIFFHANGER_ART,
             Color.MAGENTA,
-            alt_text="A hooded Black Rider watches from the ridge as the silver star opens a road below.",
+            alt_text="A faceless hooded Rider raises a sword from the saddle of a broadside horse.",
         )
         self.ui.title("THE EIGHTH HORN")
         self.ui.sound("danger")

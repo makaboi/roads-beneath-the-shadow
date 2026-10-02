@@ -117,6 +117,7 @@ These command-line options apply to that launch only. Set the same preferences f
 - A persistent Traveler's Chronicle with episode-aware ending records and eleven achievements
 - Cinematic retro ASCII scenes, restrained ANSI color, five subtle animations, and original optional sound cues
 - Four-tone scene lighting, a clearer three-Orc opening encounter, and new lantern-lit camp illustrations
+- Bold silhouette artwork for the title, inn, mounted Rider, Warg, Ghorak, and both episode finales; inn and Rider animations change light while keeping their subjects in place
 - An optional Last Lantern scene before the Part II finale: hear Mara's hopes, share Tobin's watch, or speak to Calenor beyond his Warden duty; these conversations remember earlier choices and return in the ending recap
 - Adjustable narration speed, reduced motion, narrow-terminal handling, and screen-reader scene descriptions
 - Number keys, W/S, and arrow-key menu navigation
@@ -172,6 +173,8 @@ Refreshed references and exact generation prompts are recorded in `assets/ascii-
 ```bash
 .venv/bin/python scripts/verify_journey_art.py --converter /path/to/ascii-image-converter
 ```
+
+The verifier checks twelve references, including both illumination frames for the inn and Rider. The manifests preserve the parent image used for each edit, and conversion origins keep trimmed animation frames aligned. The eleven-scene gameplay GIF and encounter screenshots show the terminal output at its normal size.
 
 The converter and Pillow are development tools; neither is needed to play. New conversations use the existing version-2 save format. A save made during the Last Lantern remembers completed conversations, while older saves already at the Last Seal continue directly from that checkpoint.
 

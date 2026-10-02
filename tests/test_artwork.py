@@ -34,8 +34,8 @@ PART_ONE_EXPANSION_ART = (
 
 LEGACY_CONVERTER_SOURCES = (
     ("title-screen.png", "TITLE_ART_EXPANDED", False),
-    ("prancing-pony.png", "PRANCING_PONY_EXTERIOR_STILL", True),
-    ("prancing-pony-rain.png", "PRANCING_PONY_EXTERIOR_RAIN_ART", False),
+    ("prancing-pony.png", "PRANCING_PONY_EXTERIOR_STILL", False),
+    ("prancing-pony-dim.png", "PRANCING_PONY_EXTERIOR_DIM_ART", False),
     ("prancing-pony-interior.png", "PRANCING_PONY_INTERIOR_ART", False),
     ("orc-attack.png", "ORC_ATTACK_SPRITE", False),
     ("bree-streets.png", "BREE_STREETS_ART", False),
@@ -53,9 +53,9 @@ LEGACY_CONVERTER_SOURCES = (
     ("orc-tracker.png", "ORC_TRACKER_SPRITE", False),
     ("marsh-warg.png", "MARSH_WARG_SPRITE", False),
     ("ghorak-ash-hand.png", "GHORAK_ASH_HAND_SPRITE", False),
-    ("final-ruins-battle.png", "FINAL_RUINS_BATTLE_SPRITE", True),
+    ("final-ruins-battle.png", "FINAL_RUINS_BATTLE_SPRITE", False),
     ("black-rider-dim.png", "BLACK_RIDER_DIM_SPRITE", False),
-    ("black-rider.png", "BLACK_RIDER_SPRITE", True),
+    ("black-rider.png", "BLACK_RIDER_SPRITE", False),
 )
 
 CONVERTER_SOURCES = LEGACY_CONVERTER_SOURCES + tuple(

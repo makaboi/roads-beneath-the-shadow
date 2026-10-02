@@ -32,6 +32,9 @@ GREEN = "#80c98f"
 GOLD = "#d5ad58"
 RED = "#d46f6f"
 SILVER = "#b9c8d1"
+BLUE = "#819ab9"
+VIOLET = "#aa8db8"
+CYAN = "#88babc"
 TERMINAL = "#0b1013"
 PANEL = "#11191d"
 
@@ -49,7 +52,10 @@ def font(size: int) -> ImageFont.FreeTypeFont:
 def draw_art_row(draw, position, text: str, face, color: str) -> None:
     """Use the game's inks and unchanged glyphs in exported terminal scenes."""
 
-    palette_color = {SILVER: Color.SILVER, GOLD: Color.YELLOW, RED: Color.RED, GREEN: Color.GREEN}.get(color)
+    palette_color = {
+        SILVER: Color.SILVER, GOLD: Color.YELLOW, RED: Color.RED, GREEN: Color.GREEN,
+        BLUE: Color.BLUE, VIOLET: Color.MAGENTA, CYAN: Color.CYAN,
+    }.get(color)
     if palette_color is None or any(character not in ASCII_RAMP for character in text):
         draw.text(position, text, font=face, fill=color)
         return
@@ -143,13 +149,16 @@ SCENES = [
     (title, art_rows(str(art), color) + [("", MUTED), (caption, MUTED)])
     for art, title, color, caption in (
         (artwork.TITLE_ART_EXPANDED, "THE SILVER STAR", SILVER, "Choices leave marks. The road remembers."),
-        (artwork.PRANCING_PONY_EXTERIOR_ART, "ARRIVAL AT THE INN", GOLD, "Calenor promised seven days. Three weeks have passed."),
+        (artwork.PRANCING_PONY_EXTERIOR_ART, "ARRIVAL AT THE INN", BLUE, "Calenor promised seven days. Three weeks have passed."),
         (artwork.ORC_ATTACK_ART, "ORCS AT THE DOOR", RED, "The silver star. Take its bearer alive."),
         (journey_artwork.MIDGEWATER_CAMP_ART, "A FIRE WITHOUT FLAME", GOLD, "For a little while, neither has to be useful to anyone."),
-        (artwork.BLACK_RIDER_CLIFFHANGER_ART, "THE BLACK RIDER", SILVER, "There is only one road left: down."),
+        (artwork.MARSH_WARG_INTRO_ART, "THE MARSH WARG", GOLD, "Beyond the reeds, the hunter waits."),
+        (artwork.GHORAK_ASH_HAND_INTRO_ART, "GHORAK ASH-HAND", RED, "He ran from the answer. You will not."),
+        (artwork.FINAL_RUINS_BATTLE_ART, "THE RUINED GATEWAY", GOLD, "Keep his attention away from the star-door."),
+        (artwork.BLACK_RIDER_CLIFFHANGER_ART, "THE BLACK RIDER", VIOLET, "There is only one road left: down."),
         (journey_artwork.LAST_LANTERN_ART, "THE LAST LANTERN", GOLD, "No ancient power keeps it alight; someone remembered to fill it."),
         (part_two_artwork.FINAL_SEAL_BATTLE_ART, "THE FINAL SEAL BATTLE", RED, "What you promise is yours too."),
-        (part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, "BENEATH RUINED FORNOST", SILVER, "We guarded the road. The Shadow was waking the city."),
+        (part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, "BENEATH RUINED FORNOST", GOLD, "We guarded the road. The Shadow was waking the city."),
     )
 ]
 
@@ -221,10 +230,10 @@ def animation_contact_sheet() -> Image.Image:
     """Show every existing animation frame with the new terminal lighting."""
 
     animations = (
-        ("THE PRANCING PONY", artwork.PRANCING_PONY_EXTERIOR_ART, GOLD),
+        ("THE PRANCING PONY", artwork.PRANCING_PONY_EXTERIOR_ART, BLUE),
         ("THE REFORGED STAR", artwork.STAR_KEY_REFORGED_ART, SILVER),
-        ("THE BLACK RIDER", artwork.BLACK_RIDER_CLIFFHANGER_ART, SILVER),
-        ("THE WALL OF NAMES", part_two_artwork.WALL_NAMES_AWAKENING_ART, SILVER),
+        ("THE BLACK RIDER", artwork.BLACK_RIDER_CLIFFHANGER_ART, VIOLET),
+        ("THE WALL OF NAMES", part_two_artwork.WALL_NAMES_AWAKENING_ART, GOLD),
         ("THE FORNOST MAP", part_two_artwork.FORNOST_MAP_CLIFFHANGER_ART, GOLD),
     )
     sheet = Image.new("RGB", (1920, 500 * len(animations)), TERMINAL)
@@ -236,7 +245,8 @@ def animation_contact_sheet() -> Image.Image:
             draw = ImageDraw.Draw(sheet)
             draw.text((x, y + 24), f"{title} — FRAME {column + 1}", font=font(21), fill=GOLD)
             for line_index, (line, ink) in enumerate(art_rows(frame, color)):
-                draw_art_row(draw, (x, y + 68 + line_index * 20), line, face, ink)
+                offset = animation.frame_offsets[column]
+                draw_art_row(draw, (x, y + 68 + (line_index + offset) * 20), line, face, ink)
     return sheet
 
 
@@ -263,8 +273,12 @@ def main() -> None:
         ("story.png", 1),
         ("combat.png", 2),
         ("camp.png", 3),
-        ("cliffhanger.png", 4),
-        ("last-lantern.png", 5),
+        ("warg.png", 4),
+        ("ghorak.png", 5),
+        ("ruined-gateway.png", 6),
+        ("cliffhanger.png", 7),
+        ("last-lantern.png", 8),
+        ("final-seal.png", 9),
     ):
         gameplay_frame(scene_index, 1.0, False).save(
             screenshot_dir / filename,

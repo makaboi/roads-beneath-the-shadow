@@ -60,9 +60,9 @@ class PartTwoArtworkTests(unittest.TestCase):
                     "Lighting/mood:",
                     "Color palette:",
                     "Constraints:",
-                    "Avoid:",
                 ):
                     self.assertIn(label, prompt)
+                self.assertIn("Avoid", prompt)
                 source_path = SOURCE_DIR / entry["filename"]
                 self.assertGreater(source_path.stat().st_size, 1024)
                 with Image.open(source_path) as source:

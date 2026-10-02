@@ -204,7 +204,12 @@ class TerminalUI:
 
         animation_frames = getattr(text, "frames", None)
         if animation_frames:
-            self.animate(animation_frames, color, alt_text=alt_text)
+            self.animate(
+                animation_frames,
+                color,
+                alt_text=alt_text,
+                frame_offsets=getattr(text, "frame_offsets", None),
+            )
             return
 
         if self.screen_reader:
@@ -238,6 +243,7 @@ class TerminalUI:
         frame_delay: float = 0.14,
         repeat: int = 1,
         alt_text: str | None = None,
+        frame_offsets: Sequence[int] | None = None,
     ) -> None:
         """Play a restrained sequence of ASCII frames.
 
@@ -245,20 +251,25 @@ class TerminalUI:
         fast, redirected-output, and automated-test environments.
         """
 
-        available = tuple(frame for frame in frames if frame.strip())
+        offsets = (0,) * len(frames) if frame_offsets is None else tuple(frame_offsets)
+        if len(offsets) != len(frames) or any(type(offset) is not int or offset < 0 for offset in offsets):
+            raise ValueError("frame offsets must provide one non-negative row count per frame")
+        available = tuple((frame, offset) for frame, offset in zip(frames, offsets) if frame.strip())
         if not available:
             return
         if not self.motion_enabled or not self._interactive_terminal or len(available) == 1:
-            self.art(available[-1], color, alt_text=alt_text)
+            self.art(available[-1][0], color, alt_text=alt_text)
             return
 
         repeat = max(1, int(repeat))
         delay = max(0.0, float(frame_delay))
         first = True
         for _ in range(repeat):
-            for frame in available:
+            for frame, offset in available:
                 if not first:
                     self.clear()
+                for _row in range(offset):
+                    self.write()
                 self.art(frame, color, alt_text=alt_text)
                 self.sleep_fn(delay)
                 first = False
