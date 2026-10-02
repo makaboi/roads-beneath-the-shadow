@@ -101,6 +101,7 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
             initialized_font = True
             pg.font.init()
         for path in font_files:
+            font = None
             try:
                 # Load the bundled TTF directly: a system-font fallback must
                 # not conceal a damaged or omitted release font.
@@ -110,15 +111,23 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
                     raise ValueError("font produced no glyphs")
             except (OSError, ValueError, pg.error) as error:
                 raise ValueError(f"Unable to decode {path.name}: {error}") from error
+            finally:
+                # SDL_ttf keeps the source file open for the Font's lifetime.
+                # Release it while the font subsystem is still initialized,
+                # including when a later decoder leaves a traceback alive.
+                font = None
         initialized_mixer = True
         pg.mixer.init(frequency=16_000, size=-16, channels=2, buffer=512)
         for path in wav_files:
+            sound = None
             try:
                 sound = pg.mixer.Sound(str(path))
                 if sound.get_length() <= 0 or not sound.get_raw():
                     raise ValueError("sound contains no decoded samples")
             except (OSError, ValueError, pg.error) as error:
                 raise ValueError(f"Unable to decode {path.name}: {error}") from error
+            finally:
+                sound = None
         return {
             "images": len(images), "world_maps": len(WORLD_MAPS), "fonts": len(font_files),
             "audio": len(wav_files), "metadata": len(metadata), "audio_driver": "dummy",

@@ -112,6 +112,55 @@ class JourneyControlsTests(unittest.TestCase):
         self.assertEqual(self.results, [None])
         self.assertEqual(self.game.state.to_dict(), before)
 
+    def test_inventory_return_preserves_keyboard_selection_and_confirmation(self):
+        self.start()
+        self.key(self.pg.K_DOWN)
+        self.assertEqual(self.window.selected, 1)
+        before = self.game.state.to_dict()
+        self.key(self.pg.K_i, "i")
+        self.await_request(lambda request: request.kind == "panel")
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.story)
+        self.assertEqual(self.window.selected, 1)
+        self.assertTrue(self.window._menu_focused)
+        self.assertEqual(self.game.state.to_dict(), before)
+        self.key(self.pg.K_RETURN)
+        self.worker.join(1)
+        self.assertEqual(self.results, [2])
+
+    def test_larger_text_after_pause_keeps_completed_story_and_exploration_ready(self):
+        self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=760, h=560))
+        self.ui.title("BREE BEFORE MIDNIGHT")
+        self.ui.narrate("The rain weakens to a cold mist. Bree has drawn in upon itself: shutters closed, hedges whispering, the watch calling from one locked gate to another. Somewhere beyond those gates a horn answers at long intervals. Whoever commanded the Orcs has not given up the hunt.")
+        self.start()
+        while self.window.reading:
+            self.key(self.pg.K_RETURN)
+            self.window.render()
+        position = self.window.world.player_position
+        before = self.game.state.to_dict()
+        old_total = len(self.window.narrative.pages)
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.label == "JOURNEY PAUSED")
+        self.key(self.pg.K_3, "3")
+        self.await_request(lambda request: request.label == "SETTINGS")
+        for _ in range(2):
+            self.window.selected = 9
+            self.key(self.pg.K_RETURN)
+            self.await_request(lambda request: request.label == "SETTINGS")
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.label == "JOURNEY PAUSED")
+        self.key(self.pg.K_ESCAPE)
+        self.await_request(lambda request: request.story)
+        self.assertEqual(self.ui.text_size, "larger")
+        self.assertGreater(len(self.window.narrative.pages), old_total)
+        self.assertEqual(self.window.narrative.index, len(self.window.narrative.pages) - 1)
+        self.assertFalse(self.window.reading)
+        self.assertTrue(self.window.world.active)
+        self.assertEqual(self.window.world.player_position, position)
+        self.assertEqual(self.game.state.to_dict(), before)
+        self.key(self.pg.K_BACKSPACE)
+        self.assertTrue(self.window._page_finished)
+
     def test_f1_controls_close_back_to_the_exact_live_options(self):
         self.start()
         options = self.window.request.options

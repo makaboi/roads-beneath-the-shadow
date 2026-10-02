@@ -414,7 +414,7 @@ class BattleView:
                 elif kind == "player" and weapon == "unarmed":
                     pg.draw.rect(sprite, (193, 160, 119), (28, 27, 3, 3))
                 else:
-                    tip = (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
+                    tip = (34, 34) if pose > 1 else (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
                     pg.draw.line(sprite, BONE, (28, 29), tip, 1)
                     pg.draw.line(sprite, AMBER, (26, 30), (31, 30), 1)
                 if kind == "mara":
@@ -429,14 +429,27 @@ class BattleView:
 
         if kind == "warg":
             fur, lit = (68, 63, 59), (125, 115, 92)
-            pg.draw.polygon(sprite, SHADOW, [(2, 31), (10, 26), (17, 24), (27, 25), (31, 20), (34, 23), (37, 30), (40, 34), (34, 38), (32, 45), (28, 45), (27, 37), (16, 37), (13, 45), (9, 45), (10, 36), (4, 36)])
+            silhouette = ([(2, 31), (10, 26), (17, 24), (27, 25), (31, 20), (34, 22), (37, 29), (39, 32), (39, 39), (34, 39), (28, 36), (22, 38), (17, 37), (13, 43), (9, 43), (9, 37), (4, 36)]
+                          if pose else [(2, 31), (10, 26), (17, 24), (27, 25), (31, 20), (34, 23), (37, 30), (40, 34), (34, 38), (32, 45), (28, 45), (27, 37), (16, 37), (13, 45), (9, 45), (10, 36), (4, 36)])
+            pg.draw.polygon(sprite, SHADOW, silhouette)
             pg.draw.polygon(sprite, fur, [(4, 31), (12, 28), (24, 27), (31, 28), (34, 24), (35, 31), (38, 33), (34, 36), (28, 35), (15, 35), (8, 34)])
             box(lit, (13, 28, 12, 2))
             box((95, 88, 73), (22, 29, 9, 4))
             box(AMBER, (34, 31, 2, 1))
-            box(BONE, (35, 35, 2, 2))
-            box(fur, (11, 36, 2, 7))
-            box(fur, (29, 36, 2, 7))
+            if pose:
+                # A pounce reaches with the forepaws and opens the jaw;
+                # the silhouette changes before the dash reaches its target.
+                pg.draw.lines(sprite, fur, False, [(12, 35), (10, 39), (10, 41)], 3)
+                pg.draw.lines(sprite, fur, False, [(27, 34), (33, 37), (37, 37)], 3)
+                box(BONE, (37, 37, 2, 1))
+                box(SHADOW, (34, 34, 5, 3))
+                box((139, 70, 61), (35, 35, 3, 2))
+                box(BONE, (35, 34, 1, 2))
+                box(BONE, (38, 36, 1, 1))
+            else:
+                box(BONE, (35, 35, 2, 2))
+                box(fur, (11, 36, 2, 7))
+                box(fur, (29, 36, 2, 7))
             box((30, 29, 30), (17, 31, 3, 2))
         else:
             giant = kind in ("troll", "ghorak", "captain")
@@ -465,14 +478,25 @@ class BattleView:
                 pg.draw.line(sprite, MUTED, (30, 16), (29, 37))
                 box(BONE, (27, 26, 10, 1))
             elif kind in ("troll", "sapper"):
-                box((117, 95, 65), (29, 17, 3, 25))
-                box((139, 127, 105), (26, 14, 9, 8))
-                box((72, 65, 54), (27, 15, 6, 2))
+                if pose > 1:
+                    pg.draw.line(sprite, (117, 95, 65), (27, 25), (36, 31), 3)
+                    box(skin, (28, 25, 3, 4))
+                    pg.draw.polygon(sprite, (139, 127, 105), [(35, 26), (39, 29), (39, 36), (32, 33)])
+                    pg.draw.line(sprite, (72, 65, 54), (36, 28), (38, 30), 2)
+                elif pose:
+                    pg.draw.line(sprite, (117, 95, 65), (27, 28), (33, 9), 3)
+                    box(skin, (28, 22, 3, 4))
+                    pg.draw.polygon(sprite, (139, 127, 105), [(29, 6), (37, 8), (35, 16), (27, 13)])
+                    pg.draw.line(sprite, (72, 65, 54), (30, 8), (35, 9), 2)
+                else:
+                    box((117, 95, 65), (29, 17, 3, 25))
+                    box((139, 127, 105), (26, 14, 9, 8))
+                    box((72, 65, 54), (27, 15, 6, 2))
             elif kind == "rider":
                 box((156, 149, 133), (28, 13, 2, 24))
                 box((204, 196, 158), (29, 13, 1, 21))
             else:
-                blade_y = 14 if pose else 20
+                blade_y = 33 if pose > 1 else 14 if pose else 20
                 pg.draw.line(sprite, (77, 82, 79), (28, 30), (35, blade_y), 3)
                 pg.draw.line(sprite, BONE, (28, 29), (35, blade_y), 1)
                 box(AMBER, (26, 29, 6, 2))
@@ -553,7 +577,8 @@ class BattleView:
         guarding = any(effect.feedback.kind == "defend" and effect.age < 0.5 for effect in effects) or any(effect.feedback.kind == "defend" and effect.feedback.actor_id == actor_id and 0 <= effect.age < 0.5 for effect in self._effects)
         stance = "walk" if outgoing and kind != "tobin" else "guard" if guarding else "idle"
         frame = 0 if self._reduced_motion else int(outgoing.age * 30) % 8 if outgoing else int(now_ms * 0.0016) % 8
-        sprite = self._sprite(kind, facing_left, int(outgoing is not None), animation_frame=frame, stance=stance)
+        attack_pose = (2 if outgoing.age >= outgoing.impact_time else 1) if outgoing else 0
+        sprite = self._sprite(kind, facing_left, attack_pose, animation_frame=frame, stance=stance)
         if actor_id in {"player", "mara", "tobin"} and escape_progress and not self._reduced_motion:
             sprite = sprite.copy()
             sprite.set_alpha(round(255 * (1 - escape_progress)))
@@ -1063,7 +1088,9 @@ class BattleView:
         actor_scale = 2 if available_scale >= 2 and arena.w >= 400 else 1 if available_scale >= 1 else 0.75 if available_scale >= 0.75 else 0.5
         player_x = arena.x + max(65, round(arena.w * 0.19))
         companions = tuple(companion for companion in snapshot.companions if companion.available)[:2]
-        ally_anchors = [(max(arena.x + 18, player_x - (35 if actor_scale <= 1 else 53) - index * (24 if actor_scale <= 1 else 30)), ground - 4 - index * 3) for index in range(len(companions))]
+        party_scale = 0.5 if actor_scale < 1 else 0.75 if actor_scale == 1 else 1.5
+        ally_edge = arena.x + max(18, round(20 * party_scale))
+        ally_anchors = [(max(ally_edge, player_x - (36 if actor_scale <= 1 else 62) - index * (29 if actor_scale <= 1 else 40)), ground - 4 - index * 3) for index in range(len(companions))]
         enemies = snapshot.enemies
         enemy_left = arena.x + round(arena.w * 0.50)
         enemy_span = max(1, arena.right - 35 - enemy_left)
@@ -1082,7 +1109,6 @@ class BattleView:
         # abstract ability names in a menu.
         for index, companion in enumerate(companions):
             ally_x, ally_ground = ally_anchors[index]
-            party_scale = 0.5 if actor_scale < 1 else 0.65 if actor_scale == 1 else 1
             self._draw_actor(surface, companion.id, self._kind(companion.id + companion.name), (ally_x, ally_ground), party_scale, facing_left=False, now_ms=now_ms)
             if companion.id in self.actor_rects and snapshot.phase != "escaped":
                 self._text(surface, companion.name, (ally_x - self.party_font.size(companion.name)[0] // 2, ally_ground + 3), TEAL, font=self.party_font)

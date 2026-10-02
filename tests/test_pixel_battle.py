@@ -1,6 +1,7 @@
 """Real SDL coverage for the battlefield's interactions and motion settings."""
 
 from dataclasses import replace
+import gc
 import importlib.util
 import os
 from pathlib import Path
@@ -60,6 +61,12 @@ class BattleSDLTests(unittest.TestCase):
         self.view.draw(self.surface, self.canvas, 400)
 
     def tearDown(self):
+        # Native fonts must be released while SDL_ttf is still initialized.
+        # Keeping the renderer alive across pygame.quit leaks font allocations
+        # in repeated headless window tests, unlike the game's single window.
+        self.view = None
+        self.surface = None
+        gc.collect()
         self.pg.quit()
 
     def click(self, pos, button=1):
@@ -135,6 +142,14 @@ class BattleSDLTests(unittest.TestCase):
             self.view.set_snapshot(replace(self.snapshot, companions=companions))
             self.view.draw(self.surface, self.canvas)
             self.assertEqual(set(self.view.actor_positions) & {"mara", "tobin"}, {companion.id for companion in companions if companion.available})
+
+    def test_roomy_arena_companions_have_readable_adult_silhouettes(self):
+        self.view.draw(self.surface, self.pg.Rect(24, 100, 677, 495))
+        hero = self.view.actor_rects["player"]
+        for actor_id in ("mara", "tobin"):
+            ally = self.view.actor_rects[actor_id]
+            self.assertGreaterEqual(ally.height, hero.height * 0.70)
+            self.assertTrue(self.view._arena_rect.contains(ally))
 
     def test_normal_mode_has_slow_live_actor_and_environment_motion(self):
         self.view.update(0, reduced_motion=False)
@@ -555,6 +570,18 @@ class BattleSDLTests(unittest.TestCase):
         sprites = [self.view._sprite(kind, True) for kind in ("orc", "captain", "archer", "sapper", "warg", "ghorak", "troll", "rider")]
         self.assertEqual(len({self.pg.image.tobytes(sprite, "RGBA") for sprite in sprites}), 8)
         self.assertTrue(all(sprite.get_flags() & self.pg.SRCALPHA for sprite in sprites))
+
+    def test_creature_attacks_change_their_pose_before_the_hit(self):
+        for kind in ("warg", "troll", "sapper"):
+            with self.subTest(kind=kind):
+                idle = self.view._sprite(kind, True)
+                attack = self.view._sprite(kind, True, pose=1)
+                self.assertEqual(attack.get_size(), idle.get_size())
+                self.assertNotEqual(self.pg.image.tobytes(attack, "RGBA"), self.pg.image.tobytes(idle, "RGBA"))
+                self.assertIs(self.view._sprite(kind, True, pose=1), attack)
+                if kind != "warg":
+                    follow_through = self.view._sprite(kind, True, pose=2)
+                    self.assertNotEqual(self.pg.image.tobytes(follow_through, "RGBA"), self.pg.image.tobytes(attack, "RGBA"))
 
     def test_draw_restores_the_callers_clip_and_never_paints_outside_canvas(self):
         sentinel = (222, 6, 203)

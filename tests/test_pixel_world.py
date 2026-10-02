@@ -543,6 +543,23 @@ class WorldSDLTests(unittest.TestCase):
         self.world.set_request(request)
         self.assertEqual(set(self.world.party_positions), {"mara"})
 
+    def test_companions_keep_up_during_continuous_walking_and_turning(self):
+        from math import hypot
+
+        self.world.set_request(request_for("hall", identifier=2))
+        circuit = ((4, 6), (15, 6), (15, 12), (4, 12))
+        for target in circuit * 8:
+            self.assertTrue(self.world.walk_to(target))
+            for _ in range(1200):
+                self.world.update(1 / 60)
+                for position in self.world.party_positions.values():
+                    self.assertTrue(self.world._position_clear(position))
+                    self.assertLess(hypot(position[0] - self.world.player_position[0], position[1] - self.world.player_position[1]), 90)
+                if not self.world._path:
+                    break
+            else:
+                self.fail("A continuous circuit left the traveler walking forever")
+
     def test_missing_motion_art_keeps_every_new_character_and_choice_playable(self):
         world = WorldView(self.pg)
         with patch.object(self.pg.image, "load", side_effect=self.pg.error("missing test asset")):

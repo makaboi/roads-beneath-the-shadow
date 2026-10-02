@@ -98,6 +98,53 @@ class RuntimeAssetTests(unittest.TestCase):
                 self.verify()
             self.assertEqual(self.pg.mixer.get_init(), original_format)
 
+    def test_fonts_are_released_before_subsystem_shutdown_and_later_errors(self):
+        original_font = self.pg.font.Font
+        original_quit = self.pg.font.quit
+        live = set()
+        lifecycle = []
+
+        class TrackedFont:
+            def __init__(instance, *args):
+                instance.font = original_font(*args)
+                live.add(id(instance))
+
+            def render(instance, *args):
+                return instance.font.render(*args)
+
+            def __del__(instance):
+                instance.font = None
+                live.discard(id(instance))
+                lifecycle.append("released")
+
+        def quit_after_release():
+            self.assertFalse(live, "A native Font would keep its TTF open across subsystem shutdown")
+            lifecycle.append("quit")
+            original_quit()
+
+        for damaged_audio in (False, True):
+            with self.subTest(damaged_audio=damaged_audio):
+                original_quit()
+                if damaged_audio:
+                    (self.package / "audio_assets/victory.wav").write_bytes(b"damaged sound")
+                with patch.object(self.pg.font, "Font", TrackedFont), patch.object(self.pg.font, "quit", side_effect=quit_after_release):
+                    if damaged_audio:
+                        with self.assertRaisesRegex(ValueError, r"decode victory\.wav"):
+                            self.verify()
+                    else:
+                        self.verify()
+                self.assertEqual(lifecycle[-3:], ["released", "released", "quit"])
+        if self.font_initialized:
+            self.pg.font.init()
+
+    def test_decoded_font_files_can_be_deleted_immediately(self):
+        self.pg.font.quit()
+        self.verify()
+        for path in (self.package / "font_assets").glob("*.ttf"):
+            path.unlink()
+        if self.font_initialized:
+            self.pg.font.init()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -299,6 +299,7 @@ class PixelWindow:
         self._saved_narrative: NarrativeDirector | None = None
         self._saved_journey: str | None = None
         self._saved_decision: tuple[Any, ...] | None = None
+        self._saved_navigation: tuple[int, int, bool] | None = None
         self._read_boundaries: Any = WeakKeyDictionary()
         self._page_token: Any = None
         self._page_reveal = 0.0
@@ -380,8 +381,12 @@ class PixelWindow:
                             self.narrative = self._saved_narrative
                             self.narrative.discard_pending()
                             restored_narrative = True
+                            if self._saved_navigation is not None:
+                                self.selected, self.choice_scroll, self._menu_focused = self._saved_navigation
+                                self.selected = min(self.selected, max(0, len(self.request.options) - 1))
                         self._saved_narrative = None
                         self._saved_decision = None
+                        self._saved_navigation = None
                     cinematic = False if self.ui.fast else None
                     if self.request.kind == "combat" and not self._combat_active and not self.ui.fast:
                         cinematic = True
@@ -391,6 +396,8 @@ class PixelWindow:
                     _, rows, text_width = self._reading_dimensions()
                     if restored_narrative:
                         self.narrative.repaginate(wrap=lambda text: wrap_pixels(text, self.font, text_width), rows=rows)
+                        if self.narrative.pages:
+                            self.narrative.index = len(self.narrative.pages) - 1
                     else:
                         self._read_boundaries.pop(self.narrative, None)
                         self.narrative.prepare(self.request, wrap=lambda text: wrap_pixels(text, self.font, text_width), rows=rows, cinematic=cinematic, suppress_headers={"COMBAT"} if self.request.kind == "combat" else ())
@@ -581,6 +588,7 @@ class PixelWindow:
                 self._saved_narrative = self.narrative
                 self._saved_journey = self.hud.get("journey_id") if self.hud else None
                 self._saved_decision = self._decision_key(self.request, self.hud)
+                self._saved_navigation = (self.selected, self.choice_scroll, self._menu_focused)
                 self.narrative = NarrativeDirector()
                 self.narrative.scene_text = self._saved_narrative.scene_text
                 self.narrative.scene_caption = self._saved_narrative.scene_caption
@@ -834,6 +842,10 @@ class PixelWindow:
         if self.world.active and not self.panels.active and not self.transcript_open:
             before = self.world.player_position
             self.world.update(dt, reduced_motion=self.ui.reduced_motion)
+            focused = self.world.focused_option
+            if not self._menu_focused and focused is not None:
+                self.selected = focused - 1
+                self._keep_selection_visible()
             if self.world.player_position != before:
                 self.soundscape.play_effect("footstep", surface=self.world.surface_kind)
         if self._combat_active and not self.reading and not self.panels.active and not self.transcript_open:

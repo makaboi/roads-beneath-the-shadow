@@ -14,7 +14,7 @@ from math import hypot
 from pathlib import Path
 from typing import Any, Sequence
 
-from .pixel_theme import load_font
+from .pixel_theme import load_font, wrap_text
 
 
 TILE = 16
@@ -365,7 +365,7 @@ def _journey_maps() -> dict[str, WorldMap]:
     post_looks = (
         WorldLook("post_pool", "The black pool", (7, 9), "Water surrounds the fallen watch-stone. Across it, yellow eyes wait between the reeds."),
         WorldLook("broken_post", "The fallen watch post", (13, 8), "The drowned watch post has fallen into its own causeway."),
-        WorldLook("ned_snare", "Ned's black-rope snare", (15, 7), "Ned is alive inside the black-rope snare. One leg lies trapped beneath fallen masonry; the tracker has left him as bait."),
+        WorldLook("ned_snare", "Ned's black-rope snare", (16, 7), "Ned is alive inside the black-rope snare. One leg lies trapped beneath fallen masonry; the tracker has left him as bait."),
     )
 
     bridge = _grid("X")
@@ -597,6 +597,7 @@ class WorldView:
         self._native = pygame.Surface(WORLD_SIZE)
         self._font = load_font(pygame, 9)
         self._small_font = load_font(pygame, 8)
+        self._inspection_fonts: dict[int, tuple[Any, Any]] = {}
 
     def stop_moving(self) -> None:
         """Cancel held and planned movement when focus or a modal interrupts."""
@@ -1219,7 +1220,7 @@ class WorldView:
                         self.pg.draw.line(self._native, (72, 84, 82), (px + offset, py + 1), (px + offset, py + 14))
                     self.pg.draw.line(self._native, (98, 105, 99), (px, py + 13), (px + 15, py + 13))
 
-    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False) -> Any:
+    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False, text_size: str = "standard") -> Any:
         if not self.spec:
             return self.pg.Rect(rect)
         self._assets()
@@ -1301,25 +1302,22 @@ class WorldView:
             pg.draw.rect(self._native, (13, 18, 22), strip)
             self._native.blit(label, label.get_rect(center=strip.center))
         if self._inspected_look:
-            words = self._inspected_look.text.split()
-            lines: list[str] = []
-            current = ""
-            for word in words:
-                candidate = f"{current} {word}".strip()
-                if self._small_font.size(candidate)[0] > 266 and current:
-                    lines.append(current)
-                    current = word
-                else:
-                    current = candidate
-            if current:
-                lines.append(current)
-            bubble = pg.Rect(20, 211 - (len(lines) + 3) * 10, 280, (len(lines) + 3) * 10)
+            font_size = {"large": 11, "larger": 12}.get(text_size, 10)
+            if font_size not in self._inspection_fonts:
+                self._inspection_fonts[font_size] = (load_font(pg, font_size), load_font(pg, font_size, bold=True))
+            body_font, title_font = self._inspection_fonts[font_size]
+            lines = wrap_text(self._inspected_look.text, body_font, 266)
+            line_height = body_font.get_linesize() + 1
+            body_top = title_font.get_linesize() + 12
+            footer_height = self._small_font.get_linesize() + 10
+            height = body_top + len(lines) * line_height + footer_height
+            bubble = pg.Rect(20, 211 - height, 280, height)
             pg.draw.rect(self._native, (13, 19, 24), bubble)
             pg.draw.rect(self._native, (115, 145, 125), bubble, 1)
-            self._native.blit(self._font.render(self._inspected_look.name.upper(), False, (222, 185, 111)), (bubble.left + 7, bubble.top + 5))
+            self._native.blit(title_font.render(self._inspected_look.name.upper(), False, (222, 185, 111)), (bubble.left + 7, bubble.top + 6))
             for index, text in enumerate(lines):
-                self._native.blit(self._small_font.render(text, False, (220, 214, 186)), (bubble.left + 7, bubble.top + 17 + index * 10))
-            self._native.blit(self._small_font.render("E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - 10))
+                self._native.blit(body_font.render(text, False, (220, 214, 186)), (bubble.left + 7, bubble.top + body_top + index * line_height))
+            self._native.blit(self._small_font.render("E / ENTER / ESC  Close", False, (129, 166, 149)), (bubble.left + 7, bubble.bottom - self._small_font.get_linesize() - 6))
         target_rect = pg.Rect(rect)
         scale = min(target_rect.width / WORLD_SIZE[0], target_rect.height / WORLD_SIZE[1])
         if scale >= 2:

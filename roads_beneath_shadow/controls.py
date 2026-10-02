@@ -12,7 +12,9 @@ _CONTROLS = {'title': 'HOW TO PLAY',
                        'Backspace revisits the previous page. Tab opens or closes the story '
                        'transcript. Use the arrow keys and Enter to choose, press a number '
                        'from 1 to 9, or click an answer. In the transcript, Ctrl+F or '
-                       'Command+F searches the full record.'},
+                       'Command+F searches the full record. Enter and Shift+Enter move '
+                       'between matches; F3 repeats the saved search. Escape first leaves '
+                       'search, then closes the transcript.'},
               {'heading': 'Explore',
                'text': 'Walk with WASD and press E beside a person, object, or exit. Click a '
                        'marked place to walk there, then press E or click it again to '
@@ -35,7 +37,7 @@ _CONTROLS = {'title': 'HOW TO PLAY',
                        'main menu. Resume checkpoint restores the last automatic story '
                        'checkpoint; you can turn checkpoints off in Settings.'},
               {'heading': 'Make yourself comfortable',
-               'text': 'Settings controls text speed, reduced motion, difficulty, and '
+               'text': 'Settings controls reading text size and speed, reduced motion, difficulty, and '
                        'separate music and sound-effect volumes. Sound starts off. F11 '
                        'toggles fullscreen. Screen-reader mode opens the terminal '
                        'presentation on your next launch.'},
