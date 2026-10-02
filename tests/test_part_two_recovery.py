@@ -15,7 +15,7 @@ from roads_beneath_shadow.ui import TerminalUI
 class LanternRecoveryTests(unittest.TestCase):
     @staticmethod
     def state():
-        state = GameState(Character.from_origin("Arin", ORIGINS[0]), chapter=2, scene="part2_vigil")
+        state = GameState(Character.from_origin("Arin", ORIGINS[0]), chapter=2, scene="part2_vigil", visited=["part2_vigil"])
         state.character.hp = 1
         state.character.focus = 0
         state.character.hope = 4

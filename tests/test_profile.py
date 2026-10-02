@@ -128,7 +128,7 @@ class PlayerProfileTests(unittest.TestCase):
             transcript = "\n".join(output)
             self.assertEqual(loaded.completed_runs, 1)
             self.assertIn("The Road Opens", transcript)
-            self.assertIn("Completed journeys: 1", transcript)
+        self.assertIn("Completed episodes: 1", transcript)
 
     def test_part_two_living_road_unlocks_only_part_two_achievements(self) -> None:
         state = GameState(Character.from_origin("Arin", ORIGINS[0]))
@@ -163,6 +163,7 @@ class PlayerProfileTests(unittest.TestCase):
             "accepted_star_power",
             "used_star_in_final",
             "part2_star_commanded",
+            "part2_star_guided_descent",
             "part2_spoke_hidden_name",
             "part2_star_read_memory",
             "part2_star_broke_chain",

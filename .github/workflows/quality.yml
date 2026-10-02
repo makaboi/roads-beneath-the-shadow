@@ -33,9 +33,7 @@ jobs:
         env:
           RBS_SAVE_DIR: ${{ runner.temp }}/rbs-test-saves
         run: python -m unittest discover -s tests -v
-      - name: Verify installed pixel assets and render the title screen
+      - name: Verify the installed wheel outside the source checkout
         env:
           RBS_SAVE_DIR: ${{ runner.temp }}/rbs-smoke-saves
-        run: |
-          python -m roads_beneath_shadow --check-install
-          python -m roads_beneath_shadow --pixel --screenshot "${{ runner.temp }}/pixel-smoke.png"
+        run: python scripts/check_installed_game.py --report "${{ runner.temp }}/installed-game-qa.json"

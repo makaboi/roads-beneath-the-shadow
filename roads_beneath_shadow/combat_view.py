@@ -105,30 +105,30 @@ class CombatCommand:
 
 
 STATUS_DESCRIPTIONS: dict[str, str] = {
-    "bleeding": "Lose 1 Health each turn. A remedy stops Bleeding.",
-    "exposed": "The next incoming hit deals extra damage.",
-    "evade": "Evade the next incoming attack completely.",
-    "ward": "Absorb damage from the next incoming hit.",
-    "riposte": "Counter the next attacker from behind your guard.",
-    "guarded": "+2 Armor until struck. Power Attack bypasses this guard.",
+    "bleeding": "Lose 1 Health each committed turn. Inspecting and changing targets spend no turn. A remedy stops Bleeding.",
+    "exposed": "The next physical hit deals extra damage. Guarding reduces that hit.",
+    "evade": "Avoid the next physical attack completely. Setup actions do not consume Evasion.",
+    "ward": "Absorb the shown amount of damage from the next physical hit, after guarding.",
+    "riposte": "Counter the next physical hit if you survive it. Evasion preserves the counter.",
+    "guarded": "+2 Armor. Attack removes it; Power Attack and Flanking Strike bypass and remove it. Companions and counters leave it intact.",
     "vulnerable": "The next weapon attack deals 2 extra damage.",
     "staggered": "Interrupt an interruptible intent; otherwise reduce the next hit by 2.",
-    "aimed": "The next attack deals 2 extra damage.",
-    "empowered": "The next attack deals 1 extra damage.",
-    "weakened": "Reduce incoming attacks by 2 while this effect lasts.",
+    "aimed": "The next landed physical hit gains 2 attack strength. Evasion preserves this effect.",
+    "empowered": "The next landed physical hit gains 1 attack strength. Evasion preserves this effect.",
+    "weakened": "Reduce this enemy's attack strength by 2 while this effect lasts. Evaded attacks do not use it up.",
 }
 
 
 ACTION_DESCRIPTIONS: dict[str, str] = {
     "attack": "Strike your target with your equipped weapon. Costs no Focus.",
-    "power": "Deal extra damage, bypass raised guards, and disrupt your target. Become Exposed.",
-    "defend": "Halve every incoming attack this round and recover 1 Focus.",
+    "power": "Deal extra damage, bypass a raised guard, and disrupt your target. Become Exposed: the next physical hit deals extra damage.",
+    "defend": "Halve incoming physical hits (minimum 1 before wards) and restore up to 1 Focus. Bleeding and setup effects still resolve.",
     "item": "Use a healing item and stop Bleeding. Uses your turn.",
     "inspect": "Read your target's defenses and intent. Does not use your turn.",
     "target": "Select a different enemy. Does not use your turn.",
-    "mara": "Mara damages and disrupts your target, causing Bleeding.",
-    "tobin": "Tobin damages your target and weakens its next two attacks.",
-    "mara_guard": "Halve every incoming attack this round. Mara absorbs 2 damage from the next hit.",
-    "tobin_guard": "Halve every incoming attack this round and evade the next attack completely.",
+    "mara": "Damage through Armor, disrupt your target's intent, and cause Bleeding.",
+    "tobin": "Damage through Armor and weaken your target's next two landed attacks.",
+    "mara_guard": "Halve incoming physical hits (minimum 1 before wards). Mara absorbs 2 damage from the next hit. Bleeding and setup effects still resolve.",
+    "tobin_guard": "Halve incoming physical hits and evade the next attack completely. Bleeding and setup effects still resolve.",
     "flee": "Attempt an escape. A failed attempt uses your turn.",
 }

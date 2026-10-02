@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
+from . import __version__
 from .app import Game
 from .audio import SoundPlayer
 from .profile import ProfileManager
@@ -14,6 +16,7 @@ from .ui import InputClosed, TerminalUI
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Play The Lord of the Rings: Roads Beneath the Shadow")
+    parser.add_argument("--version", action="version", version=f"Roads Beneath the Shadow {__version__}")
     presentation = parser.add_mutually_exclusive_group()
     presentation.add_argument("--pixel", action="store_true", help="open the pixel-art desktop game (default)")
     presentation.add_argument("--terminal", action="store_true", help="play the original dependency-free terminal edition")
@@ -38,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="choose story, intended Ranger, or hard Shadow combat",
     )
     parser.add_argument("--check-install", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--check-runtime-assets", action="store_true", help=argparse.SUPPRESS)
     return parser
 
 
@@ -46,6 +50,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.screenshot and (args.terminal or args.screen_reader):
         parser.error("--screenshot requires pixel-art mode")
+    if args.check_runtime_assets:
+        from .runtime_assets import verify_runtime_assets
+
+        print(json.dumps(verify_runtime_assets(), sort_keys=True))
+        return
     if args.check_install:
         missing = SoundPlayer.missing_cues()
         if missing:
@@ -59,13 +68,14 @@ def main() -> None:
                 + ", ".join(path.name for path in missing_pixel_scenes)
             )
         from .pixel_world import missing_world_assets
+        from .pixel_theme import missing_font_assets
         from .soundscapes import AUDIO_DIRECTORY, TRACKS
 
         missing_exploration = missing_world_assets()
         missing_ambient = [AUDIO_DIRECTORY / filename for filename in TRACKS.values() if not (AUDIO_DIRECTORY / filename).is_file()]
-        missing_new = missing_exploration + missing_ambient
+        missing_new = missing_exploration + missing_ambient + missing_font_assets()
         if missing_new:
-            raise SystemExit("Installation check failed; missing exploration or ambient assets: " + ", ".join(path.name for path in missing_new))
+            raise SystemExit("Installation check failed; missing exploration, ambient, or font assets: " + ", ".join(path.name for path in missing_new))
         print(f"Installation verified: {len(SoundPlayer.CUES)} sound cues, pixel-art scenes, exploration maps, and ambient tracks are available.")
         return
     settings_manager = SettingsManager()

@@ -47,6 +47,7 @@ class VigilTests(unittest.TestCase):
     def test_optional_vigil_can_be_skipped_without_a_reward_or_time_cost(self) -> None:
         state = self.state()
         before = state.to_dict()
+        before["visited"] = ["part2_vigil"]
         self.assertTrue(self.episode(("Enter the Last Seal",)).run_scene(state))
         before["scene"] = "part2_last_seal"
         self.assertEqual(state.to_dict(), before)
@@ -56,6 +57,7 @@ class VigilTests(unittest.TestCase):
             with self.subTest(labels=labels):
                 state = self.state()
                 before = state.to_dict()
+                before["visited"] = ["part2_vigil"]
                 self.assertFalse(self.episode(labels).run_scene(state))
                 self.assertEqual(state.to_dict(), before)
 
@@ -227,6 +229,7 @@ class VigilTests(unittest.TestCase):
                 state.scene = "part2_descent"
                 state.character.corruption = 2
                 before = state.to_dict()
+                before["visited"] = ["part2_descent"]
                 self.assertFalse(self.episode((choice, None)).run_scene(state))
                 self.assertEqual(state.to_dict(), before)
                 self.assertTrue(self.episode((choice, "Warn her")).run_scene(state))

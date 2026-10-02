@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Any
 
 from .content import ENDING_TEXT, ORIGINS, PART_ONE_ENDINGS
 from .models import GameState
-from .savegame import default_save_directory
+from .savegame import MAX_SAVE_BYTES, default_save_directory
 
 
 PROFILE_VERSION = 1
@@ -40,8 +41,12 @@ class PlayerProfile:
     version: int = PROFILE_VERSION
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlayerProfile":
+    def from_dict(cls, payload: dict[str, Any], *, strict: bool = False) -> "PlayerProfile":
         try:
+            if not isinstance(payload, dict):
+                raise ValueError("Completion record must be an object")
+            if strict:
+                _validate_profile_fields(payload)
             valid_origins = {origin.origin_id for origin in ORIGINS}
             endings = {
                 str(name): max(0, int(count))
@@ -76,7 +81,9 @@ class PlayerProfile:
                 achievements=achievements,
                 recorded_journeys=recorded,
             )
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError, RecursionError) as error:
+            if strict:
+                raise ValueError("Completion record has invalid fields") from error
             return cls()
 
     def unlock(self, achievement: str) -> bool:
@@ -119,6 +126,7 @@ class PlayerProfile:
                 "accepted_star_power",
                 "used_star_in_final",
                 "part2_star_commanded",
+                "part2_star_guided_descent",
                 "part2_spoke_hidden_name",
                 "part2_star_read_memory",
                 "part2_star_broke_chain",
@@ -152,18 +160,52 @@ class PlayerProfile:
         return [achievement for achievement in candidates if self.unlock(achievement)]
 
 
+def _validate_profile_fields(payload: dict[str, Any]) -> None:
+    """Accept missing legacy fields while rejecting damaged JSON structures."""
+
+    def count(value: Any, field_name: str) -> None:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{field_name} must be a nonnegative integer")
+
+    count(payload.get("completed_runs", 0), "completed_runs")
+    if "version" in payload:
+        count(payload["version"], "version")
+        if payload["version"] != PROFILE_VERSION:
+            raise ValueError("Unsupported completion record version")
+    endings = payload.get("endings", {})
+    if not isinstance(endings, dict):
+        raise ValueError("endings must be an object")
+    for ending, value in endings.items():
+        count(value, f"endings.{ending}")
+    for field_name in ("origins_completed", "achievements", "recorded_journeys"):
+        values = payload.get(field_name, [])
+        if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+            raise ValueError(f"{field_name} must be a list of strings")
+
+
 class ProfileManager:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or default_save_directory().parent / "profile.json"
+        self.last_load_error: str | None = None
+        self.last_recovery_backup: Path | None = None
+        self._last_load_exception: Exception | None = None
 
     def load(self) -> PlayerProfile:
-        if not self.path.exists():
-            return PlayerProfile()
+        self.last_load_error = None
+        self._last_load_exception = None
         try:
+            if self.path.stat().st_size > MAX_SAVE_BYTES:
+                raise ValueError("Completion record file is too large")
             with self.path.open("r", encoding="utf-8") as source:
                 payload = json.load(source)
-            return PlayerProfile.from_dict(payload) if isinstance(payload, dict) else PlayerProfile()
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            if not isinstance(payload, dict):
+                raise ValueError("Completion record must be an object")
+            return PlayerProfile.from_dict(payload, strict=True)
+        except FileNotFoundError:
+            return PlayerProfile()
+        except (OSError, TypeError, ValueError, RecursionError) as error:
+            self.last_load_error = str(error)
+            self._last_load_exception = error
             return PlayerProfile()
 
     def save(self, profile: PlayerProfile) -> Path:
@@ -185,7 +227,27 @@ class ProfileManager:
         return self.path
 
     def record(self, state: GameState) -> list[str]:
+        self.last_recovery_backup = None
         profile = self.load()
+        if isinstance(self._last_load_exception, OSError):
+            raise self._last_load_exception
         unlocked = profile.record(state)
+        if self._last_load_exception is not None:
+            self.last_recovery_backup = self._preserve_damaged_record()
         self.save(profile)
         return unlocked
+
+    def _preserve_damaged_record(self) -> Path:
+        """Keep exact damaged bytes before replacing a record with fresh progress."""
+
+        handle, temporary_name = tempfile.mkstemp(
+            prefix=f"{self.path.stem}.damaged.", suffix=".json", dir=self.path.parent
+        )
+        backup = Path(temporary_name)
+        try:
+            with os.fdopen(handle, "wb") as target, self.path.open("rb") as source:
+                shutil.copyfileobj(source, target)
+        except Exception:
+            backup.unlink(missing_ok=True)
+            raise
+        return backup

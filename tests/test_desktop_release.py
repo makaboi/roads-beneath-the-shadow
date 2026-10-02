@@ -1,6 +1,7 @@
 """Exercise the release API semantics, including private drafts without tags."""
 
 from copy import deepcopy
+import builtins
 import hashlib
 from pathlib import Path
 import subprocess
@@ -53,7 +54,8 @@ class ReleaseServer:
         elif args[2] == "upload":
             paths = self.downloads if self.complete_upload else self.downloads[:-1]
             self.release["assets"] = [
-                {"name": path.name, "state": "uploaded", "size": path.stat().st_size}
+                {"name": path.name, "state": "uploaded", "size": path.stat().st_size,
+                 "digest": f"sha256:{desktop_release.archive_digest(path)}"}
                 for path in paths
             ]
         elif args[2] == "edit" and "--draft=false" in args:
@@ -82,6 +84,7 @@ class DesktopReleaseTests(unittest.TestCase):
         patch.object(desktop_release, "project_version", return_value=VERSION).start()
         patch.object(desktop_release, "github_commit", return_value=COMMIT).start()
         patch.object(desktop_release, "github_repository", return_value="fixture/game").start()
+        self.quality_gate = patch.object(desktop_release, "verify_quality_gate", return_value={"run_id": 100, "verified_jobs": 8}).start()
 
     def publish(self, server):
         with patch.object(desktop_release, "github_api", side_effect=server.api), patch.object(
@@ -137,6 +140,46 @@ class DesktopReleaseTests(unittest.TestCase):
         self.assertEqual(server.commands, [])
         self.assertEqual(server.release, published)
         self.assertEqual(server.requests, [f"releases/tags/{TAG}"])
+        self.quality_gate.assert_not_called()
+
+    def test_quality_failure_quarantines_complete_upload_before_publication(self):
+        server = ReleaseServer(self.downloads)
+
+        def failed_gate():
+            self.assertTrue(server.release["draft"])
+            self.assertEqual(len(server.release["assets"]), 8)
+            raise ValueError("Quality Gate failed")
+
+        self.quality_gate.side_effect = failed_gate
+        with self.assertRaisesRegex(ValueError, "Quality Gate failed"):
+            self.publish(server)
+        self.assertTrue(server.release["draft"])
+        self.assertEqual([command[2] for command in server.commands], ["create", "upload"])
+
+    def test_tag_created_during_quality_wait_is_preserved_and_draft_stays_private(self):
+        server = ReleaseServer(self.downloads)
+        self.quality_gate.side_effect = lambda: setattr(server, "tag_commit", OLD_COMMIT)
+        with self.assertRaisesRegex(ValueError, "already names another commit"):
+            self.publish(server)
+        self.assertEqual(server.tag_commit, OLD_COMMIT)
+        self.assertTrue(server.release["draft"])
+        self.assertEqual([command[2] for command in server.commands], ["create", "upload"])
+
+    def test_stale_extra_download_keeps_recovered_draft_private(self):
+        server = ReleaseServer(self.downloads, existing=self.draft())
+        command = server.command
+
+        def upload_with_stale_asset(args, **kwargs):
+            result = command(args, **kwargs)
+            if args[2] == "upload":
+                server.release["assets"].append({"name": "outdated-mac-only.zip", "state": "uploaded", "size": 12})
+            return result
+
+        server.command = upload_with_stale_asset
+        with self.assertRaisesRegex(ValueError, "unexpected downloads"):
+            self.publish(server)
+        self.assertTrue(server.release["draft"])
+        self.assertFalse(any("--draft=false" in command for command in server.commands))
 
     def test_existing_tag_on_another_commit_prevents_draft_retarget_or_upload(self):
         server = ReleaseServer(self.downloads, existing=self.draft(), tag_commit=OLD_COMMIT)
@@ -160,6 +203,24 @@ class DesktopReleaseTests(unittest.TestCase):
         self.assertEqual(server.requests, [])
         self.assertEqual(server.commands, [])
 
+    def test_wrong_server_digest_remains_private_even_when_name_and_size_match(self):
+        server = ReleaseServer(self.downloads)
+        original_api = server.api
+
+        def corrupt_uploaded_digest(path, *, missing_ok=False):
+            response = original_api(path, missing_ok=missing_ok)
+            if path == "releases/42" and response["assets"]:
+                response["assets"][0]["digest"] = "sha256:" + "0" * 64
+            return response
+
+        with patch.object(desktop_release, "github_api", side_effect=corrupt_uploaded_digest), patch.object(
+            desktop_release.subprocess, "run", side_effect=server.command
+        ):
+            with self.assertRaisesRegex(ValueError, "GitHub download checksum mismatch"):
+                desktop_release.publish_release(VERSION, self.output)
+        self.assertTrue(server.release["draft"])
+        self.assertEqual([command[2] for command in server.commands], ["create", "upload"])
+
     def test_expected_404_is_missing_but_other_api_failures_are_not(self):
         missing = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
         with patch.object(desktop_release.subprocess, "run", return_value=missing):
@@ -170,6 +231,129 @@ class DesktopReleaseTests(unittest.TestCase):
         with patch.object(desktop_release.subprocess, "run", return_value=forbidden):
             with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
                 desktop_release.github_api("releases/tags/absent", missing_ok=True)
+
+
+class QualityGateTests(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(patch.stopall)
+        patch.object(desktop_release, "github_commit", return_value=COMMIT).start()
+        self.sleep = patch.object(desktop_release, "sleep").start()
+
+    @staticmethod
+    def quality_run(**overrides):
+        return {
+            "id": 100, "run_attempt": 1, "head_sha": COMMIT, "head_branch": "main", "event": "push",
+            "status": "completed", "conclusion": "success", "html_url": "https://github.com/fixture/game/actions/runs/100",
+            **overrides,
+        }
+
+    @staticmethod
+    def jobs():
+        return [
+            {"id": 300 + number, "run_attempt": 1, "name": name, "status": "completed", "conclusion": "success"}
+            for number, name in enumerate(sorted(desktop_release.QUALITY_JOBS))
+        ]
+
+    def verify(self, responses, **kwargs):
+        with patch.object(desktop_release, "github_api", side_effect=responses) as api:
+            result = desktop_release.verify_quality_gate(**kwargs)
+        return result, api
+
+    def test_exact_commit_requires_all_eight_successful_matrix_jobs(self):
+        result, api = self.verify([{"workflow_runs": [self.quality_run()]}, {"jobs": self.jobs()}])
+        self.assertEqual(result, {"run_id": 100, "run_attempt": 1, "verified_jobs": 8})
+        self.assertIn(f"head_sha={COMMIT}", api.call_args_list[0].args[0])
+        self.assertEqual(api.call_args_list[1].args[0], "actions/runs/100/jobs?filter=all&per_page=100&page=1")
+        self.sleep.assert_not_called()
+
+    def test_queued_quality_work_waits_then_verifies_completed_attempt(self):
+        pending = self.quality_run(status="in_progress", conclusion=None)
+        result, _ = self.verify([
+            {"workflow_runs": []}, {"workflow_runs": [pending]},
+            {"workflow_runs": [self.quality_run(run_attempt=2)]}, {"jobs": self.jobs()},
+        ])
+        self.assertEqual(result["run_attempt"], 2)
+        self.assertEqual(self.sleep.call_count, 2)
+        self.assertTrue(all(call.args[0] <= 10 for call in self.sleep.call_args_list))
+
+    def test_newer_failed_run_cannot_reuse_an_older_success(self):
+        for conclusion in ("failure", "cancelled", "timed_out"):
+            with self.subTest(conclusion=conclusion), self.assertRaisesRegex(ValueError, conclusion):
+                self.verify([{"workflow_runs": [self.quality_run(), self.quality_run(id=101, conclusion=conclusion)]}])
+        self.sleep.assert_not_called()
+
+    def test_successful_workflow_without_python310_cell_cannot_publish(self):
+        jobs = self.jobs()
+        omitted = "windows-latest / Python 3.10"
+        jobs = [job for job in jobs if job["name"] != omitted]
+        with self.assertRaisesRegex(ValueError, omitted):
+            self.verify([{"workflow_runs": [self.quality_run()]}, {"jobs": jobs}])
+
+    def test_skipped_matrix_cell_is_not_a_successful_quality_gate(self):
+        jobs = self.jobs()
+        jobs[0]["conclusion"] = "skipped"
+        with self.assertRaisesRegex(ValueError, "every required"):
+            self.verify([{"workflow_runs": [self.quality_run()]}, {"jobs": jobs}])
+
+    def test_rerun_failed_cell_can_use_untouched_successes_from_the_same_run(self):
+        jobs = self.jobs()
+        jobs[0]["conclusion"] = "failure"
+        retry = {**jobs[0], "id": 1000, "run_attempt": 2, "conclusion": "success"}
+        # Deliberately put the retry first: API ordering must not decide which
+        # execution represents the latest result for this matrix cell.
+        result, _ = self.verify([{"workflow_runs": [self.quality_run(run_attempt=2)]}, {"jobs": [retry, *jobs]}])
+        self.assertEqual(result["verified_jobs"], 8)
+
+    def test_latest_skipped_retry_cannot_reuse_that_cells_earlier_success(self):
+        jobs = self.jobs()
+        retry = {**jobs[0], "id": 1000, "run_attempt": 2, "conclusion": "skipped"}
+        with self.assertRaisesRegex(ValueError, "every required"):
+            self.verify([{"workflow_runs": [self.quality_run(run_attempt=2)]}, {"jobs": [retry, *jobs]}])
+
+    def test_other_commit_branch_or_event_cannot_satisfy_gate_before_timeout(self):
+        for overrides in ({"head_sha": OLD_COMMIT}, {"head_branch": "feature"}, {"event": "pull_request"}):
+            with self.subTest(overrides=overrides), patch.object(desktop_release, "monotonic", side_effect=[100, 100, 101]):
+                with self.assertRaisesRegex(TimeoutError, "remains private"):
+                    self.verify([{"workflow_runs": [self.quality_run(**overrides)]}], timeout=1)
+        self.sleep.assert_not_called()
+
+    def test_network_request_is_bounded_by_the_remaining_gate_deadline(self):
+        with patch.object(desktop_release, "monotonic", return_value=100), patch.object(
+            desktop_release, "github_api", side_effect=subprocess.TimeoutExpired("gh api", 7)
+        ) as api:
+            with self.assertRaisesRegex(TimeoutError, "metadata did not respond"):
+                desktop_release.verify_quality_gate(timeout=7)
+        self.assertEqual(api.call_args.kwargs["timeout"], 7)
+        self.sleep.assert_not_called()
+
+    def test_invalid_api_payload_fails_without_claiming_quality_success(self):
+        for responses in ([[]], [{"workflow_runs": [self.quality_run()]}, {"jobs": None}]):
+            with self.subTest(responses=responses), self.assertRaisesRegex(ValueError, "invalid Quality Gate"):
+                self.verify(responses)
+
+    def test_matrix_jobs_are_found_on_later_pages(self):
+        first_page = [{"name": f"Other check {number}", "status": "completed", "conclusion": "success"} for number in range(100)]
+        _, api = self.verify([{"workflow_runs": [self.quality_run()]}, {"jobs": first_page}, {"jobs": self.jobs()}])
+        self.assertTrue(api.call_args_list[-1].args[0].endswith("page=2"))
+
+
+class ProjectVersionTests(unittest.TestCase):
+    def test_python310_reader_uses_project_version_and_rejects_ambiguous_literals(self):
+        original_import = builtins.__import__
+
+        def without_tomllib(name, *args, **kwargs):
+            if name == "tomllib":
+                raise ModuleNotFoundError("Python 3.10 has no tomllib")
+            return original_import(name, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as temporary, patch("builtins.__import__", side_effect=without_tomllib):
+            metadata = Path(temporary) / "pyproject.toml"
+            metadata.write_text('[unrelated]\nversion="7.0.0"\n[project]\nversion = "0.5.0" # current release\n[tool.other]\nversion="2.0.0"\n')
+            self.assertEqual(desktop_release.read_project_version(metadata), "0.5.0")
+            for content in ('[project]\nversion="0.5.0"\nversion="0.6.0"\n', '[project]\nversion="0.5.0rc1"\n', '[project]\nname="the game"\n'):
+                metadata.write_text(content)
+                with self.assertRaises(ValueError):
+                    desktop_release.read_project_version(metadata)
 
 
 if __name__ == "__main__":

@@ -87,6 +87,7 @@ class PartTwoEpisodeTestCase(unittest.TestCase):
             chapter=2,
             flags=dict(flags or {}),
             quests=list(quests or []),
+            visited=[scene],
             play_minutes=play_minutes,
         )
 
@@ -287,7 +288,7 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
                 else:
                     self.assertIn("testimony remains unanswered", transcript)
 
-    def test_hall_exploration_exit_does_not_bank_partial_rewards(self) -> None:
+    def test_hall_exploration_exit_preserves_clues_without_advancing_the_scene(self) -> None:
         for targets in (
             ("Cipher Archive", None),
             ("Cipher Archive", "Erased Statue", None),
@@ -298,7 +299,11 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
 
                 self.assertFalse(self._episode(label_choices(*targets)).run_scene(state))
 
-                self.assertEqual(state.to_dict(), before)
+                self.assertEqual(state.character.__dict__, before["character"])
+                self.assertEqual(state.quests, before["quests"])
+                self.assertEqual((state.scene, state.play_minutes), (before["scene"], before["play_minutes"]))
+                self.assertTrue(state.flags["part2_cipher_archive"])
+                self.assertEqual(len(state.journal), len(targets) - 1)
 
     def test_hall_exploration_all_three_chambers_adds_only_four_optional_minutes(self) -> None:
         episode = self._episode(
@@ -589,6 +594,9 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
 
         self.assertEqual((state.character.hp, state.character.corruption), (1, 1))
         self.assertTrue(state.flags["part2_testimony_second"])
+        self.assertIn(QUEST_NAMES_LOST, state.quests)
+        self.assertIn("second Warden testimony sounds", " ".join(output))
+        self.assertIn("second Warden testimony", " ".join(state.journal))
         self.assertNotIn("troll falls", "\n".join(output).lower())
 
     def test_each_combat_scene_builds_fresh_enemies_for_every_callback(self) -> None:
@@ -734,6 +742,7 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
                     play_minutes=11,
                 )
                 before = state.to_dict()
+                before["visited"] = ["part2_descent"]
 
                 self.assertFalse(episode.run_scene(state))
 
@@ -862,7 +871,7 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
                     for composition in adjacent_art:
                         self.assertIn(id(composition), observed_ids)
 
-    def test_mara_forge_art_requires_only_mara_and_keeps_drowned_location_art(self) -> None:
+    def test_mara_forge_art_requires_only_mara_at_the_refuge_discovery(self) -> None:
         cases = (
             (False, True, False),
             (True, False, True),
@@ -872,11 +881,11 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
                 ui = ArtRecordingUI(color=False, fast=True, output_fn=lambda _line: None)
                 episode = PartTwoEpisode(
                     ui,
-                    label_choices("prisoners"),
+                    label_choices("forge truth", "handprints"),
                     RecordingCombat(),
                 )
                 state = self._state(
-                    "part2_drowned_mile",
+                    "part2_house_under_ash",
                     flags={
                         "part_two_mara_present": mara_present,
                         "part_two_tobin_present": tobin_present,
@@ -886,8 +895,7 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
                 self.assertTrue(episode.run_scene(state))
 
                 observed_ids = {id(art) for art, _color, _alt in ui.art_calls}
-                self.assertIn(id(part_two_art.DROWNED_MILE_ART), observed_ids)
-                self.assertIn(id(part_two_art.DROWNED_CARAVAN_ART), observed_ids)
+                self.assertIn(id(part_two_art.HOUSE_UNDER_ASH_ART), observed_ids)
                 self.assertEqual(
                     id(part_two_art.MARA_SHACKLE_FORGE_ART) in observed_ids,
                     forge_expected,
@@ -1039,6 +1047,8 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
             ).run_scene(state)
         )
         self.assertTrue(state.flags["part2_memory_complete"])
+        self.assertIn("Calenor abandoning the pursuit", " ".join(state.journal))
+        self.assertIn("road cipher cut in silver ash", " ".join(state.journal))
         self.assertEqual((state.scene, state.play_minutes), ("part2_teren", 63))
 
         combat = RecordingCombat()
@@ -1063,6 +1073,7 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
 
         self.assertEqual(combat.calls, [])
         self.assertTrue(state.flags["part2_teren_confessed"])
+        self.assertIn("Teren confessed", " ".join(state.journal))
         self.assertTrue(state.flags["part2_teren_bound"])
         self.assertEqual((state.scene, state.play_minutes), ("part2_calenor_prison", 10))
 
@@ -1121,19 +1132,22 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
             quests=[QUEST_LAST_SEAL, QUEST_NAMES_LOST],
         )
         before = state.to_dict()
+        output: list[str] = []
         self.assertFalse(
             self._episode(
-                label_choices("Why hide", "What did Teren", None)
+                label_choices("Why hide", "What did Teren", None),
+                output=output,
             ).run_scene(state)
         )
-        self.assertEqual(state.to_dict(), before)
+        self.assertEqual(state.character.__dict__, before["character"])
+        self.assertEqual(state.quests, before["quests"])
+        self.assertEqual((state.scene, state.play_minutes), (before["scene"], before["play_minutes"]))
+        self.assertFalse(state.flags.get("part2_testimony_third", False))
+        self.assertEqual(len(state.journal), 2)
 
-        output: list[str] = []
         self.assertTrue(
             self._episode(
                 label_choices(
-                    "Why hide",
-                    "What did Teren",
                     "Why must the Rider",
                     "Forgive Calenor",
                 ),

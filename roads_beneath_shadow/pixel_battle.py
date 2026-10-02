@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from .combat_view import CombatFeedback, CombatSnapshot
+from .pixel_theme import load_font
+from .pixel_world import hero_sprite_name, motion_frame_rect
 
 
 INK = (16, 21, 27)
@@ -30,7 +32,12 @@ ASSET_DIR = Path(__file__).resolve().parent / "pixel_assets"
 class _Effect:
     feedback: CombatFeedback
     age: float = 0.0
-    duration: float = 1.05
+    duration: float = 1.25
+    cue_emitted: bool = False
+
+    @property
+    def impact_time(self) -> float:
+        return 0.18 if self.feedback.kind in {"damage", "evade"} and self.feedback.actor_id != self.feedback.target_id else 0.0
 
 
 class _ScaledFont:
@@ -90,29 +97,46 @@ class BattleView:
     Enemy IDs come directly from snapshots, including after a foe falls.
     """
 
+    TYPICAL_TURN_DURATION = 0.73
+    MAX_TURN_DURATION = 1.35
+    REDUCED_MOTION_TURN_DURATION = 0.32
+
     def __init__(self, pg: Any) -> None:
         self.pg = pg
         self.snapshot: CombatSnapshot | None = None
-        self.font = pg.font.SysFont("dejavusansmono,courier,monospace", 13)
-        self.bold_font = pg.font.SysFont("dejavusansmono,courier,monospace", 13, bold=True)
-        self.compact_bold_font = pg.font.SysFont("dejavusansmono,courier,monospace", 12, bold=True)
-        self.mini_bold_font = pg.font.SysFont("dejavusansmono,courier,monospace", 10, bold=True)
-        self.mini_font = pg.font.SysFont("dejavusansmono,courier,monospace", 10)
-        self.mini_prose_font = pg.font.SysFont("dejavusans,arial,sans", 10)
-        self.small_font = pg.font.SysFont("dejavusansmono,courier,monospace", 11)
-        self.banner_font = pg.font.SysFont("dejavusansmono,courier,monospace", 16, bold=True)
-        self.number_font = pg.font.SysFont("dejavusansmono,courier,monospace", 19, bold=True)
+        self.font = load_font(pg, 13)
+        self.bold_font = load_font(pg, 13, bold=True)
+        self.compact_bold_font = load_font(pg, 12, bold=True)
+        self.mini_bold_font = load_font(pg, 10, bold=True)
+        self.mini_font = load_font(pg, 10)
+        self.mini_prose_font = load_font(pg, 10)
+        self.small_font = load_font(pg, 11)
+        self.party_font = load_font(pg, 9)
+        self.banner_font = load_font(pg, 16, bold=True)
+        self.number_font = load_font(pg, 19, bold=True)
+        self.compact_number_font = load_font(pg, 15, bold=True)
         self.enemy_hits: list[tuple[Any, str]] = []
         self.sprite_hits: list[tuple[Any, str]] = []
         self.actor_positions: dict[str, tuple[int, int]] = {}
+        self.actor_rects: dict[str, Any] = {}
+        self.party_hits: list[tuple[Any, str]] = []
+        self.condition_hits: list[tuple[Any, str]] = []
+        self.feedback_rects: list[Any] = []
+        self.feedback_labels: list[tuple[str, str, Any]] = []
+        self.target_marker_rect: Any = None
+        self.tooltip_rect: Any = None
         self.hovered_id: str | None = None
+        self.hovered_actor_id: str | None = None
         self.tooltip_hits: list[tuple[Any, str]] = []
         self._mouse: tuple[int, int] | None = None
         self._effects: list[_Effect] = []
-        self._sprites: dict[tuple[str, bool, int], Any] = {}
+        self._cues: list[str] = []
+        self._sprites: dict[tuple[Any, ...], Any] = {}
         self._fitted_fonts: dict[tuple[int, float], Any] = {}
         self._typography_cache: dict[tuple[Any, ...], tuple[bool, Any, Any, Any]] = {}
+        self._tooltip_layout_cache: dict[tuple[Any, ...], tuple[Any, list[str], int, int]] = {}
         self._character_atlas: Any = None
+        self._motion_atlas: Any = None
         self._atlas_checked = False
         self._backdrops: dict[str, Any] = {}
         self._scaled_backdrop: tuple[Any, tuple[int, int], Any] | None = None
@@ -121,16 +145,46 @@ class BattleView:
         self._arena_rect = pg.Rect(0, 0, 0, 0)
         self._reduced_motion = False
         self._time = 0.0
+        self._health_trails: dict[str, float] = {}
+        self._health_targets: dict[str, int] = {}
+        self._health_ages: dict[str, float] = {}
 
     def set_snapshot(self, snapshot: CombatSnapshot | None) -> None:
         """Replace presentation data without retaining mutable engine objects."""
         self._typography_cache.clear()
+        if snapshot is not None:
+            entities = [("player", snapshot.player.hp), *((enemy.id, enemy.hp) for enemy in snapshot.enemies)]
+            new_encounter = self.snapshot is None or snapshot.phase == "active" and snapshot.round_number == 1 and self.snapshot.phase != "active"
+            if new_encounter:
+                self._health_trails.clear()
+                self._health_targets.clear()
+                self._health_ages.clear()
+            for actor_id, hp in entities:
+                previous_hp = self._health_targets.get(actor_id, hp)
+                if hp != previous_hp:
+                    self._health_trails[actor_id] = max(float(previous_hp), self._health_trails.get(actor_id, float(previous_hp)), float(hp))
+                    self._health_ages[actor_id] = 0.0
+                else:
+                    self._health_trails.setdefault(actor_id, float(hp))
+                self._health_targets[actor_id] = hp
         if snapshot is None:
             self._effects.clear()
+            self._cues.clear()
             self.enemy_hits.clear()
             self.sprite_hits.clear()
             self.actor_positions.clear()
+            self.actor_rects.clear()
+            self.party_hits.clear()
+            self.condition_hits.clear()
+            self.feedback_rects.clear()
+            self.feedback_labels.clear()
+            self.target_marker_rect = None
+            self.tooltip_rect = None
             self.hovered_id = None
+            self.hovered_actor_id = None
+            self._health_trails.clear()
+            self._health_targets.clear()
+            self._health_ages.clear()
         self.snapshot = snapshot
 
     def set_scene(self, scene: str | Any | None) -> None:
@@ -143,18 +197,79 @@ class BattleView:
     def queue_feedback(self, feedback: CombatFeedback) -> None:
         if feedback.kind in {"inspect", "notice", "info"}:
             return
+        if self._effects and not self.has_pending_feedback:
+            # The next committed move starts a fresh result group. Otherwise
+            # lingering labels could add last round's damage into this round.
+            self._effects.clear()
+            self._cues.clear()
         # A whole resolved turn arrives in one queue drain. Stagger its visual
         # hits so each attacker and damage amount can be read independently.
-        delay = min(1.0, len(self._effects) * 0.19)
+        spacing, maximum = (0.05, 0.16) if self._reduced_motion else (0.18, 0.80)
+        delay = max(0.0, min(maximum, spacing - self._effects[-1].age)) if self._effects else 0.0
         self._effects.append(_Effect(feedback, age=-delay))
 
+    @property
+    def resolving(self) -> bool:
+        """True while a queued action still has a visible impact to resolve."""
+        return self.has_pending_feedback
+
+    @property
+    def has_pending_feedback(self) -> bool:
+        """Gate paid actions only until impacts land, rather than popup expiry.
+
+        A common attack/exchange takes 0.73 seconds; even a busy formation is
+        bounded to 1.35 seconds. Reduced motion resolves within 0.32 seconds.
+        Inspecting or changing targets can remain available throughout.
+        """
+        cutoff = 0.16 if self._reduced_motion else 0.55
+        return any(effect.age < cutoff for effect in self._effects)
+
+    @property
+    def busy(self) -> bool:
+        return self.has_pending_feedback
+
+    def drain_cues(self) -> tuple[str, ...]:
+        """Consume audio cues once, when their visible effects actually land.
+
+        The window owns audio and user volume preferences. This bounded queue
+        stays safe even when a frontend chooses to render without sound.
+        """
+        cues = tuple(self._cues)
+        self._cues.clear()
+        return cues
+
     def update(self, dt: float, reduced_motion: bool = False) -> None:
+        if reduced_motion and not self._reduced_motion:
+            for effect in self._effects:
+                if effect.age < 0:
+                    effect.age = max(-0.16, effect.age * 0.25)
         self._reduced_motion = bool(reduced_motion)
         dt = max(0.0, float(dt))
         self._time += dt
         for effect in self._effects:
             effect.age += dt
+            impact = 0 if self._reduced_motion else effect.impact_time
+            if not effect.cue_emitted and impact <= effect.age < effect.duration:
+                feedback = effect.feedback
+                cue = {"heal": "heal", "defend": "guard", "evade": "evade", "interrupt": "interrupt", "fallen": "fall", "escape": "escape"}.get(feedback.kind)
+                if feedback.kind == "damage":
+                    cue = "block" if feedback.amount == 0 else "hurt" if feedback.actor_id == feedback.target_id else "hit"
+                if cue:
+                    self._cues.append(cue)
+                    self._cues[:] = self._cues[-16:]
+                effect.cue_emitted = True
         self._effects[:] = [effect for effect in self._effects if effect.age < effect.duration]
+        for actor_id, hp in self._health_targets.items():
+            self._health_ages[actor_id] = self._health_ages.get(actor_id, 0.0) + dt
+            trail = self._health_trails.get(actor_id, float(hp))
+            pending_hit = any(effect.feedback.kind == "damage" and effect.feedback.target_id == actor_id and effect.age < effect.impact_time for effect in self._effects)
+            if self._reduced_motion:
+                trail = float(hp)
+            elif self._health_ages[actor_id] > 0.22 and not pending_hit:
+                trail = hp + (trail - hp) * math.exp(-dt * 6.0)
+                if abs(trail - hp) < 0.05:
+                    trail = float(hp)
+            self._health_trails[actor_id] = trail
 
     def handle_event(self, event: Any) -> tuple[bool, str | None]:
         if self.snapshot is None:
@@ -164,6 +279,12 @@ class BattleView:
             self.hovered_id = next(
                 (enemy_id for rect, enemy_id in self.enemy_hits + self.sprite_hits if rect.collidepoint(event.pos)), None
             )
+            self.hovered_actor_id = next((actor_id for rect, actor_id in self.party_hits if rect.collidepoint(event.pos)), None)
+            return False, None
+        if event.type in {getattr(self.pg, "WINDOWLEAVE", -1), getattr(self.pg, "WINDOWFOCUSLOST", -2)}:
+            self._mouse = None
+            self.hovered_id = None
+            self.hovered_actor_id = None
             return False, None
         if event.type != self.pg.MOUSEBUTTONDOWN or event.button != 1:
             return False, None
@@ -252,8 +373,12 @@ class BattleView:
             return "captain"
         return "orc"
 
-    def _sprite(self, kind: str, facing_left: bool, pose: int = 0) -> Any:
-        key = (kind, facing_left, pose)
+    def _sprite(self, kind: str, facing_left: bool, pose: int = 0, *, animation_frame: int = 0, stance: str = "idle") -> Any:
+        if kind not in {"player", "mara", "tobin"}:
+            animation_frame, stance = 0, "idle"
+        weapon = self._weapon_style() if kind == "player" else ""
+        identity = hero_sprite_name(self.snapshot.player.origin) if kind == "player" and self.snapshot else kind
+        key = (kind, identity, weapon, facing_left, pose, animation_frame % 8, stance)
         if key in self._sprites:
             return self._sprites[key]
         pg = self.pg
@@ -265,20 +390,33 @@ class BattleView:
                 self._character_atlas = pg.image.load(str(ASSET_DIR / "world-characters.png"))
             except (OSError, pg.error):
                 pass
+            try:
+                self._motion_atlas = pg.image.load(str(ASSET_DIR / "world-motion.png"))
+            except (OSError, pg.error):
+                pass
         # The traveler and companions share their exact coats and silhouettes
         # with the exploration maps. Original encounter creatures follow the
         # same palette while keeping different weapons and body shapes.
         atlas_rows = {"player": 2, "mara": 4, "tobin": 5}
-        if self._character_atlas is not None and kind in atlas_rows:
-            row = atlas_rows[kind]
-            native = self._character_atlas.subsurface(pg.Rect((2 if pose else 0) * 20, row * 24, 20, 24))
+        if (self._motion_atlas is not None or self._character_atlas is not None) and kind in atlas_rows:
+            if self._motion_atlas is not None:
+                native = self._motion_atlas.subsurface(pg.Rect(motion_frame_rect(identity, direction=2, frame=animation_frame, pose=stance)))
+            else:
+                native = self._character_atlas.subsurface(pg.Rect((2 if pose else 0) * 20, atlas_rows[kind] * 24, 20, 24))
             sprite = pg.transform.scale(native, (40, 48))
             if kind == "tobin":
                 pg.draw.lines(sprite, AMBER, False, [(29, 15), (33, 21), (34, 27), (32, 34), (28, 37)], 1)
                 pg.draw.line(sprite, MUTED, (29, 15), (28, 37))
             else:
-                pg.draw.line(sprite, BONE, (28, 29), (35, 17 if pose else 21), 1)
-                pg.draw.line(sprite, AMBER, (26, 30), (31, 30), 1)
+                if kind == "player" and weapon == "staff":
+                    pg.draw.line(sprite, (129, 105, 68), (29, 39), (31 if pose else 29, 13), 2)
+                    pg.draw.line(sprite, BONE, (30, 13), (32, 13))
+                elif kind == "player" and weapon == "unarmed":
+                    pg.draw.rect(sprite, (193, 160, 119), (28, 27, 3, 3))
+                else:
+                    tip = (32, 23) if weapon == "knife" else (35, 17 if pose else 21)
+                    pg.draw.line(sprite, BONE, (28, 29), tip, 1)
+                    pg.draw.line(sprite, AMBER, (26, 30), (31, 30), 1)
                 if kind == "mara":
                     pg.draw.line(sprite, BONE, (11, 29), (5, 21), 1)
             if facing_left:
@@ -353,48 +491,122 @@ class BattleView:
         self._sprites[key] = sprite
         return sprite
 
+    def _weapon_style(self) -> str:
+        weapon = self.snapshot.player.weapon_id if self.snapshot else "sword"
+        if weapon is None:
+            return "unarmed"
+        if "staff" in weapon:
+            return "staff"
+        if any(word in weapon for word in ("knife", "dagger", "dirk")):
+            return "knife"
+        return "sword"
+
     def _active_effects(self, actor_id: str) -> list[_Effect]:
-        return [effect for effect in self._effects if 0 <= effect.age < effect.duration and effect.feedback.target_id == actor_id]
+        return [effect for effect in self._effects if (0 if self._reduced_motion else effect.impact_time) <= effect.age < effect.duration and effect.feedback.target_id == actor_id]
+
+    def _fall_progress(self, actor_id: str, alive: bool) -> float:
+        """A final snapshot cannot turn an actor into a corpse before its hit."""
+        if alive:
+            return 0.0
+        fallen = next((effect for effect in self._effects if effect.feedback.kind == "fallen" and effect.feedback.target_id == actor_id), None)
+        if fallen is None or self._reduced_motion:
+            return 1.0
+        return min(1.0, max(0.0, fallen.age) / 0.22)
 
     def _draw_actor(self, surface: Any, actor_id: str, kind: str, anchor: tuple[int, int], scale: float, *, facing_left: bool, alive: bool = True, targeted: bool = False, now_ms: int = 0) -> None:
         pg = self.pg
         x, ground = anchor
         self.actor_positions[actor_id] = anchor
         effects = self._active_effects(actor_id)
-        outgoing = next((effect for effect in self._effects if 0 <= effect.age < 0.32 and effect.feedback.actor_id == actor_id and effect.feedback.kind == "damage" and effect.feedback.target_id != actor_id), None)
+        outgoing = next((effect for effect in self._effects if 0 <= effect.age < 0.44 and effect.feedback.actor_id == actor_id and effect.feedback.kind in {"damage", "evade"} and effect.feedback.target_id != actor_id), None)
         offset = 0
         bob = 0
-        if not self._reduced_motion and alive:
-            bob = int(math.sin(now_ms / 390 + x / 45) > 0)
-            if outgoing:
-                offset = round(math.sin(outgoing.age / 0.32 * math.pi) * 12) * (-1 if facing_left else 1)
-            if effects and effects[-1].feedback.kind == "damage" and effects[-1].age < 0.24:
-                offset += (2 if int(effects[-1].age * 40) % 2 else -2) * scale
+        fall = self._fall_progress(actor_id, alive)
+        standing = fall < 1
+        if not self._reduced_motion and standing:
+            if kind not in {"player", "mara", "tobin"}:
+                bob = int(math.sin(now_ms / 390 + x / 45) > 0)
+            if outgoing and kind not in {"tobin", "archer"}:
+                target = self.actor_positions.get(outgoing.feedback.target_id)
+                if target is not None:
+                    travel = target[0] - x
+                    reach = max(0, abs(travel) - round(34 * scale)) * (1 if travel > 0 else -1)
+                    progress = outgoing.age / 0.18 if outgoing.age < 0.18 else max(0.0, 1 - (outgoing.age - 0.18) / 0.26)
+                    offset = round(reach * (1 - (1 - min(1.0, progress)) ** 2))
+            hit = next((effect for effect in reversed(effects) if effect.feedback.kind == "damage" and effect.feedback.amount > 0 and effect.age - effect.impact_time < 0.18), None)
+            if hit is not None:
+                offset += round((2 if int((hit.age - hit.impact_time) * 50) % 2 else -2) * max(1, scale))
+            evasion = next((effect for effect in self._effects if effect.feedback.kind == "evade" and effect.feedback.target_id == actor_id and 0 <= effect.age < 0.36), None)
+            if evasion is not None:
+                offset -= round(math.sin(evasion.age / 0.36 * math.pi) * 10 * max(0.75, scale))
+        escape = next((effect for effect in self._effects if effect.feedback.kind == "escape" and 0 <= effect.age < effect.duration), None)
+        escaped = bool(self.snapshot and self.snapshot.phase == "escaped")
+        escape_progress = 1.0 if escaped and (self._reduced_motion or escape is None) else min(1.0, escape.age / 0.45) if escape is not None else 0.0
+        if actor_id in {"player", "mara", "tobin"} and escape_progress >= 1:
+            return
+        if actor_id in {"player", "mara", "tobin"} and escape_progress and not self._reduced_motion:
+            offset -= round(self._arena_rect.w * 0.24 * escape_progress)
         shadow_width = int((35 if kind == "warg" else 27) * scale)
-        pg.draw.ellipse(surface, SHADOW, (x - shadow_width // 2, ground - 6, shadow_width, 10))
+        pg.draw.ellipse(surface, SHADOW, (x + offset - shadow_width // 2, ground - 6, shadow_width, 10))
         if targeted and alive:
-            pg.draw.ellipse(surface, AMBER, (x - shadow_width // 2 - 5, ground - 8, shadow_width + 10, 13), 2)
-        sprite = self._sprite(kind, facing_left, int(outgoing is not None))
-        if not alive:
-            sprite = pg.transform.rotate(sprite, 90 if facing_left else -90)
+            pg.draw.ellipse(surface, AMBER, (x + offset - shadow_width // 2 - 5, ground - 8, shadow_width + 10, 13), 2)
+        guarding = any(effect.feedback.kind == "defend" and effect.age < 0.5 for effect in effects) or any(effect.feedback.kind == "defend" and effect.feedback.actor_id == actor_id and 0 <= effect.age < 0.5 for effect in self._effects)
+        stance = "walk" if outgoing and kind != "tobin" else "guard" if guarding else "idle"
+        frame = 0 if self._reduced_motion else int(outgoing.age * 30) % 8 if outgoing else int(now_ms * 0.0016) % 8
+        sprite = self._sprite(kind, facing_left, int(outgoing is not None), animation_frame=frame, stance=stance)
+        if actor_id in {"player", "mara", "tobin"} and escape_progress and not self._reduced_motion:
             sprite = sprite.copy()
-            sprite.set_alpha(90)
-        sprite = pg.transform.scale(sprite, (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
+            sprite.set_alpha(round(255 * (1 - escape_progress)))
+        if fall:
+            sprite = pg.transform.rotate(sprite, round((90 if facing_left else -90) * fall))
+            sprite = sprite.copy()
+            sprite.set_alpha(round(255 - 165 * fall))
+        sprite = pg.transform.scale(sprite, (max(1, int(sprite.get_width() * scale)), max(1, int(sprite.get_height() * scale))))
         sprite_rect = sprite.get_rect(midbottom=(x + offset, ground - bob))
+        self.actor_rects[actor_id] = sprite_rect.copy()
         surface.blit(sprite, sprite_rect)
-        if alive and not self._reduced_motion and any(effect.feedback.kind == "damage" and effect.age < 0.12 for effect in effects):
+        if standing and not self._reduced_motion and any(effect.feedback.kind == "damage" and effect.feedback.amount > 0 and effect.age - effect.impact_time < 0.12 for effect in effects):
             flash = pg.Surface(sprite.get_size(), pg.SRCALPHA)
-            # An outline flash keeps every cloak/weapon pixel visible.
-            pg.draw.rect(flash, (*RED, 90), flash.get_rect(), 2)
+            flash.blit(sprite, (0, 0))
+            # Multiply only existing pixels so no rectangular box flashes
+            # around a sparse pixel silhouette.
+            flash.fill((*RED, 255), special_flags=pg.BLEND_RGBA_MULT)
+            flash.set_alpha(160)
             surface.blit(flash, sprite_rect)
+        if standing:
+            for effect in effects:
+                age = effect.age - (0 if self._reduced_motion else effect.impact_time)
+                if effect.feedback.kind in {"defend", "evade"} and age < 0.5:
+                    guard = sprite_rect.inflate(10, 4).clip(self._arena_rect)
+                    pg.draw.arc(surface, TEAL, guard, -math.pi / 2, math.pi / 2, 2)
+                    pg.draw.line(surface, TEAL, (guard.centerx, guard.y), (guard.right - 2, guard.y + 3), 1)
+                elif effect.feedback.kind == "heal" and age < 0.7:
+                    center = (sprite_rect.centerx, sprite_rect.centery)
+                    pg.draw.line(surface, TEAL, (center[0] - 4, center[1]), (center[0] + 4, center[1]), 2)
+                    pg.draw.line(surface, TEAL, (center[0], center[1] - 4), (center[0], center[1] + 4), 2)
+        if actor_id == "player" or actor_id in {"mara", "tobin"}:
+            self.party_hits.append((sprite_rect.inflate(8, 6).clip(self._arena_rect), actor_id))
+            self.tooltip_hits.append((self.party_hits[-1][0], self._party_help(actor_id)))
         if actor_id.startswith("enemy_"):
-            self.sprite_hits.append((sprite_rect.inflate(12, 12), actor_id))
+            self.sprite_hits.append((sprite_rect.inflate(12, 12).clip(self._arena_rect), actor_id))
+            enemy = next((enemy for enemy in self.snapshot.enemies if enemy.id == actor_id), None) if self.snapshot else None
+            if enemy is not None:
+                help_text = f"{enemy.name}\nHealth {enemy.hp}/{enemy.max_hp} · Armor {enemy.armor}\n" + (self._intent_help(enemy) if alive else "This foe has fallen.")
+                self.tooltip_hits.append((self.sprite_hits[-1][0], help_text))
             if targeted and alive:
-                pg.draw.polygon(surface, AMBER, [(x - 5, sprite_rect.y - 9), (x + 5, sprite_rect.y - 9), (x, sprite_rect.y - 3)])
+                marker_x = sprite_rect.centerx
+                marker_y = max(self._arena_rect.y + 1, sprite_rect.y - 9)
+                self.target_marker_rect = pg.Rect(marker_x - 5, marker_y, 11, 7)
+                pg.draw.polygon(surface, AMBER, [(marker_x - 5, marker_y), (marker_x + 5, marker_y), (marker_x, marker_y + 6)])
 
-    def _health(self, surface: Any, rect: Any, hp: int, maximum: int, *, color: tuple[int, int, int] = RED) -> None:
+    def _health(self, surface: Any, rect: Any, hp: int, maximum: int, *, color: tuple[int, int, int] = RED, actor_id: str | None = None) -> None:
         pg = self.pg
         pg.draw.rect(surface, (43, 45, 44), rect)
+        trail = self._health_trails.get(actor_id, float(hp)) if actor_id else float(hp)
+        if maximum > 0 and trail > hp:
+            lost = rect.copy()
+            lost.w = max(1, round(rect.w * min(1, trail / maximum)))
+            pg.draw.rect(surface, AMBER, lost)
         if maximum > 0 and hp > 0:
             fill = rect.copy()
             fill.w = max(1, round(rect.w * min(1, hp / maximum)))
@@ -411,26 +623,60 @@ class BattleView:
         self.tooltip_hits.append((self.pg.Rect(x, start, width, y - start), description))
         return y
 
-    def _arena_conditions(self, surface: Any, rect: Any) -> None:
+    def _header_conditions(self, surface: Any, rect: Any) -> int:
+        """Status badges live outside the actor/impact plane, even when short."""
         if self.snapshot is None or not self.snapshot.player.statuses:
-            return
-        text = "  ".join(f"{status.label} {status.remaining}" for status in self.snapshot.player.statuses)
-        width = min(rect.w - 20, max(100, round(rect.w * 0.48)))
-        lines = _wrapped(text, self.small_font, width - 12)
-        height = len(lines) * self.small_font.get_linesize() + 8
-        panel = self.pg.Rect(rect.x + 8, rect.y + 6, min(width, max(self.small_font.size(line)[0] for line in lines) + 12), height)
-        self.pg.draw.rect(surface, INK, panel)
-        self.pg.draw.rect(surface, EDGE, panel, 1)
-        y = panel.y + 4
-        for line in lines:
-            self._text(surface, line, (panel.x + 6, y), TEAL, font=self.small_font)
-            y += self.small_font.get_linesize()
-        description = "\n".join(f"{status.label}: {status.description}" for status in self.snapshot.player.statuses)
-        self.tooltip_hits.append((panel, description))
+            return rect.y
+        x, y = rect.x, rect.y
+        bottom = y
+        for status in self.snapshot.player.statuses:
+            label = f"{status.label} {status.remaining}"
+            lines = _wrapped(label, self.mini_font, max(1, rect.w - 10))
+            width = min(rect.w, max(self.mini_font.size(line)[0] for line in lines) + 10)
+            height = len(lines) * self.mini_font.get_linesize() + 4
+            if x > rect.x and x + width > rect.right:
+                x, y = rect.x, bottom + 3
+            badge = self.pg.Rect(x, y, width, height)
+            color = RED if status.id in {"bleeding", "exposed"} else TEAL
+            self.pg.draw.rect(surface, PANEL, badge)
+            self.pg.draw.rect(surface, color, badge, 1)
+            for index, line in enumerate(lines):
+                self._text(surface, line, (x + 5, y + 2 + index * self.mini_font.get_linesize()), color, font=self.mini_font)
+            self.condition_hits.append((badge, status.id))
+            self.tooltip_hits.append((badge, f"{status.label}: {status.description}"))
+            x += width + 5
+            bottom = max(bottom, badge.bottom)
+        return bottom
+
+    def _party_help(self, actor_id: str) -> str:
+        if self.snapshot is None:
+            return ""
+        if actor_id == "player":
+            player = self.snapshot.player
+            lines = [player.name, f"Health {player.hp}/{player.max_hp} · Focus {player.focus}/{player.max_focus}",
+                     f"{player.weapon_name} · Armor {player.armor}"]
+            lines.extend(f"{status.label}: {status.description}" for status in player.statuses)
+            return "\n".join(lines)
+        companion = next((ally for ally in self.snapshot.companions if ally.id == actor_id), None)
+        if companion is None:
+            return ""
+        lines = [f"{companion.name} · Bond {companion.trust}"]
+        commands = [action for action in self.snapshot.actions if action.id.startswith(actor_id)]
+        for action in commands:
+            label = action.label.split(" (", 1)[0]
+            lines.append(f"{label} · {action.focus_cost} Focus")
+            lines.append(action.description)
+            if not action.enabled:
+                lines.append(action.disabled_reason)
+        if not commands:
+            lines.append("Your companion stands beside you.")
+        return "\n".join(line for line in lines if line)
 
     @staticmethod
     def _damage_label(enemy: Any) -> str:
-        return f"{enemy.damage_min}–{enemy.damage_max} DAMAGE" if enemy.damage_max or enemy.threat in {"attack", "danger"} else str(enemy.threat).upper()
+        if enemy.damage_max or enemy.threat in {"attack", "danger"}:
+            return f"{enemy.damage_min}–{enemy.damage_max} DAMAGE"
+        return {"setup": "PREPARING", "mark": "SHADOW EFFECT"}.get(enemy.threat, str(enemy.threat).upper())
 
     @staticmethod
     def _status_text(statuses: Any) -> str:
@@ -445,9 +691,38 @@ class BattleView:
         return f"ARMOR {enemy.armor}" + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
 
     def _interrupt_label(self, enemy: Any) -> str:
+        if self.snapshot and self.snapshot.defensive_objective:
+            return "◇ HOLD YOUR GROUND"
         if enemy.interruptible:
-            return "◆ CAN INTERRUPT"
-        return "◇ HOLD YOUR GROUND" if self.snapshot and self.snapshot.defensive_objective else "◇ COMMITTED INTENT"
+            available = any(action.enabled and action.id in {"power", "mara"} for action in self.snapshot.actions) if self.snapshot else False
+            return "◆ CAN INTERRUPT" if available else "◆ INTERRUPTIBLE"
+        return "◇ COMMITTED INTENT"
+
+    def _intent_help(self, enemy: Any) -> str:
+        lines = [f"{enemy.intent_label}: {enemy.telegraph}"]
+        if enemy.damage_max or enemy.threat in {"attack", "danger"}:
+            lines.append(f"Current stance: {enemy.damage_min}–{enemy.damage_max} Health damage. Defend and new effects can change this forecast.")
+        elif enemy.threat == "setup":
+            lines.append("Preparation: no immediate physical damage.")
+        elif enemy.threat == "mark":
+            lines.append("A shadow effect drains Focus and leaves you Exposed.")
+        if self.snapshot and self.snapshot.defensive_objective:
+            guards = [action.label.split(" (", 1)[0] for action in self.snapshot.actions if action.enabled and action.id in {"defend", "origin", "mara_guard", "tobin_guard"}]
+            choices = ", ".join(guards[:-1]) + " or " + guards[-1] if len(guards) > 1 else guards[0] if guards else "Guard"
+            lines.append(f"Survival objective: {choices}. You cannot harm this foe here.")
+        elif enemy.interruptible:
+            available = {action.id for action in self.snapshot.actions if action.enabled} if self.snapshot else set()
+            if {"power", "mara"} <= available:
+                lines.append("Power Attack or Mara can interrupt this intent.")
+            elif "power" in available:
+                lines.append("Power Attack can interrupt this intent.")
+            elif "mara" in available:
+                lines.append("Mara can interrupt this intent.")
+            else:
+                lines.append("This intent is interruptible, but no disruption is currently available. Defend to reduce physical damage and recover Focus.")
+        else:
+            lines.append("This intent cannot be interrupted. Defend reduces physical damage.")
+        return "\n".join(lines)
 
     def _card_content_height(self, rect: Any, enemy: Any, wide: bool, compact: bool, fonts: tuple[Any, Any, Any]) -> int:
         """Measure every visible field using the same spacing as drawing."""
@@ -552,7 +827,7 @@ class BattleView:
         y += 1 if compact else 4
         y = self._paragraph(surface, self._health_label(enemy), (x, y), title_width, RED if alive else MUTED, font=body_font)
         y += 1 if compact else 4
-        self._health(surface, pg.Rect(x, y, title_width, 3 if compact else 5), enemy.hp, enemy.max_hp)
+        self._health(surface, pg.Rect(x, y, title_width, 3 if compact else 5), enemy.hp, enemy.max_hp, actor_id=enemy.id)
         y += 6 if compact else 11
         y = self._paragraph(surface, self._armor_label(enemy), (x, y), title_width, MUTED, font=body_font)
         y += 2 if compact else 6
@@ -573,46 +848,108 @@ class BattleView:
         y += 2 if compact else 5
         y = self._paragraph(surface, enemy.telegraph, (details_x, y), details_width, MUTED, font=prose_font)
         y += 3 if compact else 6
-        interrupt_color = TEAL if enemy.interruptible else AMBER if self.snapshot and self.snapshot.defensive_objective else MUTED
+        interrupt_color = AMBER if self.snapshot and self.snapshot.defensive_objective else TEAL if enemy.interruptible else MUTED
         y = self._paragraph(surface, self._interrupt_label(enemy), (details_x, y), details_width, interrupt_color, font=body_font)
         y += 2 if compact else 6
-        self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), f"{enemy.intent_label}: {enemy.telegraph}\n{enemy.threat}" + ("\nPower Attack or Mara can interrupt this intent." if enemy.interruptible else "") + "\nDamage is a forecast before your move. Defend, Power Attack, and interruptions can change it."))
+        self.tooltip_hits.append((pg.Rect(details_x, intent_y, details_width, max(20, y - intent_y)), self._intent_help(enemy)))
         if not wide:
             self._status_line(surface, enemy.statuses, details_x, y, details_width, font=body_font)
 
-    def _draw_feedback(self, surface: Any) -> None:
-        pg = self.pg
-        stacked: dict[str, int] = {}
+    def _draw_attack_effects(self, surface: Any) -> None:
+        """Weapon travel lands before numbers, without moving reduced motion."""
+        if self._reduced_motion or self.snapshot is None:
+            return
         for effect in self._effects:
-            if effect.age < 0:
-                continue
             feedback = effect.feedback
-            position = self.actor_positions.get(feedback.target_id) or self.actor_positions.get(feedback.actor_id)
-            if position is None:
+            if feedback.kind not in {"damage", "evade"} or feedback.actor_id == feedback.target_id or not 0 <= effect.age < 0.36:
                 continue
-            x, ground = position
-            labels = {"defend": "GUARDED", "evade": "EVADED", "interrupt": "INTERRUPTED", "fallen": "FALLEN"}
-            if feedback.kind == "damage":
-                text, color = (f"−{feedback.amount}", RED) if feedback.amount else ("BLOCKED", TEAL)
-            elif feedback.kind == "heal":
-                text, color = f"+{feedback.amount}", TEAL
-            else:
-                text, color = labels.get(feedback.kind, feedback.kind.upper()), AMBER
-            font = self.number_font if feedback.kind in ("damage", "heal") else self.small_font
-            glyph = font.render(text, True, color)
-            rise = 0 if self._reduced_motion else int(min(1.0, effect.age) * 25)
-            stack = stacked.get(feedback.target_id, 0)
-            stacked[feedback.target_id] = stack + 1
-            bottom = ground - 102 - rise - stack * 25
-            if self._arena_rect.h < 120:
-                bottom = self._arena_rect.y + glyph.get_height() + 5 + stack * 23
-            pos = glyph.get_rect(midbottom=(x, bottom))
-            label = pos.inflate(12, 6)
-            pg.draw.rect(surface, INK, label)
-            pg.draw.rect(surface, EDGE, label, 1)
-            surface.blit(glyph, pos)
-            if feedback.kind == "defend" and not self._reduced_motion and effect.age < 0.45:
-                pg.draw.arc(surface, TEAL, (x - 26, ground - 88, 52, 80), -math.pi / 2, math.pi / 2, 2)
+            actor = self.actor_positions.get(feedback.actor_id)
+            target = self.actor_rects.get(feedback.target_id)
+            if actor is None or target is None:
+                continue
+            enemy = next((enemy for enemy in self.snapshot.enemies if enemy.id == feedback.actor_id), None)
+            kind = "tobin" if feedback.actor_id == "tobin" else self._kind(enemy.archetype + " " + enemy.name) if enemy else "player"
+            if kind in {"tobin", "archer"} and effect.age < effect.impact_time:
+                start = (actor[0], actor[1] - min(35, round(self._arena_rect.h * 0.35)))
+                progress = effect.age / effect.impact_time
+                end = (target.centerx, target.centery)
+                arrow = (round(start[0] + (end[0] - start[0]) * progress), round(start[1] + (end[1] - start[1]) * progress))
+                direction = 1 if end[0] > start[0] else -1
+                self.pg.draw.line(surface, BONE, (arrow[0] - direction * 12, arrow[1]), arrow, 1)
+                self.pg.draw.lines(surface, AMBER, False, [(arrow[0] - direction * 3, arrow[1] - 3), arrow, (arrow[0] - direction * 3, arrow[1] + 3)], 1)
+            elif effect.impact_time <= effect.age < effect.impact_time + 0.14:
+                radius = min(18, max(7, target.h // 3))
+                center = target.center
+                if feedback.kind == "evade":
+                    center = (center[0] + 20, center[1])
+                color = TEAL if feedback.amount == 0 else BONE
+                self.pg.draw.line(surface, color, (center[0] - radius, center[1] + radius), (center[0] + radius, center[1] - radius), 2)
+                self.pg.draw.line(surface, AMBER if feedback.amount else TEAL, (center[0] - radius + 3, center[1] + radius), (center[0] + radius + 3, center[1] - radius), 1)
+
+    @staticmethod
+    def _feedback_label(feedback: CombatFeedback) -> tuple[str, tuple[int, int, int]]:
+        if feedback.kind == "damage":
+            return (f"−{feedback.amount}", RED) if feedback.amount else ("BLOCKED", TEAL)
+        if feedback.kind == "heal":
+            return (f"+{feedback.amount}" if feedback.amount else "REMEDY"), TEAL
+        return {"defend": "GUARDED", "evade": "EVADED", "interrupt": "INTERRUPTED", "fallen": "FALLEN", "escape": "ESCAPED"}.get(feedback.kind, feedback.kind.upper()), AMBER
+
+    def _draw_feedback(self, surface: Any) -> None:
+        # A formation can deliver Bleeding and three attacks in a single turn.
+        # Keep two readable rows per target, summarizing older numeric hits
+        # rather than piling labels above the canvas or under status badges.
+        grouped: dict[str, list[_Effect]] = {}
+        for effect in self._effects:
+            impact = 0 if self._reduced_motion else effect.impact_time
+            if effect.age < impact:
+                continue
+            actor_id = effect.feedback.target_id if effect.feedback.target_id in self.actor_positions else effect.feedback.actor_id
+            if actor_id in self.actor_positions:
+                grouped.setdefault(actor_id, []).append(effect)
+        compact = self._arena_rect.h < 120
+        number_font = self.compact_number_font if compact else self.number_font
+        word_font = self.mini_font if compact else self.small_font
+        for actor_id, effects in grouped.items():
+            entries = [(self._feedback_label(effect.feedback), effect.feedback.kind in {"damage", "heal"}) for effect in effects[-2:]]
+            if len(effects) > 2:
+                outcome = next((effect for effect in reversed(effects) if effect.feedback.kind in {"interrupt", "fallen", "evade", "defend", "escape"} and effect.age - (0 if self._reduced_motion else effect.impact_time) < 0.9), None)
+                previous = effects[:-1]
+                damage = [effect.feedback.amount for effect in previous if effect.feedback.kind == "damage"]
+                healing = [effect.feedback.amount for effect in previous if effect.feedback.kind == "heal"]
+                if outcome is not None and any(effect.feedback.kind in {"damage", "heal"} for effect in effects):
+                    damage = [effect.feedback.amount for effect in effects if effect.feedback.kind == "damage"]
+                    healing = [effect.feedback.amount for effect in effects if effect.feedback.kind == "heal"]
+                    if healing and damage:
+                        numeric = (f"+{sum(healing)} / −{sum(damage)}", TEAL)
+                    elif healing:
+                        suffix = f" ×{len(healing)}" if len(healing) > 1 else ""
+                        numeric = (f"+{sum(healing)}{suffix}" if sum(healing) else "REMEDY", TEAL)
+                    elif damage:
+                        suffix = f" ×{len(damage)}" if len(damage) > 1 else ""
+                        numeric = (f"−{sum(damage)}{suffix}", RED) if sum(damage) else (f"BLOCKED{suffix}", TEAL)
+                    entries = [(numeric, False), (self._feedback_label(outcome.feedback), False)]
+                elif damage and not healing:
+                    suffix = f" ×{len(damage)}" if len(damage) > 1 else ""
+                    entries[0] = (((f"−{sum(damage)}{suffix}", RED) if sum(damage) else (f"BLOCKED{suffix}", TEAL)), len(damage) == 1 and sum(damage) > 0)
+                elif healing and not damage:
+                    suffix = f" ×{len(healing)}" if len(healing) > 1 else ""
+                    entries[0] = ((f"+{sum(healing)}{suffix}", TEAL), len(healing) == 1)
+            glyphs = [(number_font if numeric else word_font).render(text, True, color) for (text, color), numeric in entries]
+            total_height = sum(glyph.get_height() + 6 for glyph in glyphs) + 3 * (len(glyphs) - 1)
+            actor_rect = self.actor_rects.get(actor_id)
+            ideal = self._arena_rect.y + 4 if compact or actor_rect is None else actor_rect.y - total_height - 9
+            top = max(self._arena_rect.y + 3, min(ideal, self._arena_rect.bottom - total_height - 3))
+            center_x = self.actor_positions[actor_id][0]
+            for glyph, ((text, _), _) in zip(glyphs, entries):
+                label = self.pg.Rect(0, top, glyph.get_width() + 12, glyph.get_height() + 6)
+                label.centerx = center_x
+                label.x = max(self._arena_rect.x + 2, min(label.x, self._arena_rect.right - label.w - 2))
+                self.pg.draw.rect(surface, INK, label)
+                self.pg.draw.rect(surface, EDGE, label, 1)
+                surface.blit(glyph, (label.x + 6, label.y + 3))
+                self.feedback_rects.append(label)
+                self.feedback_labels.append((actor_id, text, label))
+                top = label.bottom + 3
 
     def _draw_tooltip(self, surface: Any) -> None:
         if self._mouse is None:
@@ -620,17 +957,50 @@ class BattleView:
         text = next((text for rect, text in reversed(self.tooltip_hits) if rect.collidepoint(self._mouse)), None)
         if not text:
             return
-        width = min(320, max(170, self._rect.w - 32))
-        lines = [line for paragraph in text.splitlines() for line in _wrapped(paragraph, self.small_font, width - 20)]
-        height = len(lines) * self.small_font.get_linesize() + 16
+        key = (text, self._rect.w, self._rect.h, id(self.small_font), id(self.mini_font))
+        if key not in self._tooltip_layout_cache:
+            width = min(320, max(170, self._rect.w - 32))
+            maximum = max(1, self._rect.h - 12)
+            font = self.small_font
+
+            def layout(selected_font: Any) -> tuple[list[str], int]:
+                lines = [line for paragraph in text.splitlines() for line in _wrapped(paragraph, selected_font, width - 20)]
+                return lines, len(lines) * selected_font.get_linesize() + 16
+
+            lines, height = layout(font)
+            if height > maximum:
+                width = max(40, self._rect.w - 16)
+                lines, height = layout(font)
+            if height > maximum:
+                font = self.mini_font
+                lines, height = layout(font)
+            if height > maximum:
+                lower, upper = 0.35, 1.0
+                for _ in range(9):
+                    scale = round((lower + upper) / 2, 4)
+                    fitted_key = (id(self.mini_font), scale)
+                    if fitted_key not in self._fitted_fonts:
+                        self._fitted_fonts[fitted_key] = _ScaledFont(self.pg, self.mini_font, scale)
+                    candidate = self._fitted_fonts[fitted_key]
+                    candidate_lines, candidate_height = layout(candidate)
+                    if candidate_height <= maximum:
+                        lower = scale
+                        font, lines, height = candidate, candidate_lines, candidate_height
+                    else:
+                        upper = scale
+            if len(self._tooltip_layout_cache) >= 32:
+                self._tooltip_layout_cache.clear()
+            self._tooltip_layout_cache[key] = font, lines, width, height
+        font, lines, width, height = self._tooltip_layout_cache[key]
         x = max(self._rect.x + 8, min(self._mouse[0] + 12, self._rect.right - width - 8))
         y = max(self._rect.y + 4, min(self._mouse[1] - height - 10, self._rect.bottom - height - 4))
         rect = self.pg.Rect(x, y, width, height)
+        self.tooltip_rect = rect.copy()
         self.pg.draw.rect(surface, INK, rect)
         self.pg.draw.rect(surface, AMBER, rect, 1)
         for line in lines:
-            self._text(surface, line, (x + 10, y + 8), BONE, font=self.small_font)
-            y += self.small_font.get_linesize()
+            self._text(surface, line, (x + 10, y + 8), BONE, font=font)
+            y += font.get_linesize()
 
     def draw(self, surface: Any, rect: Any, now_ms: int = 0) -> Any:
         """Draw the arena and full intent cards inside ``rect`` and return it."""
@@ -641,7 +1011,13 @@ class BattleView:
         self.sprite_hits.clear()
         self.tooltip_hits.clear()
         self.actor_positions.clear()
-        self.actor_positions.clear()
+        self.actor_rects.clear()
+        self.party_hits.clear()
+        self.condition_hits.clear()
+        self.feedback_rects.clear()
+        self.feedback_labels.clear()
+        self.target_marker_rect = None
+        self.tooltip_rect = None
         if self.snapshot is None or rect.w <= 0 or rect.h <= 0:
             return rect
         snapshot = self.snapshot
@@ -649,10 +1025,18 @@ class BattleView:
         surface.set_clip(rect.clip(previous_clip))
         pg.draw.rect(surface, INK, rect)
         label = {"active": "CHOOSE YOUR MOVE", "victory": "THE ROAD IS YOURS", "defeat": "THE SHADOW PREVAILS", "escaped": "YOU FOUND A WAY OUT"}.get(snapshot.phase, snapshot.phase.upper())
-        self._text(surface, f"ROUND {snapshot.round_number}" + (f" / {snapshot.max_rounds}" if snapshot.max_rounds else ""), (rect.x + 12, rect.y + 9), AMBER, font=self.banner_font)
+        if snapshot.phase == "victory" and snapshot.defensive_objective:
+            label = "YOU HELD THE LINE"
+        if snapshot.phase == "active" and self.resolving:
+            label = "TURN RESULTS"
+        round_label = f"ROUND {snapshot.round_number}" + (f" / {snapshot.max_rounds}" if snapshot.max_rounds else "")
+        self._text(surface, round_label, (rect.x + 12, rect.y + 9), AMBER, font=self.banner_font)
         phase_width = self.small_font.size(label)[0]
-        self._text(surface, label, (rect.right - phase_width - 12, rect.y + 13), TEAL if snapshot.phase == "victory" else MUTED, font=self.small_font)
-        header_bottom = rect.y + 34
+        phase_left = rect.right - phase_width - 12
+        self._text(surface, label, (phase_left, rect.y + 13), TEAL if snapshot.phase == "victory" else MUTED, font=self.small_font)
+        condition_left = rect.x + 24 + self.banner_font.size(round_label)[0]
+        condition_bottom = self._header_conditions(surface, pg.Rect(condition_left, rect.y + 5, max(40, phase_left - condition_left - 10), 30))
+        header_bottom = max(rect.y + 34, condition_bottom + 6)
         objective = snapshot.objective or ("Read their intent. Choose your target. Survive the road." if snapshot.phase == "active" else "")
         if objective:
             header_bottom = self._paragraph(surface, objective, (rect.x + 12, header_bottom), rect.w - 24, BONE, font=self.small_font) + 7
@@ -675,30 +1059,43 @@ class BattleView:
                 py = arena.y + int((index * 29 - now_ms * 0.009) % max(1, arena.h - 20))
                 pg.draw.rect(surface, (96, 84, 59) if index % 3 else (133, 108, 65), (px, py, 2, 2))
         ground = arena.bottom - (16 if compact else 25)
-        actor_scale = 2 if arena.h >= 116 and arena.w >= 400 else 1
+        available_scale = (arena.h - (16 if compact else 25) - 11) / 48
+        actor_scale = 2 if available_scale >= 2 and arena.w >= 400 else 1 if available_scale >= 1 else 0.75 if available_scale >= 0.75 else 0.5
         player_x = arena.x + max(65, round(arena.w * 0.19))
-        self._draw_actor(surface, "player", "player", (player_x, ground), actor_scale, facing_left=False, alive=snapshot.player.hp > 0, now_ms=now_ms)
-        player_label = snapshot.player.name
-        self._text(surface, player_label, (player_x - self.small_font.size(player_label)[0] // 2, ground + 3), BONE, font=self.small_font)
-        # Companions stand a step behind the traveler rather than becoming
-        # abstract ability names in a menu.
-        for index, companion in enumerate(tuple(companion for companion in snapshot.companions if companion.available)[:2]):
-            ally_x = max(arena.x + 18, player_x - (35 if actor_scale == 1 else 53) - index * (24 if actor_scale == 1 else 30))
-            self._draw_actor(surface, companion.id, self._kind(companion.id + companion.name), (ally_x, ground - 4 - index * 3), 0.65 if actor_scale == 1 else 1, facing_left=False, now_ms=now_ms)
+        companions = tuple(companion for companion in snapshot.companions if companion.available)[:2]
+        ally_anchors = [(max(arena.x + 18, player_x - (35 if actor_scale <= 1 else 53) - index * (24 if actor_scale <= 1 else 30)), ground - 4 - index * 3) for index in range(len(companions))]
         enemies = snapshot.enemies
         enemy_left = arena.x + round(arena.w * 0.50)
         enemy_span = max(1, arena.right - 35 - enemy_left)
+        enemy_anchors = [(enemy_left + round(enemy_span * ((index + 0.5) / max(1, len(enemies)))), ground) for index in range(len(enemies))]
+        # Resolve every destination before drawing the first actor. Otherwise
+        # player attacks cannot travel toward enemies rendered later in order.
+        self.actor_positions.update({"player": (player_x, ground), **{ally.id: anchor for ally, anchor in zip(companions, ally_anchors)}, **{enemy.id: anchor for enemy, anchor in zip(enemies, enemy_anchors)}})
+        self._draw_actor(surface, "player", "player", (player_x, ground), actor_scale, facing_left=False, alive=snapshot.player.hp > 0, now_ms=now_ms)
+        player_label = snapshot.player.name
+        label_width = min(140, round(arena.w * 0.30))
+        while len(player_label) > 1 and self.small_font.size(player_label)[0] > label_width:
+            player_label = player_label[:-2].rstrip() + "…"
+        if "player" in self.actor_rects and snapshot.phase != "escaped":
+            self._text(surface, player_label, (player_x - self.small_font.size(player_label)[0] // 2, ground + 3), BONE, font=self.small_font)
+        # Companions stand a step behind the traveler rather than becoming
+        # abstract ability names in a menu.
+        for index, companion in enumerate(companions):
+            ally_x, ally_ground = ally_anchors[index]
+            party_scale = 0.5 if actor_scale < 1 else 0.65 if actor_scale == 1 else 1
+            self._draw_actor(surface, companion.id, self._kind(companion.id + companion.name), (ally_x, ally_ground), party_scale, facing_left=False, now_ms=now_ms)
+            if companion.id in self.actor_rects and snapshot.phase != "escaped":
+                self._text(surface, companion.name, (ally_x - self.party_font.size(companion.name)[0] // 2, ally_ground + 3), TEAL, font=self.party_font)
         for index, enemy in enumerate(enemies):
-            enemy_x = enemy_left + round(enemy_span * ((index + 0.5) / max(1, len(enemies))))
+            enemy_x, _ = enemy_anchors[index]
             self._draw_actor(surface, enemy.id, self._kind(enemy.archetype + " " + enemy.name), (enemy_x, ground), actor_scale, facing_left=True, alive=enemy.hp > 0, targeted=enemy.id == snapshot.target_id, now_ms=now_ms)
             if enemy.hp > 0:
-                self._health(surface, pg.Rect(enemy_x - 23, ground + 5, 46, 3), enemy.hp, enemy.max_hp)
+                self._health(surface, pg.Rect(enemy_x - 23, ground + 5, 46, 3), enemy.hp, enemy.max_hp, actor_id=enemy.id)
                 number = str(index + 1)
                 number_pos = (enemy_x - 34, ground + 1) if compact else (enemy_x - 3, ground + 10)
                 self._text(surface, number, number_pos, AMBER if enemy.id == snapshot.target_id else MUTED, font=self.mini_font if compact else self.small_font)
+        self._draw_attack_effects(surface)
         self._draw_feedback(surface)
-        # Player conditions remain visible even when a long transcript scrolls.
-        self._arena_conditions(surface, arena)
         surface.set_clip(rect.clip(previous_clip))
         gap = 8
         count = max(1, len(enemies))

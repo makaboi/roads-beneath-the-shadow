@@ -88,6 +88,10 @@ def play_pixel_opening(screenshot: Path):
                         else:
                             key = pg.K_0 + int(answer) if answer.isdigit() else ord(answer)
                             window.handle_event(pg.event.Event(pg.KEYDOWN, key=key, unicode=answer))
+                            if request.kind == "panel" and request.context.get("kind") == "background":
+                                # Background numbers preview a card; explicit
+                                # confirmation chooses the player's identity.
+                                window.handle_event(pg.event.Event(pg.KEYDOWN, key=pg.K_RETURN, unicode="\r"))
                     window.clock.tick(120)
                 window.drain()
                 if worker.is_alive():
@@ -188,6 +192,7 @@ class PixelGameIntegrationTests(unittest.TestCase):
                 game = Game(ui)
                 game.state = self._state()
                 before = game.state.to_dict()
+                before["visited"] = ["chapter1_decision"]
 
                 game._run_journey()
 

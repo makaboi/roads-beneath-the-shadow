@@ -119,7 +119,7 @@ class TerminalUI:
         self.text_speed = self._validate_text_speed(value)
 
     def style(self, text: str, *codes: str) -> str:
-        if not self.color:
+        if not self.color or self.screen_reader:
             return text
         return "".join(codes) + text + Color.RESET
 
@@ -154,10 +154,16 @@ class TerminalUI:
         self.output_fn(self.style(text, *codes))
 
     def rule(self, char: str = "=") -> None:
+        if self.screen_reader:
+            self.write()
+            return
         glyph = char[0] if char else "="
         self.write(glyph * min(72, self.width), color=Color.DIM)
 
     def title(self, text: str) -> None:
+        if self.screen_reader:
+            self.write(text)
+            return
         stage_width = min(72, self.width)
         self.rule()
         self.write(text.center(stage_width), color=Color.YELLOW, bold=True)
@@ -445,6 +451,8 @@ class TerminalUI:
 
     def meter(self, label: str, value: int, maximum: int, *, color: str = Color.GREEN) -> str:
         maximum = max(1, maximum)
+        if self.screen_reader:
+            return f"{label}: {value} of {maximum}"
         bar_width = max(8, min(16, self.width - 20))
         filled = max(0, min(bar_width, round((value / maximum) * bar_width)))
         bar = "#" * filled + "-" * (bar_width - filled)

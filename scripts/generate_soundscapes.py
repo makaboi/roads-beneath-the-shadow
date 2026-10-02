@@ -98,8 +98,11 @@ class Canvas:
 
     def samples(self) -> array:
         peak = max(max(abs(value) for value in self.left), max(abs(value) for value in self.right), 0.001)
-        # A fixed safe ceiling leaves considerable headroom for gameplay cues.
-        scale = 0.29 / peak if peak > 0.29 else 1.0
+        rms = math.sqrt((sum(value * value for value in self.left) + sum(value * value for value in self.right)) / (self.frames * 2))
+        # Match perceived bed levels across rooms rather than making quiet
+        # wind nearly disappear at the default volume. A -23 dBFS RMS target
+        # remains restrained, and the peak ceiling leaves ample cue headroom.
+        scale = min(10 ** (-23 / 20) / max(rms, 0.001), 0.29 / peak)
         result = array("h")
         for left, right in zip(self.left, self.right):
             result.append(round(left * scale * 32_767))

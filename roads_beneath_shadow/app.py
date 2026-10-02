@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from uuid import uuid4
 from collections.abc import Sequence
 
 from .artwork import (
@@ -122,6 +123,7 @@ class Game:
         )).validate()
         self.ui.music_volume = self.user_settings.music_volume
         self.ui.sfx_volume = self.user_settings.sfx_volume
+        self.ui.text_size = self.user_settings.text_size
         self.profile = profile
         selected_difficulty = difficulty or DIFFICULTY_MODES[self.user_settings.difficulty]
         self.combat = CombatEngine(ui, self.rng, difficulty=selected_difficulty)
@@ -219,7 +221,24 @@ class Game:
                 f"{origin.name} — HP {origin.max_hp}, STR {origin.strength}, CUN {origin.cunning}, WIL {origin.will}"
                 for origin in ORIGINS
             ]
-            selected = self.ui.choose("Choose your background", labels)
+            background_choice = getattr(self.ui, "choose_background", None)
+            if callable(background_choice):
+                from .player_view import background_snapshot
+
+                response = background_choice(background_snapshot())
+                if isinstance(response, dict):
+                    if response.get("action") == "close":
+                        return False
+                    selected = next((index for index, item in enumerate(ORIGINS, 1) if item.origin_id == response.get("origin_id")), None)
+                else:
+                    selected = response
+                if selected is None:
+                    return False
+                if type(selected) is not int or not 1 <= selected <= len(ORIGINS):
+                    self.ui.write("Choose one of the three backgrounds.", color=Color.RED)
+                    continue
+            else:
+                selected = self.ui.choose("Choose your background", labels)
             if selected is None:
                 continue
             origin = ORIGINS[selected - 1]
@@ -278,6 +297,10 @@ class Game:
     def _run_journey(self) -> None:
         assert self.state is not None
         while self.state is not None:
+            from .player_view import LOCATIONS
+
+            if self.state.scene in LOCATIONS:
+                self.state.visit(self.state.scene)
             self._record_checkpoint()
             if self.state.ending:
                 self._show_ending()
@@ -802,7 +825,8 @@ class Game:
                 return False
             route = routes[choice - 1]
             if route == "north_gate":
-                if len(self.state.visited) < 2:
+                investigations = {"messenger_room", "stable_yard", "pony_kitchen", "mara_fire"}
+                if len(investigations.intersection(self.state.visited)) < 2:
                     self.ui.write(
                         "The letter gives you a destination, but too much about tonight remains unknown. "
                         "Investigate at least two places before leaving the Pony.",
@@ -1766,12 +1790,22 @@ class Game:
             ),
         )
         if result == CombatResult.VICTORY:
-            self.state.flags["defeated_ghorak"] = True
-            self.ui.narrate(
-                "Ghorak falls against the star-door. His ash-white hand leaves one last print, then "
-                "slides away. Calenor's broken sword rings on the stone. From the passage above comes "
-                "the slow tread of a horse that should never fit inside the hill."
-            )
+            if max_rounds is not None and enemies[0].hp > 0:
+                self.state.flags["escaped_ghorak_collapse"] = True
+                self.ui.narrate(
+                    "The sixth falling arch breaks the wayhouse in two. You cross the last strip of "
+                    "stone as Ghorak's cleaver bites into the gap behind you. Calenor's broken sword "
+                    "is knocked from his back and rings beside the star-door. The captain is still "
+                    "alive, cut off beyond the collapse. From the passage above comes the slow tread "
+                    "of a horse that should never fit inside the hill."
+                )
+            else:
+                self.state.flags["defeated_ghorak"] = True
+                self.ui.narrate(
+                    "Ghorak falls against the star-door. His ash-white hand leaves one last print, then "
+                    "slides away. Calenor's broken sword rings on the stone. From the passage above comes "
+                    "the slow tread of a horse that should never fit inside the hill."
+                )
         else:
             character.hp = 1
             self.state.flags["defeated_by_ghorak"] = True
@@ -1995,6 +2029,8 @@ class Game:
 
         if flags.get("defeated_ghorak"):
             battle = "Ghorak was defeated; Calenor's broken sword and the initiative pass to you."
+        elif flags.get("escaped_ghorak_collapse"):
+            battle = "You survived the collapsing wayhouse and cut Ghorak off beyond the fallen arches."
         else:
             battle = "Ghorak defeated you; the Black Rider marked the threshold before you escaped below."
 
@@ -2045,7 +2081,7 @@ class Game:
                 color=Color.SILVER,
             )
             self.ui.narrate(
-                "We guarded the road. The Shadow was waking the city.", color=Color.SILVER
+                "The road was only the beginning. The Shadow was waking the city.", color=Color.SILVER
             )
             self.ui.write(
                 "These choices shape the road to Fornost.", color=Color.YELLOW, bold=True
@@ -2053,7 +2089,7 @@ class Game:
             self.ui.write()
             self.ui.write("PART II COMPLETE", color=Color.YELLOW, bold=True)
             self.ui.narrate(
-                "The road continues in Part III: The Waking City.", color=Color.CYAN
+                "The road will continue in Part III: The Waking City.", color=Color.CYAN
             )
         else:
             self.ui.write(
@@ -2067,6 +2103,8 @@ class Game:
             self.ui.title("ACHIEVEMENTS UNLOCKED")
             for achievement in unlocked:
                 self.ui.write(f"* {ACHIEVEMENTS[achievement]}", color=Color.GREEN)
+        if getattr(self, "_completion_notice", ""):
+            self.ui.write(self._completion_notice, color=Color.YELLOW)
         options = ["Save this journey", "Return to the main menu"]
         if self.state.chapter == 1 and self.state.ending in PART_ONE_ENDINGS:
             options.append("Begin Part II — The Dead Road")
@@ -2080,6 +2118,7 @@ class Game:
         """Record a completed route exactly once, even if its save is reopened."""
 
         assert self.state is not None
+        self._completion_notice = ""
         recorded_flag = f"profile_recorded_part_{self.state.chapter}"
         legacy_recorded = self.state.chapter == 1 and self.state.flags.get("profile_recorded")
         if self.profile is None or self.state.flags.get(recorded_flag) or legacy_recorded:
@@ -2087,20 +2126,33 @@ class Game:
         try:
             unlocked = self.profile.record(self.state)
         except OSError:
+            self._completion_notice = "The Chronicle could not be saved. You can still save this journey in a manual slot."
             return []
+        if self.profile.last_recovery_backup is not None:
+            self._completion_notice = (
+                "Your new deeds have been recorded. The damaged earlier Chronicle was kept as "
+                + self.profile.last_recovery_backup.name
+                + "."
+            )
         self.state.flags[recorded_flag] = True
         return unlocked
 
     def _show_chronicle(self) -> None:
         profile = self.profile.load() if self.profile is not None else PlayerProfile()
+        notice = (
+            "The Chronicle could not be read. Its existing file has been kept; your journey saves are still available."
+            if self.profile is not None and getattr(self.profile, "last_load_error", None) else ""
+        )
         panel = getattr(self.ui, "show_panel", None)
         if callable(panel):
             from .player_view import chronicle_snapshot
 
-            panel("chronicle", chronicle_snapshot(profile))
+            panel("chronicle", {**chronicle_snapshot(profile), "notice": notice})
             return
         self.ui.clear()
         self.ui.title("THE TRAVELER'S CHRONICLE")
+        if notice:
+            self.ui.write(notice, color=Color.YELLOW)
         if profile.completed_runs == 0:
             self.ui.narrate(
                 "No completed road has yet been written here. Finish Part I to record an ending, "
@@ -2109,7 +2161,7 @@ class Game:
             self.ui.pause()
             return
 
-        self.ui.write(f"Completed journeys: {profile.completed_runs}", color=Color.CYAN, bold=True)
+        self.ui.write(f"Completed episodes: {profile.completed_runs}", color=Color.CYAN, bold=True)
         origins = ", ".join(origin.replace("_", " ").title() for origin in profile.origins_completed)
         self.ui.write(f"Origins completed: {origins or 'None'}")
         self.ui.write()
@@ -2124,6 +2176,8 @@ class Game:
         self.ui.pause()
 
     def _story_choice(self, heading: str, options: Sequence[str]) -> int | None:
+        self._active_decision = {"heading": heading, "options": tuple(options)}
+        self.ui.story_decision_token = uuid4().hex
         while True:
             # Exploration and conversation loops may finish several choices
             # without changing the scene ID. Each new decision is a safe stop.
@@ -2142,6 +2196,7 @@ class Game:
                 for index, option in enumerate(options, 1):
                     self.ui.write(f"[{index}] {option}")
                 self.ui.write("[I] Inventory  [C] Character  [J] Journal  [S] Save  [M] Main menu", color=Color.DIM)
+                self.ui.write("[R] Road map  [P] Pause  [H] Controls", color=Color.DIM)
                 answer = self.ui.prompt("Enter your choice: ").lower()
             if answer.isdigit() and 1 <= int(answer) <= len(options):
                 return int(answer)
@@ -2155,10 +2210,36 @@ class Game:
                 self._show_route_map()
             elif answer in {"s", "save"}:
                 self._save_menu()
+            elif answer in {"p", "pause"}:
+                if not self._pause_menu():
+                    return None
+            elif answer in {"h", "help", "controls"}:
+                self._how_to_play()
             elif answer in {"m", "menu", "q", "quit"}:
                 return None
             else:
                 self.ui.write("Choose a number or one of the listed commands.", color=Color.RED)
+
+    def _pause_menu(self) -> bool:
+        """Manage a journey at a safe decision without changing that decision."""
+        while True:
+            choice = self.ui.choose("JOURNEY PAUSED", [
+                "Return to the road",
+                "Save this journey",
+                "Settings",
+                "How to play",
+                "Return to the main menu",
+            ], allow_back=True)
+            if choice is None or choice == 1:
+                return True
+            if choice == 2:
+                self._save_menu()
+            elif choice == 3:
+                self._settings()
+            elif choice == 4:
+                self._how_to_play()
+            elif choice == 5:
+                return False
 
     def _inventory_menu(self) -> None:
         assert self.state is not None
@@ -2167,8 +2248,11 @@ class Game:
         if callable(panel):
             from .player_view import player_snapshot
 
+            notice = None
             while True:
-                action = panel("inventory", player_snapshot(self.state))
+                snapshot = player_snapshot(self.state)
+                snapshot["notice"] = notice
+                action = panel("inventory", snapshot)
                 if not isinstance(action, dict) or action.get("action") == "close":
                     return
                 item_id = action.get("item_id")
@@ -2252,7 +2336,7 @@ class Game:
         if callable(panel):
             from .player_view import player_snapshot
 
-            panel("journal", player_snapshot(self.state))
+            panel("journal", player_snapshot(self.state, decision=getattr(self, "_active_decision", None)))
             return
         self.ui.title("JOURNAL")
         self.ui.write("Active quests", color=Color.YELLOW, bold=True)
@@ -2272,7 +2356,7 @@ class Game:
         assert self.state is not None
         from .player_view import route_snapshot
 
-        snapshot = route_snapshot(self.state)
+        snapshot = route_snapshot(self.state, decision=getattr(self, "_active_decision", None))
         panel = getattr(self.ui, "show_panel", None)
         if callable(panel):
             panel("map", snapshot)
@@ -2374,42 +2458,17 @@ class Game:
     def _how_to_play(self) -> None:
         panel = getattr(self.ui, "show_panel", None)
         if callable(panel):
-            panel("information", {
-                "title": "HOW TO PLAY",
-                "subtitle": "Your first steps beneath the shadow",
-                "sections": [
-                    {"heading": "Explore", "text":
-                "In Bree and the other exploration rooms, use WASD or the arrow keys to walk. "
-                "Press E beside a person, object, or exit to interact. You can also click a "
-                "marked place to walk to it. The numbered choices provide another way to act."},
-                    {"heading": "Read the story", "text":
-                "Read each story page with Space or Enter, then choose an answer. Tab opens "
-                "the transcript so you can read earlier passages. During combat, click an "
-                "enemy to target it and choose an action from the battle menu."},
-                    {"heading": "Your pack, journal, and road map", "text":
-                "At story choices, I opens your pack, C shows your character, J opens the "
-                "journal, and R shows the road map. F5 saves your journey. Escape closes "
-                "a panel; M returns to the main menu. Automatic scene checkpoints can be "
-                "resumed from the main menu and turned off in Settings."},
-                    {"heading": "Combat", "text":
-                "Enemies announce their next intent before you act. Attack costs no Focus. "
-                "Power attacks spend Focus, interrupt dangerous moves, and leave you Exposed. "
-                "Defend halves every incoming attack for one round and restores Focus. Each "
-                "background has one special ability per battle. Companion commands help you "
-                "disrupt, weaken, or defend. Inspect explains an enemy without spending your turn."},
-                    {"heading": "Choices and consequences", "text":
-                "Hope, corruption, trust, clues, and surviving companions change available "
-                "routes. The road remembers your choices."},
-                ],
-            })
+            from .controls import controls_snapshot
+
+            panel("information", controls_snapshot())
             return
         self.ui.clear()
         self.ui.title("HOW TO PLAY")
         self.ui.narrate(
-            "Enter the number beside a story choice or combat action. Menus also support W/S, the "
-            "arrow keys, and Return in an interactive terminal. At story "
+            "Enter the number beside a story choice or combat action, then press Return. "
+            "Menus also support W/S and the arrow keys in an interactive terminal when screen-reader mode is off. At story "
             "choices, use I for inventory, C for character status, J for the journal, S to save, "
-            "or M to return to the main menu."
+            "R for the road map, P for the pause menu, H for controls, or M to return to the main menu."
         )
         self.ui.write("Combat", color=Color.YELLOW, bold=True)
         self.ui.narrate(
@@ -2431,15 +2490,15 @@ class Game:
             color = self.user_settings.color_mode.title()
             speed = str(self.user_settings.text_speed).title()
             motion = "Reduced" if self.ui.reduced_motion else "Full"
-            reader = "On" if self.ui.screen_reader else "Off"
+            reader = "On" if self.user_settings.screen_reader else "Off"
             difficulty = DIFFICULTY_DESCRIPTIONS[self.user_settings.difficulty]
             graphical = bool(getattr(self.ui, "supports_checkpoints", False))
             options = [
                 f"Sound: {sound}" if graphical else f"Original sound cues: {sound}",
-                f"Color mode: {color}",
-                f"Narration speed: {speed}",
+                f"Color: {'Grayscale' if self.user_settings.color_mode == 'off' else 'Full'}" if graphical else f"Color mode: {color}",
+                f"Text speed: {speed}",
                 f"Motion: {motion}",
-                f"Screen-reader mode: {reader}",
+                f"Terminal on next launch: {reader}" if graphical else f"Screen-reader mode: {reader}",
                 f"Difficulty: {difficulty}",
             ]
             if graphical:
@@ -2447,9 +2506,10 @@ class Game:
                     f"Music volume: {self.user_settings.music_volume:.0%}",
                     f"Sound-effect volume: {self.user_settings.sfx_volume:.0%}",
                     f"Automatic checkpoints: {'On' if self.user_settings.autosave else 'Off'}",
+                    f"Reading text size: {self.user_settings.text_size.title()}",
                 ])
             options.append("Back")
-            choice = self.ui.choose("SETTINGS", options)
+            choice = self.ui.choose("SETTINGS", options, allow_back=True)
             if choice == 1:
                 self.ui.sound_enabled = not self.ui.sound_enabled
                 self.user_settings.sound = self.ui.sound_enabled
@@ -2472,8 +2532,9 @@ class Game:
                 self.ui.reduced_motion = not self.ui.reduced_motion
                 self.user_settings.reduced_motion = self.ui.reduced_motion
             elif choice == 5:
-                self.ui.screen_reader = not self.ui.screen_reader
-                self.user_settings.screen_reader = self.ui.screen_reader
+                self.user_settings.screen_reader = not self.user_settings.screen_reader
+                if not graphical:
+                    self.ui.screen_reader = self.user_settings.screen_reader
             elif choice == 6:
                 difficulties = ["story", "ranger", "shadow"]
                 current = difficulties.index(self.user_settings.difficulty)
@@ -2488,6 +2549,10 @@ class Game:
                 setattr(self.ui, field, volume)
             elif graphical and choice == 9:
                 self.user_settings.autosave = not self.user_settings.autosave
+            elif graphical and choice == 10:
+                sizes = ("standard", "large", "larger")
+                self.user_settings.text_size = sizes[(sizes.index(self.user_settings.text_size) + 1) % len(sizes)]
+                self.ui.text_size = self.user_settings.text_size
             else:
                 return
             self._persist_settings()

@@ -1,4 +1,4 @@
-"""Persistent player preferences for the terminal presentation and difficulty."""
+"""Persistent presentation, accessibility, audio, and difficulty preferences."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from .savegame import default_save_directory
 SETTINGS_VERSION = 1
 COLOR_MODES = {"auto", "on", "off"}
 TEXT_SPEEDS = {"slow", "normal", "fast", "instant"}
+TEXT_SIZES = {"standard", "large", "larger"}
 DIFFICULTIES = {"story", "ranger", "shadow"}
 
 
@@ -32,6 +33,7 @@ class UserSettings:
     autosave: bool = True
     music_volume: float = 0.25
     sfx_volume: float = 0.6
+    text_size: str = "standard"
     version: int = SETTINGS_VERSION
 
     def validate(self) -> "UserSettings":
@@ -39,6 +41,8 @@ class UserSettings:
             self.color_mode = "auto"
         if not isinstance(self.text_speed, str) or self.text_speed not in TEXT_SPEEDS:
             self.text_speed = "normal"
+        if not isinstance(self.text_size, str) or self.text_size not in TEXT_SIZES:
+            self.text_size = "standard"
         if not isinstance(self.difficulty, str) or self.difficulty not in DIFFICULTIES:
             self.difficulty = "ranger"
         if not isinstance(self.sound, bool):
@@ -74,15 +78,15 @@ class SettingsManager:
         self.path = path or default_save_directory().parent / "settings.json"
 
     def load(self) -> UserSettings:
-        if not self.path.exists():
-            return UserSettings()
         try:
+            if not self.path.exists():
+                return UserSettings()
             with self.path.open("r", encoding="utf-8") as source:
                 payload = json.load(source)
             if not isinstance(payload, dict):
                 return UserSettings()
             return UserSettings.from_dict(payload)
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        except (OSError, TypeError, ValueError, RecursionError):
             return UserSettings()
 
     def save(self, settings: UserSettings) -> Path:

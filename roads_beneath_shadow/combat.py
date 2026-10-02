@@ -151,6 +151,9 @@ class CombatEngine:
             enemy.current_intent = "strike"
             enemy.turn_count = self._opening_turn_index(enemy)
 
+        begin = getattr(self.ui, "combat_begin", None)
+        if callable(begin):
+            begin()
         self.ui.sound("danger")
         self.ui.title("COMBAT")
         self.ui.narrate(config.location_text, color=Color.RED)
@@ -217,11 +220,13 @@ class CombatEngine:
                 self._origin
                 and self._origin.ability_name
                 and (
-                    not defensive_objective or self._origin.ability_id == "field_remedy"
+                    not defensive_objective or self._origin.ability_id in {"field_remedy", "stand_fast"}
                 )
             ):
                 actions.append("origin")
                 availability = "spent" if self._ability_used else "-1 Focus"
+                if defensive_objective and self._origin.ability_id == "stand_fast":
+                    availability += ", guard and cleanse"
                 options.append(f"{self._origin.ability_name} ({availability})")
             if config.mara_aid:
                 actions.append("mara_guard" if defensive_objective else "mara")
@@ -312,12 +317,12 @@ class CombatEngine:
                     [f"{enemy.name} ({enemy.hp}/{enemy.max_hp} Health)" for enemy in living],
                     allow_back=True,
                 )
-                if target is not None:
+                if isinstance(target, int) and not isinstance(target, bool) and 1 <= target <= len(living):
                     active = living[target - 1]
                     self.ui.write(f"You turn your attention to {active.name}.", color=Color.CYAN)
                 consumes_turn = False
             elif action == "origin":
-                consumes_turn, defended = self._use_origin_ability(state, active)
+                consumes_turn, defended = self._use_origin_ability(state, active, defensive_objective=defensive_objective)
                 if not consumes_turn:
                     continue
             elif action in {"mara_guard", "tobin_guard"}:
@@ -364,6 +369,7 @@ class CombatEngine:
             elif action == "flee":
                 if self.rng.randint(1, 6) + character.cunning + self._profile.flee_bonus >= 6:
                     self.ui.write("You overturn a table and vanish through the smoke.", color=Color.CYAN)
+                    self._feedback("escape", "player", "player", 0, "You find an opening and escape.")
                     self._publish_snapshot(state, enemies, round_number, active, config, phase="escaped")
                     self._player_statuses.clear()
                     return CombatResult.ESCAPED
@@ -382,6 +388,8 @@ class CombatEngine:
             if not character.alive:
                 break
             self._enemy_phase(state, enemies, defended=defended, config=config)
+            if not character.alive or not any(enemy.alive for enemy in enemies):
+                break
             round_number += 1
             prepare_round = True
             if config.max_rounds and round_number > config.max_rounds and character.alive:
@@ -530,6 +538,8 @@ class CombatEngine:
             elif action == "item" and character.hp >= character.max_hp and not self._player_statuses.get("bleeding"):
                 reason = "Already at full Health"
             description = self._origin.ability_description if action == "origin" and self._origin else ACTION_DESCRIPTIONS.get(action, "")
+            if action == "origin" and self._origin and self._origin.ability_id == "stand_fast" and config.objective_enemy_invulnerable:
+                description = "Guard every incoming physical hit and clear Bleeding and Exposed. This survival stance does not counterattack."
             action_views.append(CombatActionView(action, label, cost, not reason, reason, description))
         hook(CombatSnapshot(
             round_number=round_number, phase=phase, difficulty=self._difficulty.value,
@@ -674,7 +684,7 @@ class CombatEngine:
         if self._player_statuses.get("evade", 0):
             self._decrement_status(self._player_statuses, "evade")
             self.ui.write(f"You evade {enemy.name}'s {spec.label} completely.", color=Color.CYAN, bold=True)
-            self._feedback("evade", "player", "player", 0, "Attack evaded")
+            self._feedback("evade", self._enemy_id(enemy), "player", 0, "Attack evaded")
             return
 
         raw = self.rng.randint(enemy.attack_min, enemy.attack_max) + spec.damage_bonus
@@ -716,7 +726,7 @@ class CombatEngine:
             self._player_statuses["bleeding"] = max(2, self._player_statuses.get("bleeding", 0))
             self.ui.write("You are Bleeding. Remedy it before the next enemy phase.", color=Color.MAGENTA)
 
-        if self._player_statuses.pop("riposte", 0) and character.alive and enemy.alive:
+        if self._player_statuses.pop("riposte", 0) and character.alive and enemy.alive and not config.objective_enemy_invulnerable:
             counter = character.strength + 2
             enemy.hp = max(0, enemy.hp - counter)
             self.ui.write(f"You answer from behind your guard for {counter} damage!", color=Color.GREEN)
@@ -739,6 +749,8 @@ class CombatEngine:
         self,
         state: GameState,
         enemy: Enemy,
+        *,
+        defensive_objective: bool = False,
     ) -> tuple[bool, bool]:
         character = state.character
         origin = self._origin
@@ -756,9 +768,15 @@ class CombatEngine:
         if origin.ability_id == "stand_fast":
             self._player_statuses.pop("exposed", None)
             self._player_statuses.pop("bleeding", None)
-            self._player_statuses["riposte"] = 1
+            if not defensive_objective:
+                self._player_statuses["riposte"] = 1
+            message = (
+                "STAND FAST — You clear Bleeding and Exposed and guard every blow until this round ends."
+                if defensive_objective
+                else "STAND FAST — You clear Bleeding and Exposed, guard every blow, and ready a counter."
+            )
             self.ui.write(
-                "STAND FAST — You clear Bleeding and Exposed, guard every blow, and ready a counter.",
+                message,
                 color=Color.CYAN,
                 bold=True,
             )
@@ -848,7 +866,7 @@ class CombatEngine:
             return False
         labels = [f"{ITEMS[item_id].name} x{character.inventory[item_id]}" for item_id in consumables]
         choice = self.ui.choose("Use which item?", labels, allow_back=True)
-        if choice is None:
+        if isinstance(choice, bool) or not isinstance(choice, int) or not 1 <= choice <= len(consumables):
             return False
         item = ITEMS[consumables[choice - 1]]
         if character.hp >= character.max_hp and not self._player_statuses.get("bleeding"):
@@ -906,11 +924,17 @@ class CombatEngine:
         for enemy in enemies:
             if not enemy.alive:
                 continue
-            marker = " < TARGET" if enemy is target else ""
-            self.ui.write(self.ui.meter(enemy.name[:7], enemy.hp, enemy.max_hp, color=Color.RED) + marker)
+            reader = self.ui.screen_reader
+            label = enemy.name if reader else enemy.name[:7]
+            marker = (" (targeted)" if reader else " < TARGET") if enemy is target else ""
+            self.ui.write(self.ui.meter(label, enemy.hp, enemy.max_hp, color=Color.RED) + marker)
             intent = INTENTS.get(enemy.current_intent, INTENTS["strike"])
-            warning = " !" if intent.interruptible else ""
-            self.ui.write(f"  -> {intent.label}{warning}: {intent.telegraph}", color=Color.YELLOW)
+            if reader:
+                warning = " (can be interrupted)" if intent.interruptible else ""
+                self.ui.write(f"Intent: {intent.label}{warning}: {intent.telegraph}", color=Color.YELLOW)
+            else:
+                warning = " !" if intent.interruptible else ""
+                self.ui.write(f"  -> {intent.label}{warning}: {intent.telegraph}", color=Color.YELLOW)
             effects = [name.title() for name, turns in enemy.statuses.items() if turns]
             if effects:
                 self.ui.write("     " + ", ".join(effects), color=Color.DIM)

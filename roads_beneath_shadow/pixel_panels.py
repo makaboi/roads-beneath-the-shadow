@@ -8,8 +8,12 @@ engine to validate.  Closing a panel leaves the caller's story page intact.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from .pixel_theme import load_font
+from .pixel_world import origin_portrait_rect
 
 
 INK = (16, 21, 27)
@@ -30,10 +34,13 @@ _TITLES = {
     "saves": ("CAMPFIRE MEMORIES", "Keep a place on the road"),
     "chronicle": ("THE TRAVELER'S CHRONICLE", "The roads you finished and the deeds remembered"),
     "information": ("NOTES FROM THE ROAD", "Read closely, then return to your journey"),
+    "background": ("WHO WALKS THIS ROAD?", "Left / Right or click: compare. Enter: choose."),
 }
 _TABS = {
     "inventory": (("All items", "all"), ("Equipment", "gear"), ("Supplies", "supplies"), ("Keepsakes", "quest")),
-    "journal": (("Active quests", "active"), ("Completed", "completed"), ("Clues", "clues")),
+    "journal": (("Active quests", "active"), ("Completed", "completed"), ("Clues", "clues"), ("This stop", "decision")),
+    "map": (("This stop", "here"), ("Remembered roads", "route")),
+    "chronicle": (("Overview", "all"), ("Earned", "earned"), ("Still to discover", "open")),
 }
 _ICONS = {
     "weapon": ("..........aa", ".........aa.", "........aa..", ".......aa...", "......aa....", ".....aa.....", "..a.aa......", "...aaa......", "...aaa......", "..aa..a.....", ".aa.........", "............"),
@@ -79,7 +86,8 @@ class PanelView:
     """A snapshot-driven modal. ``handle_event`` returns (handled, result).
 
     Results are ``{'action': 'close'}``, inventory ``equip`` / ``use`` with
-    ``item_id``, or saves ``select_slot`` with ``slot``.  An action never edits
+    ``item_id``, saves ``select_slot`` with ``slot``, or ``choose_origin`` with
+    ``origin_id``. An action never edits
     the supplied snapshot.  Tab changes categories, arrows browse, and Escape
     always returns to the current scene.  pygame must already be initialized.
     """
@@ -98,20 +106,23 @@ class PanelView:
         self.hit_targets: list[tuple[Any, str, Any]] = []
         self.content_rect = pg.Rect(0, 0, 0, 0)
         self.detail_rect = pg.Rect(0, 0, 0, 0)
+        self.detail_body_rect = pg.Rect(0, 0, 0, 0)
+        self._inventory_memory: dict[str, Any] | None = None
+        self._scrollbars: dict[str, tuple[Any, Any, int]] = {}
+        self._dragging: tuple[str, int] | None = None
         self._ensure_selection = True
         self._font_size = 0
-        self._portraits: dict[tuple[int, int], Any] = {}
+        self._portraits: dict[tuple[Any, int], Any] = {}
         self._fonts(16)
 
     def _fonts(self, size: int) -> None:
         if self._font_size == size:
             return
         self._font_size = size
-        name = "dejavusansmono,courier,monospace"
-        self.font = self.pg.font.SysFont(name, size)
-        self.small_font = self.pg.font.SysFont(name, max(11, size - 3))
-        self.bold_font = self.pg.font.SysFont(name, size, bold=True)
-        self.title_font = self.pg.font.SysFont(name, size + 8, bold=True)
+        self.font = load_font(self.pg, size)
+        self.small_font = load_font(self.pg, max(11, size - 3))
+        self.bold_font = load_font(self.pg, size, bold=True)
+        self.title_font = load_font(self.pg, size + 8, bold=True)
         self.line_height = self.font.get_linesize() + 3
 
     def open(self, kind: str, data: dict[str, Any]) -> None:
@@ -123,11 +134,28 @@ class PanelView:
         self.selected = self.tab_index = self.scroll = self.detail_scroll = 0
         self.max_scroll = self.max_detail_scroll = 0
         self.hit_targets = []
+        self._scrollbars = {}
+        self._dragging = None
         self._ensure_selection = True
+        memory = self._inventory_memory
+        if kind == "inventory" and memory and data.get("journey_id") and memory["journey_id"] == data["journey_id"]:
+            self.tab_index = memory["tab_index"]
+            items = self.visible_items()
+            self.selected = next((index for index, item in enumerate(items) if item.get("id") == memory["item_id"]), min(memory["selected"], max(0, len(items) - 1)))
+            self.scroll = memory["scroll"]
+            self.detail_scroll = memory["detail_scroll"] if items and items[self.selected].get("id") == memory["item_id"] else 0
 
     def close(self) -> None:
+        if self.active and self.kind == "inventory" and self.data.get("journey_id"):
+            item = self._selected_item()
+            self._inventory_memory = {
+                "journey_id": self.data["journey_id"], "tab_index": self.tab_index,
+                "item_id": item.get("id") if item else None, "selected": self.selected,
+                "scroll": self.scroll, "detail_scroll": self.detail_scroll,
+            }
         self.active = False
         self.hit_targets = []
+        self._dragging = None
 
     @property
     def tab(self) -> str:
@@ -161,8 +189,29 @@ class PanelView:
         if item.get("slot") and not item.get("equipped"):
             return {"action": "equip", "item_id": item["id"]}
         if _number(item.get("healing")) > 0:
+            character = self.data.get("character", self.data)
+            if _number(character.get("max_hp")) > 0 and _number(character.get("hp")) >= _number(character["max_hp"]):
+                return None
             return {"action": "use", "item_id": item["id"]}
         return None
+
+    def _recovery_amount(self, item: dict[str, Any]) -> int:
+        character = self.data.get("character", self.data)
+        capacity = _number(item.get("healing_effective", item.get("healing")))
+        if "healing_effective" not in item and character.get("origin") == "healers_apprentice":
+            capacity += 2
+        if _number(character.get("max_hp")) > 0:
+            return min(capacity, max(0, _number(character["max_hp"]) - _number(character.get("hp"))))
+        return capacity
+
+    def _equipment_difference(self, item: dict[str, Any]) -> tuple[int, str]:
+        key, label = ("attack", "attack") if item.get("slot") == "weapon" else ("defense", "armor")
+        if f"{key}_delta" in item:
+            return _number(item[f"{key}_delta"]), label
+        equipped = next((other for other in self.data.get("items", []) if isinstance(other, dict) and other.get("slot") == item.get("slot") and other.get("equipped")), None)
+        character = self.data.get("character", self.data)
+        baseline = _number(equipped.get(key)) if equipped else _number(character.get("weapon_attack" if key == "attack" else "armor_defense"))
+        return _number(item.get(key)) - baseline, label
 
     def _change_tab(self, direction: int) -> None:
         tabs = _TABS.get(self.kind, ())
@@ -172,7 +221,7 @@ class PanelView:
             self._ensure_selection = True
 
     def _move_selection(self, direction: int) -> None:
-        entries = self.visible_items() if self.kind == "inventory" else self.data.get("slots", [])
+        entries = self.visible_items() if self.kind == "inventory" else self.data.get("origins" if self.kind == "background" else "slots", [])
         if entries:
             self.selected = max(0, min(self.selected + direction, len(entries) - 1))
             self.detail_scroll = 0
@@ -189,6 +238,9 @@ class PanelView:
         if not self.active:
             return False, None
         pg = self.pg
+        if event.type == getattr(pg, "WINDOWFOCUSLOST", -1):
+            self._dragging = None
+            return False, None
         if event.type in {pg.QUIT, pg.VIDEORESIZE, getattr(pg, "WINDOWRESIZED", -1)}:
             return False, None
         if event.type == pg.KEYDOWN:
@@ -198,10 +250,21 @@ class PanelView:
             if key == pg.K_ESCAPE:
                 self.close()
                 return True, {"action": "close"}
+            if self.kind == "background" and key in {pg.K_1, pg.K_2, pg.K_3}:
+                self._choose_background_index(key - pg.K_1)
+                return True, None
             if key == pg.K_TAB:
-                self._change_tab(-1 if getattr(event, "mod", 0) & pg.KMOD_SHIFT else 1)
+                direction = -1 if getattr(event, "mod", 0) & pg.KMOD_SHIFT else 1
+                if self.kind == "background":
+                    self._cycle_background(direction)
+                else:
+                    self._change_tab(direction)
             elif key in {pg.K_LEFT, pg.K_RIGHT}:
-                self._change_tab(-1 if key == pg.K_LEFT else 1)
+                direction = -1 if key == pg.K_LEFT else 1
+                if self.kind == "background":
+                    self._cycle_background(direction)
+                else:
+                    self._change_tab(direction)
             elif key in {pg.K_UP, pg.K_DOWN}:
                 direction = -1 if key == pg.K_UP else 1
                 if self.kind in {"inventory", "saves"}:
@@ -225,6 +288,8 @@ class PanelView:
                     return True, self._item_action()
                 if self.kind == "saves":
                     return True, self._slot_action()
+                if self.kind == "background":
+                    return True, self._background_action()
                 self.close()
                 return True, {"action": "close"}
             return True, None
@@ -261,11 +326,43 @@ class PanelView:
                     elif target == "slot_action":
                         self.selected = value
                         return True, self._slot_action()
+                    elif target == "origin":
+                        self._choose_background_index(value)
+                    elif target == "origin_action":
+                        return True, self._background_action()
+                    elif target == "scrollbar":
+                        track, thumb, _ = self._scrollbars[value]
+                        grab = event.pos[1] - thumb.top if thumb.collidepoint(event.pos) else thumb.height // 2
+                        self._dragging = (value, grab)
+                        self._drag_scrollbar(event.pos[1])
                     break
+            return True, None
+        if event.type == pg.MOUSEMOTION and self._dragging:
+            self._drag_scrollbar(event.pos[1])
+            return True, None
+        if event.type == pg.MOUSEBUTTONUP:
+            if getattr(event, "button", None) == 1:
+                self._dragging = None
             return True, None
         # A modal consumes pointer/text events so they cannot select a story
         # choice behind it. Window lifecycle events still belong to the caller.
         return event.type in {pg.MOUSEMOTION, pg.MOUSEBUTTONUP, pg.KEYUP, pg.TEXTINPUT, pg.TEXTEDITING}, None
+
+    def _drag_scrollbar(self, pointer_y: int) -> None:
+        if not self._dragging:
+            return
+        key, grab = self._dragging
+        if key not in self._scrollbars:
+            self._dragging = None
+            return
+        track, thumb, maximum = self._scrollbars[key]
+        travel = max(1, track.height - thumb.height)
+        value = round(maximum * max(0, min(travel, pointer_y - grab - track.top)) / travel)
+        if key == "detail":
+            self.detail_scroll = value
+        else:
+            self.scroll = value
+        self._ensure_selection = False
 
     def _text(self, screen: Any, text: Any, x: int, y: int, color: Any = PARCHMENT, *, font: Any = None) -> None:
         screen.blit((font or self.font).render(str(text), False, color), (x, y))
@@ -301,6 +398,25 @@ class PanelView:
         screen.blit(portrait, (x, y))
         return True
 
+    def _origin_portrait(self, screen: Any, origin: Any, x: int, y: int, scale: int = 4) -> bool:
+        """Keep the chosen background visible in the character sheet."""
+        crop = origin_portrait_rect(str(origin or ""))
+        if crop is None:
+            return self._portrait(screen, 0, x, y, scale)
+        key = (f"origin:{crop[0]}", scale)
+        if key not in self._portraits:
+            try:
+                atlas = self.pg.image.load(str(Path(__file__).with_name("pixel_assets") / "world-portraits.png"))
+                frame = atlas.subsurface(self.pg.Rect(crop))
+                self._portraits[key] = self.pg.transform.scale(frame, (20 * scale, 24 * scale))
+            except (OSError, ValueError, self.pg.error):
+                self._portraits[key] = None
+        portrait = self._portraits[key]
+        if portrait is None:
+            return self._portrait(screen, 0, x, y, scale)
+        screen.blit(portrait, (x, y))
+        return True
+
     def _button(self, screen: Any, rect: Any, label: str, target: str, value: Any = None, *, primary: bool = False, enabled: bool = True) -> None:
         pg = self.pg
         pg.draw.rect(screen, INK if not enabled else (47, 58, 57) if primary else CARD, rect)
@@ -312,14 +428,19 @@ class PanelView:
         if enabled and visible.width and visible.height:
             self.hit_targets.append((visible, target, value))
 
-    def _scrollbar(self, screen: Any, rect: Any, offset: int, maximum: int) -> None:
+    def _scrollbar(self, screen: Any, rect: Any, offset: int, maximum: int, *, key: str = "main") -> None:
         if maximum <= 0 or rect.height < 20:
             return
         track = self.pg.Rect(rect.right - 5, rect.top + 2, 3, rect.height - 4)
         self.pg.draw.rect(screen, EDGE, track)
-        height = max(24, int(track.height * rect.height / (rect.height + maximum)))
+        height = min(track.height, max(24, int(track.height * rect.height / (rect.height + maximum))))
         top = track.top + int((track.height - height) * min(offset, maximum) / maximum)
-        self.pg.draw.rect(screen, AMBER, (track.left, top, 3, height))
+        thumb = self.pg.Rect(track.left, top, 3, height)
+        self.pg.draw.rect(screen, AMBER, thumb)
+        # Give the thin pixel rail a forgiving pointer target.
+        hit = self.pg.Rect(track.left - 4, track.top, 11, track.height)
+        self._scrollbars[key] = (track, thumb, maximum)
+        self.hit_targets.append((hit, "scrollbar", key))
 
     def draw(self, screen: Any, rect: Any) -> None:
         if not self.active:
@@ -328,21 +449,30 @@ class PanelView:
         rect = pg.Rect(rect)
         if rect.width < 260 or rect.height < 220:
             return
-        self._fonts(14 if rect.width < 900 else 16)
+        self._fonts(14 if rect.width < 900 else 18 if rect.width >= 1400 else 16)
         old_clip = screen.get_clip()
         screen.set_clip(rect)
         screen.fill(INK, rect)
         frame = rect.inflate(-max(16, min(56, rect.width // 20)), -28)
+        # A journal page remains a readable page on a wide monitor. Keep
+        # equipment columns and their actions together rather than stretching
+        # every sentence and pointer journey across the entire display.
+        if frame.width > 1180:
+            frame.width = 1180
+            frame.centerx = rect.centerx
         pg.draw.rect(screen, PANEL, frame)
         pg.draw.rect(screen, EDGE, frame, 1)
         pg.draw.line(screen, AMBER, (frame.left + 18, frame.top), (frame.left + min(frame.width - 18, 180), frame.top), 2)
         self.hit_targets = []
+        self._scrollbars = {}
         padding = 22 if rect.width >= 700 else 14
         left, width = frame.left + padding, frame.width - padding * 2
         title, subtitle = _TITLES[self.kind]
         if self.kind == "information":
             title = str(self.data.get("title", title))
             subtitle = str(self.data.get("subtitle", subtitle))
+        elif self.kind == "saves":
+            subtitle = "Choose the road you want to continue" if self.data.get("mode") == "load" else "Choose a campfire to remember this journey"
         title_y = frame.top + 20
         self._icon(screen, "quest", left, title_y + 2, AMBER)
         title_bottom = self._paragraph(screen, title, left + 36, title_y, width - 36, PARCHMENT, font=self.title_font)
@@ -350,7 +480,11 @@ class PanelView:
         footer_height = 72 if width < 600 else 60
         footer_y = frame.bottom - footer_height
         pg.draw.line(screen, EDGE, (left, footer_y), (left + width, footer_y))
-        return_label = "Return to the main menu  [Esc]" if self.kind == "chronicle" else "Return to the road  [Esc]"
+        return_label = "Return to the main menu  [Esc]" if self.kind in {"chronicle", "background"} else "Return to the road  [Esc]"
+        if self.kind in {"information", "saves"}:
+            return_label = str(self.data.get("return_label", "Back  [Esc]"))
+        if self.kind == "background" and width < 500:
+            return_label = "Back [Esc]"
         button_width = min(width, self.bold_font.size(return_label)[0] + 26)
         self._button(screen, pg.Rect(left + width - button_width, footer_y + 12, button_width, 34), return_label, "close")
         hint = "Tab: categories   Arrows: browse"
@@ -358,9 +492,25 @@ class PanelView:
             hint = "Enter: equip / use   Shift+PgDn: details"
         elif self.kind == "saves":
             hint = "Arrows: choose   Enter: select"
+        elif self.kind == "background":
+            hint = "Left / Right: compare   Enter: choose"
+        elif self.kind in {"journal", "map", "chronicle"}:
+            hint = "Tab: sections   Scroll: read"
         elif self.kind not in _TABS:
             hint = "Scroll to read   Enter: return"
-        if width > button_width + self.small_font.size(hint)[0] + 20:
+        notice = str(self.data.get("notice", "")).strip() if self.kind == "inventory" else ""
+        notice_width = width - button_width - 20
+        if notice and notice_width >= 180:
+            notice_bottom = self._paragraph(screen, notice, left, footer_y + 9, notice_width, TEAL, font=self.small_font)
+            if notice_bottom + self.small_font.get_linesize() + 4 < frame.bottom and self.small_font.size(hint)[0] <= notice_width:
+                self._text(screen, hint, left, notice_bottom + 3, MUTED, font=self.small_font)
+        elif self.kind == "background":
+            choose_label = "Choose background [Enter]" if width >= 500 else "Choose [Enter]"
+            action_width = min(width - button_width - 14, self.bold_font.size(choose_label)[0] + 26)
+            self._button(screen, pg.Rect(left, footer_y + 12, max(1, action_width), 34), choose_label, "origin_action", primary=True, enabled=bool(self.data.get("origins")))
+            if footer_height > 60:
+                self._text(screen, "Left / Right: compare", left, footer_y + 51, MUTED, font=self.small_font)
+        elif width > button_width + self.small_font.size(hint)[0] + 20:
             self._text(screen, hint, left, footer_y + 21, MUTED, font=self.small_font)
         elif footer_height > 60:
             self._text(screen, hint, left, footer_y + 51, MUTED, font=self.small_font)
@@ -380,8 +530,11 @@ class PanelView:
             content_y += 52
         self.content_rect = pg.Rect(left, content_y, width, max(1, footer_y - content_y - 16))
         self.detail_rect = pg.Rect(0, 0, 0, 0)
+        self.detail_body_rect = pg.Rect(0, 0, 0, 0)
         if self.kind == "inventory":
             self._draw_inventory(screen)
+        elif self.kind == "background":
+            self._draw_background(screen)
         else:
             screen.set_clip(self.content_rect.clip(rect))
             render = {
@@ -391,10 +544,101 @@ class PanelView:
             }[self.kind]
             height = render(screen, self.content_rect.left, self.content_rect.top - self.scroll, self.content_rect.width - 12)
             self.max_scroll = max(0, height - self.content_rect.height)
-            self.scroll = min(self.scroll, self.max_scroll)
+            clamped_scroll = min(self.scroll, self.max_scroll)
+            if clamped_scroll != self.scroll:
+                # Reflow can shorten a long journal or archive. Draw its
+                # reachable position immediately, including matching pointer
+                # targets, instead of showing an empty frame after resizing.
+                self.scroll = clamped_scroll
+                screen.fill(PANEL, self.content_rect)
+                self.hit_targets = [target for target in self.hit_targets if not self.content_rect.colliderect(target[0])]
+                render(screen, self.content_rect.left, self.content_rect.top - self.scroll, self.content_rect.width - 12)
             screen.set_clip(rect)
             self._scrollbar(screen, self.content_rect, self.scroll, self.max_scroll)
         screen.set_clip(old_clip)
+
+    def _choose_background_index(self, index: int) -> None:
+        origins = self.data.get("origins", [])
+        if origins:
+            self.selected = max(0, min(index, len(origins) - 1))
+            self.scroll = 0
+
+    def _cycle_background(self, direction: int) -> None:
+        origins = self.data.get("origins", [])
+        if origins:
+            self._choose_background_index((self.selected + direction) % len(origins))
+
+    def _background_action(self) -> dict[str, Any] | None:
+        origins = self.data.get("origins", [])
+        if not origins or not 0 <= self.selected < len(origins):
+            return None
+        origin = origins[self.selected]
+        if not isinstance(origin, dict) or not origin.get("id"):
+            return None
+        return {"action": "choose_origin", "origin_id": origin["id"]}
+
+    def _draw_background(self, screen: Any) -> None:
+        """Compare identity and attributes, then inspect the selected life."""
+        pg = self.pg
+        region = self.content_rect
+        origins = self.data.get("origins", [])
+        if not origins:
+            self._paragraph(screen, "No backgrounds are available.", region.left, region.top, region.width)
+            return
+        self.selected = max(0, min(self.selected, len(origins) - 1))
+        screen.set_clip(region)
+        columns = len(origins) if region.width >= 540 else 1
+        gap = 12
+        card_width = (region.width - gap * (columns - 1) - 10) // columns
+        rows = list(enumerate(origins)) if columns > 1 else [(self.selected, origins[self.selected])]
+        top = region.top
+        if columns == 1:
+            selector_width = (region.width - 10) // len(origins)
+            for index in range(len(origins)):
+                self._button(screen, pg.Rect(region.left + selector_width * index, top, selector_width - 6, 28), str(index + 1), "origin", index, primary=index == self.selected)
+            top += 37
+        scale = 3 if region.width >= 1100 and region.height >= 400 else 2
+        portrait_width = 20 * scale
+        header_width = card_width - portrait_width - 36
+        header_height = max(24 * scale, max(len(_wrap(origin.get("name", "Traveler"), self.bold_font, header_width)) * self.line_height for _, origin in rows))
+        ability_height = max(len(_wrap(origin.get("ability_name", ""), self.small_font, card_width - 24)) * (self.small_font.get_linesize() + 3) for _, origin in rows)
+        card_height = header_height + self.line_height * 2 + ability_height + 37
+        for column, (index, origin) in enumerate(rows):
+            card = pg.Rect(region.left + column * (card_width + gap), top, card_width, card_height)
+            pg.draw.rect(screen, (40, 51, 52) if index == self.selected else CARD, card)
+            pg.draw.rect(screen, AMBER if index == self.selected else EDGE, card, 1)
+            self._origin_portrait(screen, origin.get("id"), card.left + 12, card.top + 12, scale)
+            self._paragraph(screen, origin.get("name", "Traveler"), card.left + portrait_width + 23, card.top + 12, header_width, PARCHMENT, font=self.bold_font)
+            text_y = card.top + header_height + 20
+            self._text(screen, f"Health {origin.get('max_hp', '?')}", card.left + 12, text_y, RED, font=self.small_font)
+            text_y += self.line_height
+            attributes = f"STR {origin.get('strength', '?')}  CUN {origin.get('cunning', '?')}  WILL {origin.get('will', '?')}"
+            self._text(screen, attributes, card.left + 12, text_y, MUTED, font=self.small_font)
+            self._paragraph(screen, origin.get("ability_name", ""), card.left + 12, text_y + self.line_height, card.width - 24, TEAL, font=self.small_font)
+            visible = card.clip(region)
+            if visible.width and visible.height:
+                self.hit_targets.append((visible, "origin", index))
+        body = pg.Rect(region.left, top + card_height + 15, region.width, max(1, region.bottom - top - card_height - 15))
+        self.detail_rect = self.detail_body_rect = body
+        screen.set_clip(body)
+        origin = origins[self.selected]
+        x, width = body.left + 4, body.width - 18
+        start_y = body.top - self.scroll
+        y = self._paragraph(screen, origin.get("description", ""), x, start_y, width, PARCHMENT) + 16
+        y = self._paragraph(screen, origin.get("ability_name", ""), x, y, width, TEAL, font=self.bold_font) + 5
+        if origin.get("ability_rules"):
+            y = self._paragraph(screen, origin["ability_rules"], x, y, width, AMBER, font=self.small_font) + 5
+        y = self._paragraph(screen, origin.get("ability_description", ""), x, y, width) + 17
+        y = self._section(screen, "Starting pack", x, y, width)
+        for item in origin.get("starting_items", []):
+            y = self._paragraph(screen, str(item), x, y, width, PARCHMENT) + 4
+        y += 12
+        y = self._paragraph(screen, f"Weapon: {origin.get('weapon_name', 'Unarmed')}   Armor: {origin.get('armor_name', 'Travel clothes')}", x, y, width) + 18
+        y = self._paragraph(screen, "Strength adds to strikes and counters. Cunning helps Flanking Strike and escape attempts. Will strengthens Field Remedy.", x, y, width, MUTED, font=self.small_font)
+        self.max_scroll = max(0, y - start_y + 8 - body.height)
+        self.scroll = min(self.scroll, self.max_scroll)
+        screen.set_clip(region)
+        self._scrollbar(screen, body, self.scroll, self.max_scroll)
 
     def _draw_inventory(self, screen: Any) -> None:
         pg = self.pg
@@ -405,7 +649,12 @@ class PanelView:
         self.detail_rect = pg.Rect(pack_rect.right + gap, region.top, region.width - left_width - gap, region.height)
         items = self.visible_items()
         self.selected = min(self.selected, max(0, len(items) - 1))
-        card_heights = [max(82, len(_wrap(item.get("name", "Unnamed item"), self.bold_font, left_width - 68)) * self.line_height + 44) for item in items]
+        card_heights = []
+        for item in items:
+            markers = self._item_markers(item)
+            name_height = len(_wrap(item.get("name", "Unnamed item"), self.bold_font, left_width - 68)) * self.line_height
+            marker_height = len(_wrap(markers, self.small_font, left_width - 68)) * (self.small_font.get_linesize() + 3)
+            card_heights.append(max(82, name_height + marker_height + 30))
         self.max_scroll = max(0, sum(height + 8 for height in card_heights) - 8 - pack_rect.height)
         if items and self._ensure_selection:
             top = sum(height + 8 for height in card_heights[:self.selected])
@@ -425,10 +674,7 @@ class PanelView:
                 pg.draw.rect(screen, AMBER if index == self.selected else EDGE, card, 1)
                 self._icon(screen, item.get("kind", "quest"), card.left + 13, card.top + 17, TEAL if item.get("kind") == "consumable" else AMBER)
                 bottom = self._paragraph(screen, item.get("name", "Unnamed item"), card.left + 49, card.top + 12, card.width - 58, PARCHMENT, font=self.bold_font)
-                markers = [f"x{_number(item.get('count', 1))}", str(item.get("kind", "item")).capitalize()]
-                if item.get("equipped"):
-                    markers.append("EQUIPPED")
-                self._paragraph(screen, "  /  ".join(markers), card.left + 49, bottom + 5, card.width - 58, TEAL if item.get("equipped") else MUTED, font=self.small_font)
+                self._paragraph(screen, self._item_markers(item), card.left + 49, bottom + 5, card.width - 58, TEAL if item.get("equipped") else MUTED, font=self.small_font)
                 self.hit_targets.append((card.clip(pack_rect), "item", index))
             y += height + 8
         if not items:
@@ -437,15 +683,66 @@ class PanelView:
         screen.fill(CARD, self.detail_rect)
         selected = self._selected_item()
         if selected:
+            self.detail_body_rect = self.detail_rect.copy()
+            self.detail_body_rect.height = max(50, self.detail_rect.height - 80)
+            screen.set_clip(self.detail_body_rect)
+            previous_scroll = self.detail_scroll
             detail_height = self._draw_item_detail(screen, selected)
-            self.max_detail_scroll = max(0, detail_height - self.detail_rect.height)
+            self.max_detail_scroll = max(0, detail_height - self.detail_body_rect.height)
             self.detail_scroll = min(self.detail_scroll, self.max_detail_scroll)
+            if self.detail_scroll != previous_scroll:
+                screen.fill(CARD, self.detail_body_rect)
+                self._draw_item_detail(screen, selected)
+            screen.set_clip(self.detail_rect)
+            self._draw_item_action_dock(screen, selected)
         else:
             self.max_detail_scroll = self.detail_scroll = 0
             self._paragraph(screen, "Every object on the road has a story. Select an item to inspect it.", self.detail_rect.left + 18, self.detail_rect.top + 24, self.detail_rect.width - 36)
         screen.set_clip(region)
         self._scrollbar(screen, pack_rect, self.scroll, self.max_scroll)
-        self._scrollbar(screen, self.detail_rect, self.detail_scroll, self.max_detail_scroll)
+        self._scrollbar(screen, self.detail_body_rect, self.detail_scroll, self.max_detail_scroll, key="detail")
+
+    @staticmethod
+    def _item_markers(item: dict[str, Any]) -> str:
+        markers = [f"x{_number(item.get('count', 1))}", str(item.get("kind", "item")).capitalize()]
+        if item.get("equipped"):
+            markers.append("EQUIPPED")
+        return "  /  ".join(markers)
+
+    def _draw_item_action_dock(self, screen: Any, item: dict[str, Any]) -> None:
+        rect = self.detail_rect
+        x, width = rect.left + 18, rect.width - 36
+        top = rect.bottom - 77
+        self.pg.draw.rect(screen, CARD, (rect.left, top, rect.width, 77))
+        self.pg.draw.line(screen, EDGE, (x, top), (x + width, top))
+        action = self._item_action()
+        label, summary, color = "Keepsake", "Kept for the journey", MUTED
+        if item.get("slot"):
+            difference, statistic = self._equipment_difference(item)
+            if item.get("equipped"):
+                key = "attack" if item.get("slot") == "weapon" else "defense"
+                label, summary, color = "Equipped", f"Provides +{_number(item.get(key))} {statistic}", TEAL
+            else:
+                label = "Equip  [Enter]"
+                summary = f"{difference:+d} {statistic} vs equipped gear" if difference else f"Same {statistic} as equipped gear"
+                color = TEAL if difference > 0 else RED if difference < 0 else MUTED
+        elif _number(item.get("healing")) > 0:
+            recovered = self._recovery_amount(item)
+            label = "Use  [Enter]" if action else "Health is full"
+            summary = f"Recover {recovered} Health / x{_number(item.get('count', 1))} in pack" if recovered else "No healing needed; keep this supply"
+            color = TEAL if recovered else MUTED
+        elif item.get("kind") == "consumable":
+            label, summary = "Story item", "Use when a story choice offers it"
+        summary_font = self.small_font
+        lines = _wrap(summary, summary_font, width)
+        # The dock remains legible at the minimum window size: the summary
+        # can occupy two measured lines while the action stays fully visible.
+        summary_y = top + 7
+        for line in lines[:2]:
+            self._text(screen, line, x, summary_y, color, font=summary_font)
+            summary_y += summary_font.get_linesize() + 1
+        button_y = rect.bottom - 39
+        self._button(screen, self.pg.Rect(x, button_y, width, 32), label, "item_action", primary=bool(action), enabled=bool(action))
 
     def _draw_item_detail(self, screen: Any, item: dict[str, Any]) -> int:
         pg = self.pg
@@ -459,8 +756,10 @@ class PanelView:
         self._text(screen, label, x, y, TEAL if item.get("equipped") else AMBER, font=self.small_font)
         y += 33
         y = self._paragraph(screen, item.get("description", ""), x, y, width) + 23
-        for key, label, color in (("attack", "Attack", AMBER), ("defense", "Armor", TEAL), ("healing", "Restores health", TEAL)):
+        for key, label, color in (("attack", "Attack", AMBER), ("defense", "Armor", TEAL), ("healing", "Healing capacity", TEAL)):
             amount = _number(item.get(key))
+            if key == "healing":
+                amount = _number(item.get("healing_effective", amount))
             if amount:
                 self._text(screen, f"{label}  +{amount}", x, y, color, font=self.bold_font)
                 y += self.line_height + 6
@@ -474,17 +773,6 @@ class PanelView:
                     if difference:
                         self._text(screen, f"{difference:+d} {label}", x, y, TEAL if difference > 0 else RED)
                         y += self.line_height
-        y += 22
-        action = self._item_action()
-        if action:
-            label = "Equip item  [Enter]" if action["action"] == "equip" else "Use item  [Enter]"
-            if self.bold_font.size(label)[0] > width - 10:
-                label = "Equip" if action["action"] == "equip" else "Use item"
-            self._button(screen, pg.Rect(x, y, width, 43), label, "item_action", primary=True)
-            y += 57
-        else:
-            message = "This gear is already equipped." if item.get("equipped") else "Available during combat." if item.get("kind") == "consumable" else "A keepsake for the journey."
-            y = self._paragraph(screen, message, x, y, width, MUTED, font=self.small_font) + 12
         return y - start_y + 10
 
     def _section(self, screen: Any, title: str, x: int, y: int, width: int) -> int:
@@ -511,19 +799,20 @@ class PanelView:
         character = self.data.get("character", self.data)
         # The traveler portrait and companion portraits share the exploration
         # atlas, keeping the sheet visually connected to the playable world.
-        header_x = x + 116 if width >= 500 else x
+        portrait_scale = 2 if self.content_rect.height < 330 else 4
+        portrait_width, portrait_height = 20 * portrait_scale + 14, 24 * portrait_scale + 12
+        header_x = x + portrait_width + 22 if width >= 500 else x
         if width >= 500:
-            self.pg.draw.rect(screen, CARD, (x, y, 94, 108))
-            self.pg.draw.rect(screen, EDGE, (x, y, 94, 108), 1)
-            self._portrait(screen, 0, x + 7, y + 6)
+            self.pg.draw.rect(screen, CARD, (x, y, portrait_width, portrait_height))
+            self.pg.draw.rect(screen, EDGE, (x, y, portrait_width, portrait_height), 1)
+            self._origin_portrait(screen, character.get("origin"), x + 7, y + 6, portrait_scale)
         header_width = width - (header_x - x)
         header_top = y
         y = self._paragraph(screen, character.get("name", "Traveler"), header_x, y + 4, header_width, PARCHMENT, font=self.title_font) + 5
         origin = character.get("origin_label", character.get("origin_name", character.get("origin", "A traveler of the old roads")))
-        y = self._paragraph(screen, str(origin).replace("_", " ").title(), header_x, y, header_width, TEAL) + 13
-        if character.get("origin_description"):
-            y = self._paragraph(screen, character["origin_description"], header_x, y, header_width) + 8
-        y = max(y + 18, header_top + 133 if width >= 500 else y + 18)
+        origin_label = str(origin).replace("_", " ").title() if "_" in str(origin) else str(origin)
+        y = self._paragraph(screen, origin_label, header_x, y, header_width, TEAL) + 13
+        y = max(y + 18, header_top + portrait_height + 25 if width >= 500 else y + 18)
         if width >= 760:
             column_width = (width - 44) // 2
             condition_end = self._draw_character_condition(screen, character, x, y, column_width)
@@ -558,7 +847,13 @@ class PanelView:
         if ability_name:
             y += 10
             y = self._paragraph(screen, ability_name, x, y, width, TEAL, font=self.bold_font) + 5
+            if character.get("ability_rules"):
+                y = self._paragraph(screen, character["ability_rules"], x, y, width, AMBER, font=self.small_font) + 5
             y = self._paragraph(screen, character.get("ability_description", self.data.get("ability_description", "")), x, y, width) + 15
+            y = self._paragraph(screen, "Focus refills when a battle begins. Defend restores 1 Focus during battle.", x, y, width, MUTED, font=self.small_font) + 15
+        if character.get("origin_description"):
+            y = self._section(screen, "Background", x, y + 12, width)
+            y = self._paragraph(screen, character["origin_description"], x, y, width) + 15
         return y + 8
 
     def _draw_character_party(self, screen: Any, character: dict[str, Any], x: int, y: int, width: int) -> int:
@@ -588,21 +883,24 @@ class PanelView:
                 companion = {"name": str(companion)}
             trust = _number(companion.get("trust"))
             present = companion.get("present", True)
-            status = "Traveling with you" if present else "Elsewhere on the road"
+            status = str(companion.get("status", "Traveling with you" if present else "Elsewhere on the road"))
             trust_label = "Trusted" if trust >= 2 else "Steady" if trust >= 0 else "Wary"
+            status_line = f"{status}  /  {trust_label} ({trust:+d})" if "trust" in companion else status
             top = y
             portrait_row = {"mara": 4, "tobin": 5, "calenor": 6}.get(str(companion.get("name", "")).casefold())
             text_x = x + (69 if portrait_row is not None else 14)
             text_width = width - (text_x - x) - 14
             name_height = len(_wrap(companion.get("name", "Companion"), self.bold_font, text_width)) * self.line_height
-            status_height = len(_wrap(f"{status}  /  {trust_label} ({trust:+d})", self.small_font, text_width)) * (self.small_font.get_linesize() + 3)
+            status_height = len(_wrap(status_line, self.small_font, text_width)) * (self.small_font.get_linesize() + 3)
             height = max(88, name_height + status_height + 32)
             self.pg.draw.rect(screen, CARD, (x, y, width, height))
             if portrait_row is not None:
                 self._portrait(screen, portrait_row, x + 12, y + 15, 2)
             y = self._paragraph(screen, companion.get("name", "Companion"), text_x, y + 12, text_width, PARCHMENT, font=self.bold_font) + 5
-            y = self._paragraph(screen, f"{status}  /  {trust_label} ({trust:+d})", text_x, y, text_width, TEAL if present and trust >= 0 else MUTED, font=self.small_font)
+            y = self._paragraph(screen, status_line, text_x, y, text_width, TEAL if present and trust >= 0 else MUTED, font=self.small_font)
             y = max(y + 12, top + height + 10)
+        if any(isinstance(companion, dict) and "trust" in companion for companion in companions):
+            y = self._paragraph(screen, "Trust can change conversations and the aid companions offer in battle.", x, y + 8, width, MUTED, font=self.small_font) + 15
         return y + 8
 
     def _journal_entries(self) -> list[Any]:
@@ -611,26 +909,44 @@ class PanelView:
             "completed": ("completedquests", "completed_quests"),
             "clues": ("clues", "journal"),
         }
-        for key in aliases[self.tab]:
+        for key in aliases.get(self.tab, ()):
             if key in self.data:
                 return self.data[key] or []
         return []
 
     def _draw_journal(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
+        if self.tab == "decision":
+            return self._draw_decision(screen, x, y, width)
         entries = self._journal_entries()
         if not entries:
             messages = {"active": "No unfinished promises. New quests will appear as the road unfolds.", "completed": "Your completed quests will be remembered here.", "clues": "No clues recorded yet. Listen closely, and keep your eyes on the road."}
             return self._paragraph(screen, messages[self.tab], x + 18, y + 20, width - 36) - start_y + 25
+        details = {entry.get("title"): entry for entry in self.data.get("quest_details", []) if isinstance(entry, dict)}
+        if self.tab == "clues":
+            self._text(screen, f"NEWEST NOTES FIRST  /  {len(entries)} recorded", x, y, TEAL, font=self.small_font)
+            y += 33
+            entries = list(reversed(entries))
         for index, entry in enumerate(entries):
             if isinstance(entry, dict):
                 title = entry.get("title", entry.get("name", "A note from the road"))
                 description = entry.get("description", entry.get("text", ""))
             else:
                 title, description = str(entry), ""
+            detail = details.get(title, {}) if self.tab == "active" else {}
+            guidance = str(detail.get("guidance", ""))
+            progress = str(detail.get("progress", ""))
+            related = detail.get("related_clues", [])
+            lead = str(related[0]) if related else ""
             title_lines = _wrap(title, self.bold_font, width - 66)
             body_lines = _wrap(description, self.font, width - 66) if description else []
             height = 30 + len(title_lines) * self.line_height + len(body_lines) * self.line_height + (12 if body_lines else 8)
+            if progress:
+                height += len(_wrap(progress, self.bold_font, width - 66)) * self.line_height + 10
+            if guidance:
+                height += len(_wrap(guidance, self.font, width - 66)) * self.line_height + 10
+            if lead:
+                height += len(_wrap(f"Recorded lead: {lead}", self.small_font, width - 66)) * (self.small_font.get_linesize() + 3) + 10
             card = self.pg.Rect(x, y, width, height)
             self.pg.draw.rect(screen, CARD, card)
             self.pg.draw.rect(screen, EDGE, card, 1)
@@ -638,20 +954,58 @@ class PanelView:
             self._text(screen, f"{index + 1:02d}", x + 13, y + 15, TEAL if self.tab == "completed" else AMBER, font=self.small_font)
             text_y = self._paragraph(screen, title, x + 48, y + 13, width - 66, PARCHMENT, font=self.bold_font)
             if description:
-                self._paragraph(screen, description, x + 48, text_y + 8, width - 66)
+                text_y = self._paragraph(screen, description, x + 48, text_y + 8, width - 66)
+            if progress:
+                text_y = self._paragraph(screen, progress, x + 48, text_y + 8, width - 66, TEAL, font=self.bold_font)
+            if guidance:
+                text_y = self._paragraph(screen, guidance, x + 48, text_y + 8, width - 66)
+            if lead:
+                self._paragraph(screen, f"Recorded lead: {lead}", x + 48, text_y + 8, width - 66, TEAL, font=self.small_font)
             y += height + 13
         return y - start_y
 
+    def _draw_decision(self, screen: Any, x: int, y: int, width: int) -> int:
+        """Show exact current options without submitting an engine choice."""
+        start_y = y
+        location = self.data.get("location", "Your present stop")
+        y = self._paragraph(screen, location, x, y, width, PARCHMENT, font=self.title_font) + 5
+        chapter = self.data.get("chapter")
+        if chapter:
+            self._text(screen, f"PART { {1: 'I', 2: 'II'}.get(_number(chapter), chapter) }  /  YOU ARE HERE", x, y, AMBER, font=self.small_font)
+            y += 32
+        decision = self.data.get("decision") or {}
+        options = decision.get("options", []) if isinstance(decision, dict) else []
+        if not options:
+            message = "Places you have already explored are recorded under Remembered roads." if self.kind == "map" else "Your journal records the promises and clues you have collected. Return to the scene to continue."
+            y = self._paragraph(screen, message, x, y + 14, width) + 20
+            return y - start_y
+        y = self._section(screen, "Choices at this stop", x, y + 8, width)
+        heading = decision.get("heading", "")
+        if heading:
+            y = self._paragraph(screen, heading, x, y, width, TEAL, font=self.small_font) + 12
+        for index, option in enumerate(options, 1):
+            lines = _wrap(option, self.font, width - 61)
+            height = max(54, 25 + len(lines) * self.line_height)
+            self.pg.draw.rect(screen, CARD, (x, y, width, height))
+            self.pg.draw.rect(screen, EDGE, (x, y, width, height), 1)
+            self._text(screen, f"{index:02d}", x + 13, y + 14, AMBER, font=self.small_font)
+            self._paragraph(screen, option, x + 43, y + 11, width - 61, PARCHMENT)
+            y += height + 9
+        y = self._paragraph(screen, "Return to the scene to make a choice.", x, y + 12, width, MUTED, font=self.small_font) + 12
+        return y - start_y
+
     def _draw_map(self, screen: Any, x: int, y: int, width: int) -> int:
+        if self.tab == "here":
+            return self._draw_decision(screen, x, y, width)
         start_y = y
         route = self.data.get("route", self.data.get("locations", []))
         if not route:
             route = [{"name": name, "visited": True} for name in self.data.get("visited", [])]
         if not route:
             return self._paragraph(screen, "The first step is still ahead. Places you have visited will appear here.", x + 18, y + 20, width - 36) - start_y + 25
-        if self.data.get("chapter"):
-            self._text(screen, f"CHAPTER {self.data['chapter']}", x, y, TEAL, font=self.small_font)
-            y += 35
+        remembered = sum(bool(location.get("visited")) if isinstance(location, dict) else True for location in route)
+        self._text(screen, f"{remembered} PLACES REMEMBERED", x, y, TEAL, font=self.small_font)
+        y += 35
         for location in route:
             if not isinstance(location, dict):
                 location = {"name": str(location), "visited": True}
@@ -680,24 +1034,38 @@ class PanelView:
 
     def _draw_chronicle(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
-        completed = max(0, _number(self.data.get("completed_runs")))
-        y = self._paragraph(screen, f"Completed journeys: {completed}", x, y, width, TEAL, font=self.bold_font) + 14
-        if not completed:
-            y = self._paragraph(screen, "Your chronicle begins when you finish a road. Your endings and earned achievements will be remembered here.", x, y, width) + 20
-        origins = self.data.get("origins", [])
-        y = self._paragraph(screen, "Backgrounds completed", x, y, width, AMBER, font=self.bold_font) + 6
-        y = self._paragraph(screen, ", ".join(str(name) for name in origins) or "None yet", x, y, width) + 24
-        y = self._paragraph(screen, "Endings witnessed", x, y, width, AMBER, font=self.bold_font) + 8
-        endings = self.data.get("endings", [])
-        if not endings:
-            y = self._paragraph(screen, "No ending recorded yet.", x, y, width) + 9
-        for ending in endings:
-            if isinstance(ending, dict):
-                count = max(0, _number(ending.get("count")))
-                y = self._paragraph(screen, f"{ending.get('name', 'A completed road')}  /  {count}", x + 12, y, width - 12, PARCHMENT) + 8
+        notice = str(self.data.get("notice", "")).strip()
+        if notice:
+            y = self._paragraph(screen, notice, x, y, width, AMBER, font=self.small_font) + 18
+        if self.tab == "all":
+            completed = max(0, _number(self.data.get("completed_runs")))
+            y = self._paragraph(screen, f"Completed episodes: {completed}", x, y, width, TEAL, font=self.bold_font) + 8
+            if "part_one_completions" in self.data and "part_two_completions" in self.data:
+                y = self._paragraph(screen, f"Part I: {_number(self.data['part_one_completions'])}  /  Part II: {_number(self.data['part_two_completions'])}", x, y, width, MUTED, font=self.small_font) + 18
+            if not completed:
+                y = self._paragraph(screen, "Your chronicle begins when you finish a road. Your endings and earned achievements will be remembered here.", x, y, width) + 20
+            origins = self.data.get("origins", [])
+            y = self._paragraph(screen, "Backgrounds completed", x, y, width, AMBER, font=self.bold_font) + 6
+            y = self._paragraph(screen, ", ".join(str(name) for name in origins) or "None yet", x, y, width) + 24
+            y = self._paragraph(screen, "Endings witnessed", x, y, width, AMBER, font=self.bold_font) + 8
+            endings = self.data.get("endings", [])
+            if not endings:
+                y = self._paragraph(screen, "No ending recorded yet.", x, y, width) + 9
+            for ending in endings:
+                if isinstance(ending, dict):
+                    count = max(0, _number(ending.get("count")))
+                    y = self._paragraph(screen, f"{ending.get('name', 'A completed road')}  /  {count}", x + 12, y, width - 12, PARCHMENT) + 8
         achievements = [entry for entry in self.data.get("achievements", []) if isinstance(entry, dict)]
         earned = sum(bool(entry.get("earned")) for entry in achievements)
-        y = self._paragraph(screen, f"Achievements  /  {earned} of {len(achievements)} earned", x, y + 14, width, AMBER, font=self.bold_font) + 14
+        heading = f"Earned deeds: {earned}" if self.tab == "earned" else f"Still to discover: {len(achievements) - earned}" if self.tab == "open" else f"Achievements  /  {earned} of {len(achievements)} earned"
+        y = self._paragraph(screen, heading, x, y + (14 if self.tab == "all" else 0), width, AMBER, font=self.bold_font) + 14
+        if self.tab == "earned":
+            achievements = [entry for entry in achievements if entry.get("earned")]
+        elif self.tab == "open":
+            achievements = [entry for entry in achievements if not entry.get("earned")]
+        if not achievements:
+            empty = "No deeds earned yet. Completed episodes and their achievements will be remembered here." if self.tab == "earned" else "Every deed in this chronicle has been earned." if self.tab == "open" else "Your deeds will be remembered here."
+            y = self._paragraph(screen, empty, x, y, width) + 16
         for achievement in achievements:
             is_earned = bool(achievement.get("earned"))
             color = TEAL if is_earned else MUTED
@@ -740,6 +1108,29 @@ class PanelView:
             return None
         return {"action": "select_slot", "slot": slot.get("slot", slot.get("id", self.selected + 1))}
 
+    def _slot_lines(self, slot: dict[str, Any], mode: str) -> list[tuple[str, Any, Any]]:
+        if slot.get("corrupt"):
+            return [("Cannot be loaded." if mode == "load" else "Replace this damaged memory.", MUTED, self.small_font)]
+        if slot.get("empty"):
+            return [("A place for your journey" if mode == "save" else "No journey saved here", MUTED, self.small_font)]
+        chapter = slot.get("chapter", "?")
+        part = {1: "I", 2: "II"}.get(_number(chapter), chapter)
+        place = str(slot.get("location", ""))
+        episode = f"Part {part}{' complete' if slot.get('ending') else ''}"
+        lines = [(f"{episode} / {place}" if place else episode, TEAL, self.font)]
+        minutes = max(0, _number(slot.get("play_minutes", 0)))
+        health = f"Health {_number(slot['hp'])}/{_number(slot.get('max_hp'))} / " if "hp" in slot and "max_hp" in slot else ""
+        lines.append((f"{health}Play time {minutes // 60}h {minutes % 60:02d}m", MUTED, self.small_font))
+        saved_at = slot.get("saved_at")
+        if isinstance(saved_at, str) and saved_at != "unknown":
+            try:
+                moment = datetime.fromisoformat(saved_at.replace("Z", "+00:00")).astimezone()
+                stamp = moment.strftime("%b %d, %Y %H:%M %Z")
+                lines.append((f"Saved {stamp}", MUTED, self.small_font))
+            except (ValueError, OverflowError, OSError):
+                pass
+        return lines
+
     def _draw_saves(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
         mode = self.data.get("mode", "save")
@@ -751,7 +1142,10 @@ class PanelView:
         card_heights = []
         for slot in slots:
             title = "Damaged memory" if slot.get("corrupt", False) else "Empty campfire" if slot.get("empty", False) else slot.get("name", "Traveler")
-            card_heights.append(max(109, 73 + len(_wrap(title, self.bold_font, text_width)) * self.line_height) + (42 if width < 500 else 0))
+            height = 48 + len(_wrap(title, self.bold_font, text_width)) * self.line_height
+            for text, _, font in self._slot_lines(slot, mode):
+                height += len(_wrap(text, font, text_width)) * (font.get_linesize() + 3) + 6
+            card_heights.append(max(109, height) + (42 if width < 500 else 0))
         if self._ensure_selection:
             top = sum(height + 12 for height in card_heights[:self.selected])
             bottom = top + card_heights[self.selected]
@@ -773,15 +1167,8 @@ class PanelView:
             label = f"CAMP {slot.get('slot', slot.get('id', index + 1))}"
             self._text(screen, label, x + 16, y + 11, AMBER, font=self.small_font)
             bottom = self._paragraph(screen, title, x + 16, y + 33, text_width, RED if corrupt else MUTED if empty else PARCHMENT, font=self.bold_font)
-            if corrupt:
-                detail = "Cannot be loaded." if mode == "load" else "Replace this damaged memory."
-                self._paragraph(screen, detail, x + 16, bottom + 7, text_width, MUTED, font=self.small_font)
-            elif not empty:
-                minutes = max(0, _number(slot.get("play_minutes", 0)))
-                detail = f"Chapter {slot.get('chapter', '?')}  /  {minutes // 60}h {minutes % 60:02d}m"
-                self._paragraph(screen, detail, x + 16, bottom + 7, text_width, MUTED, font=self.small_font)
-            elif mode == "save":
-                self._text(screen, "A place for your journey", x + 16, bottom + 7, MUTED, font=self.small_font)
+            for text, color, font in self._slot_lines(slot, mode):
+                bottom = self._paragraph(screen, text, x + 16, bottom + 6, text_width, color, font=font)
             button_label = "Load memory" if mode == "load" else "Save here" if empty else "Overwrite..."
             button = self.pg.Rect(x + width - 164, y + (height - 37) // 2, 148, 37) if width >= 500 else self.pg.Rect(x + 16, y + height - 47, min(180, width - 32), 35)
             visible = card.clip(self.content_rect)

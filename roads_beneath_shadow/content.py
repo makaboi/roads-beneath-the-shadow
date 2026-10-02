@@ -110,7 +110,7 @@ ORIGINS: tuple[Origin, ...] = (
         armor="patched_leather",
         ability_id="stand_fast",
         ability_name="Stand Fast",
-        ability_description="Guard every incoming blow, clear Exposed, and counter the first attacker.",
+        ability_description="Guard every incoming blow, clear Bleeding and Exposed, and counter the first attacker.",
     ),
     Origin(
         "north_road_scout",

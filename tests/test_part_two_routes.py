@@ -150,7 +150,7 @@ class PartTwoRouteTests(unittest.TestCase):
         self.assertEqual((game.state.scene, game.state.ending), ("complete", "living_road"))
         self.assertIn("the Eighth Name is its Warden oath-title", transcript)
         self.assertIn("another sealed spoke beneath ruined Fornost", transcript)
-        self.assertIn("We guarded the road. The Shadow was waking the city.", transcript)
+        self.assertIn("The road was only the beginning. The Shadow was waking the city.", transcript)
         self.assertNotIn("\x1b", transcript)
 
 
@@ -182,8 +182,8 @@ class PartTwoRouteTests(unittest.TestCase):
         self.assertIn("PART II COMPLETE", transcript)
         self.assertIn("The Eighth Name:", transcript)
         self.assertIn("These choices shape the road to Fornost.", transcript)
-        self.assertIn("We guarded the road. The Shadow was waking the city.", transcript)
-        self.assertIn("The road continues in Part III: The Waking City.", transcript)
+        self.assertIn("The road was only the beginning. The Shadow was waking the city.", transcript)
+        self.assertIn("The road will continue in Part III: The Waking City.", transcript)
         self.assertNotIn("Begin Part II", transcript)
         self.assertNotIn("PART I COMPLETE", transcript)
 

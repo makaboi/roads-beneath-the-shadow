@@ -3,7 +3,7 @@
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
-./Roads-Beneath-the-Shadow
+./Roads-Beneath-the-Shadow "$@"
 STATUS=$?
 
 if [[ $STATUS -ne 0 ]]; then
