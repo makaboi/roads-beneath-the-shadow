@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4 — Clearer Archive Highlights
+
+- Keep cyan and green Archive entries readable on search highlights while preserving their original text and other story colors.
+
 ## 0.7.3 — Settings and Chronicle Fixes
 
 - Keep `--text-speed` temporary when saving other settings; changing Text speed explicitly persists the new choice.

@@ -14,7 +14,7 @@ from unicodedata import combining, normalize
 
 from .lighting import Color
 from .pixel_font import _hangul_kind, caret_positions, text_viewport
-from .pixel_theme import draw_pixel_frame, load_font, wrap_text
+from .pixel_theme import SELECTED_TEAL, draw_pixel_frame, load_font, wrap_text
 from .text_input import TextEntry
 
 
@@ -544,10 +544,13 @@ class TranscriptView:
         for row, (line, color, bold, entry) in enumerate(self._lines[start:end]):
             y = self._content.y + row * self.line_height
             begin, stop = self._line_spans[start + row]
+            ink = color_map.get(color, PARCHMENT)
             if selected and entry == selected[0] and stop > selected[1] and begin < selected[2]:
                 pg.draw.rect(surface, (51, 49, 38), (self._content.x, y, self._content.width - 14, self.line_height))
                 pg.draw.rect(surface, AMBER, (self._content.x, y, 2, self.line_height))
-            self._text(surface, line, (self._content.x + 6, y), color_map.get(color, PARCHMENT), font=self.bold_font if bold else self.font)
+                if ink == TEAL:
+                    ink = SELECTED_TEAL
+            self._text(surface, line, (self._content.x + 6, y), ink, font=self.bold_font if bold else self.font)
         if not self._lines:
             self._text(surface, "No story recorded yet.", (self._content.x + 6, self._content.y + 12), MUTED)
         surface.set_clip(rect.clip(old_clip))
