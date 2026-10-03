@@ -13,7 +13,7 @@ from typing import Any
 from unicodedata import combining, normalize
 
 from .lighting import Color
-from .pixel_font import caret_positions, text_viewport
+from .pixel_font import _hangul_kind, caret_positions, text_viewport
 from .pixel_theme import draw_pixel_frame, load_font, wrap_text
 from .text_input import TextEntry
 
@@ -41,6 +41,16 @@ def _normalized(text: str, *, folded: bool = False) -> tuple[str, list[tuple[int
             characters.append(" ")
             spans.append((index, end))
         else:
+            # Modern Hangul composes adjacent Jamo without a combining class.
+            # Consume only pairs that NFC actually joins, preserving precise
+            # spans for repeated/archaic Jamo and every other existing script.
+            if _hangul_kind(text[index]) in {"L", "LV"} and end < len(text):
+                composed = normalize("NFC", text[index:end + 1])
+                if len(composed) == 1:
+                    end += 1
+                    if _hangul_kind(composed) == "LV" and end < len(text):
+                        if len(normalize("NFC", composed + text[end])) == 1:
+                            end += 1
             while end < len(text) and combining(text[end]):
                 end += 1
             cluster = normalize("NFC", text[index:end])

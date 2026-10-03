@@ -2220,7 +2220,7 @@ class Game:
             return []
         try:
             unlocked = self.profile.record(self.state)
-        except OSError:
+        except (OSError, ValueError):
             self._completion_notice = "The Chronicle could not be saved. You can still save this journey in a manual slot."
             return []
         if self.profile.last_recovery_backup is not None:
@@ -2610,7 +2610,11 @@ class Game:
         while True:
             sound = "On" if self.ui.sound_enabled else "Off"
             color = self.user_settings.color_mode.title()
-            speed = str(self.user_settings.text_speed).title()
+            speeds = ["slow", "normal", "fast", "instant"]
+            current_speed = getattr(self.ui, "text_speed", self.user_settings.text_speed)
+            if current_speed not in speeds:
+                current_speed = self.user_settings.text_speed
+            speed = current_speed.title()
             motion = "Reduced" if self.ui.reduced_motion else "Full"
             reader = "On" if self.user_settings.screen_reader else "Off"
             difficulty = DIFFICULTY_DESCRIPTIONS[self.user_settings.difficulty]
@@ -2618,7 +2622,7 @@ class Game:
             checkpoints = bool(getattr(self.ui, "supports_checkpoints", False))
             options = [
                 f"Sound: {sound}" if graphical else f"Original sound cues: {sound}",
-                f"Color: {'Grayscale' if self.user_settings.color_mode == 'off' else 'Full'}" if graphical else f"Color mode: {color}",
+                f"Color: {'Full' if self.ui.color else 'Grayscale'}" if graphical else f"Color mode: {color}",
                 f"Text speed: {speed}",
                 f"Motion: {motion}",
                 f"Terminal on next launch: {reader}" if graphical else f"Screen-reader mode: {reader}",
@@ -2642,16 +2646,19 @@ class Game:
                 if self.ui.sound_enabled:
                     self.ui.sound("notice")
             elif choice == 2:
-                modes = ["auto", "on", "off"]
-                current = modes.index(self.user_settings.color_mode)
-                self.user_settings.color_mode = modes[(current + 1) % len(modes)]
-                if self.user_settings.color_mode == "auto":
-                    self.ui.color = self.ui._supports_color()
+                if graphical:
+                    self.ui.color = not self.ui.color
+                    self.user_settings.color_mode = "on" if self.ui.color else "off"
                 else:
-                    self.ui.color = self.user_settings.color_mode == "on"
+                    modes = ["auto", "on", "off"]
+                    current = modes.index(self.user_settings.color_mode)
+                    self.user_settings.color_mode = modes[(current + 1) % len(modes)]
+                    if self.user_settings.color_mode == "auto":
+                        self.ui.color = self.ui._supports_color()
+                    else:
+                        self.ui.color = self.user_settings.color_mode == "on"
             elif choice == 3:
-                speeds = ["slow", "normal", "fast", "instant"]
-                current = speeds.index(self.user_settings.text_speed)
+                current = speeds.index(current_speed)
                 self.user_settings.text_speed = speeds[(current + 1) % len(speeds)]
                 self.ui.set_text_speed(self.user_settings.text_speed)
             elif choice == 4:

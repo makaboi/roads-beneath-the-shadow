@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3 — Settings and Chronicle Fixes
+
+- Keep `--text-speed` temporary when saving other settings; changing Text speed explicitly persists the new choice.
+- Switch the graphical Color setting between Full and Grayscale on every selection, while preserving the terminal Auto/On/Off cycle.
+- Match precomposed Hangul and equivalent Jamo spellings in Archive search while preserving original text and highlight positions.
+- Check Chronicle file bytes before replacing the earlier record; a full Chronicle still leaves ending and manual-save choices available.
+
 ## 0.7.2 — Quieter in the Background
 
 - Pause drawing while minimized and keep window events responsive; resume the current page and combat animation without counting the hidden interval.

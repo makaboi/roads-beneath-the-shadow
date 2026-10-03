@@ -17,7 +17,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 from roads_beneath_shadow.app import Game
 from roads_beneath_shadow.content import ORIGINS
 from roads_beneath_shadow.models import Character, GameState
-from roads_beneath_shadow.pixel_transcript import TranscriptView
+from roads_beneath_shadow.pixel_transcript import TranscriptView, _normalized
 from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
 from roads_beneath_shadow.savegame import SaveManager
 from roads_beneath_shadow.ui import InputClosed
@@ -85,6 +85,18 @@ class TranscriptTests(unittest.TestCase):
         self.search("éowen")
         self.assertEqual(self.view.matches, [0])
         self.assertEqual(self.view.entries[0][0], source)
+
+    def test_canonical_hangul_search_maps_both_forms_to_original_name_spans(self):
+        for name, query in (("한", "한"), ("한", "한"),
+                            ("한", "한"), ("한", "한")):
+            with self.subTest(name=name, query=query):
+                source = "A " + name + " remembers the road."
+                self.view.open([(source, None, False)])
+                self.draw()
+                self.search(query)
+                self.assertEqual(self.view.matches, [0])
+                self.assertEqual(self.view._match_positions, [(0, 2, 2 + len(name))])
+                self.assertEqual(self.view.entries[0][0], source)
 
     def test_reopening_retains_query_and_place_but_requires_search_focus_to_edit(self):
         entries = [(f"Remembered road {index}.", None, False) for index in range(100)]
@@ -283,6 +295,35 @@ class TranscriptTests(unittest.TestCase):
         self.assertEqual(self.view.match_index, 0)
         hit = next(hit for hit, action in self.view._hits if action == "close")
         self.assertTrue(self.view.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=hit.center)))
+
+
+class TranscriptNormalizationTests(unittest.TestCase):
+    def test_hangul_composition_keeps_original_jamo_source_spans(self):
+        for source, normalized, spans in (
+            ("한", "한", [(0, 3)]),
+            ("한", "한", [(0, 2)]),
+            ("ᄀ가", "ᄀ가", [(0, 1), (1, 3)]),
+            ("ᅡᅡ", "ᅡᅡ", [(0, 1), (1, 2)]),
+            ("ᆨᆨ", "ᆨᆨ", [(0, 1), (1, 2)]),
+            ("\ua960ᅡ", "\ua960ᅡ", [(0, 1), (1, 2)]),
+            ("ᄀ\u0301ᅡ", "ᄀ\u0301ᅡ", [(0, 2), (0, 2), (2, 3)]),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(_normalized(source, folded=True), (normalized, spans))
+
+    def test_existing_accents_casefold_whitespace_and_leading_marks_keep_spans(self):
+        for source, normalized, spans in (
+            ("E\u0301", "é", [(0, 2)]),
+            ("Straße", "strasse", [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (4, 5), (5, 6)]),
+            ("A\u00a0\nB", "a b", [(0, 1), (1, 3), (3, 4)]),
+            ("\u0301\u0308x", "\u0301\u0308x", [(0, 2), (0, 2), (2, 3)]),
+            ("a\u200db", "a\u200db", [(0, 1), (1, 2), (2, 3)]),
+            ("का", "का", [(0, 1), (1, 2)]),
+            ("क्क", "क्क", [(0, 2), (0, 2), (2, 3)]),
+            ("가\u0301", "가\u0301", [(0, 2), (0, 2)]),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(_normalized(source, folded=True), (normalized, spans))
 
 
 @unittest.skipUnless(importlib.util.find_spec("pygame"), "pygame-ce is needed for integrated archive input")
