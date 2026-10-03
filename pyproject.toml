@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "roads-beneath-the-shadow"
-version = "0.7.0"
+version = "0.7.1"
 description = "A pixel-art, choice-driven dark fantasy RPG set in Middle-earth."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ roads-beneath-shadow = "roads_beneath_shadow.__main__:main"
 include = ["roads_beneath_shadow*"]
 
 [tool.setuptools.package-data]
-roads_beneath_shadow = ["audio_assets/*.wav", "pixel_assets/*.png", "pixel_assets/*.json", "font_assets/*.ttf", "font_assets/*.txt"]
+roads_beneath_shadow = ["audio_assets/*.wav", "pixel_assets/*.png", "pixel_assets/*.json", "font_assets/*.ttf", "font_assets/*.otf", "font_assets/*.json", "font_assets/*.txt"]
 
 [tool.unittest]
 start-directory = "tests"

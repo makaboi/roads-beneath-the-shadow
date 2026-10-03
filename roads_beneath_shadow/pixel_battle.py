@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .combat_view import CombatFeedback, CombatSnapshot
+from .pixel_font import text_clusters
 from .pixel_theme import load_font
 from .pixel_world import hero_sprite_name, motion_frame_rect
 
@@ -1448,8 +1449,12 @@ class BattleView:
         if font.size(name)[0] <= width:
             return name
         prefix = name
+        clusters = list(text_clusters(name))
         while prefix and font.size(prefix + "…")[0] > width:
-            prefix = prefix[:-1].rstrip()
+            clusters.pop()
+            while clusters and clusters[-1].isspace():
+                clusters.pop()
+            prefix = "".join(clusters)
         return prefix + "…" if font.size(prefix + "…")[0] <= width else ""
 
     def _draw_party_names(self, surface: Any, arena: Any, player_x: int, ground: int,
@@ -1462,7 +1467,7 @@ class BattleView:
         # Reserve a short traveler label. Companions retain their full names
         # whenever their measured ink fits; nearby labels can shift slightly.
         name = self.snapshot.player.name
-        minimum = self.small_font.size(name[:1] + "…")[0]
+        minimum = self.small_font.size(next(text_clusters(name), "") + "…")[0]
         companion_right = min(arena.right - padding, player_x + round(14 * scale) - minimum - gap)
         entries = sorted(zip(companions, anchors), key=lambda entry: entry[1][0])
         available = companion_right - arena.left - padding - gap * max(0, len(entries) - 1)

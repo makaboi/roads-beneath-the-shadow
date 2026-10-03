@@ -3,6 +3,8 @@
 import importlib.util
 import os
 import unittest
+import gc
+import weakref
 from copy import deepcopy
 from unittest.mock import patch
 
@@ -168,6 +170,43 @@ class PixelPanelTests(unittest.TestCase):
         panel.draw(screen, self.pg.Rect(18, 68, 724, 445), text_size="larger")
         self.assertIn("Overwrite...", labels)
         self.assertEqual(self.click("slot_action", 0), (True, {"action": "select_slot", "slot": 1}))
+
+    def test_warmed_large_save_buttons_repaint_without_reopening_native_fonts(self):
+        screen = self.pg.Surface((1920, 1080))
+        self.panel.open("saves", {"mode": "save", "slots": [
+            {"slot": 1, "empty": False, "name": "Éowen", "chapter": 1,
+             "location": "Bree", "hp": 18, "max_hp": 26},
+            {"slot": 2, "empty": True}, {"slot": 3, "empty": True},
+        ]})
+        self.panel.draw(screen, screen.get_rect(), text_size="larger")
+        self.assertTrue(self.panel._button_fonts, "This layout must exercise fitted captions")
+        before = self.pg.image.tobytes(screen, "RGBA")
+        hits = [(tuple(rect), target, value) for rect, target, value in self.panel.hit_targets]
+        with patch("roads_beneath_shadow.pixel_panels.load_font",
+                   side_effect=AssertionError("Stable captions reopened a native font")):
+            for _ in range(20):
+                self.panel.draw(screen, screen.get_rect(), text_size="larger")
+        self.assertEqual(self.pg.image.tobytes(screen, "RGBA"), before)
+        self.assertEqual([(tuple(rect), target, value) for rect, target, value in self.panel.hit_targets], hits)
+        self.assertEqual(self.click("slot_action", 0), (True, {"action": "select_slot", "slot": 1}))
+
+    def test_fitted_fonts_are_bounded_and_release_when_reading_size_changes(self):
+        self.panel._fonts(40)
+        # A deliberately narrow caption explores more sizes than normal UI layouts.
+        self.panel._button_font("Overwrite...", self.pg.Rect(0, 0, 90, 24))
+        self.assertGreater(len(self.panel._button_fonts), 0)
+        self.assertLessEqual(len(self.panel._button_fonts), 12)
+        handles = [weakref.ref(font) for font in self.panel._button_fonts.values()]
+        self.panel._fonts(14)
+        gc.collect()
+        self.assertFalse(self.panel._button_fonts)
+        self.assertTrue(all(handle() is None for handle in handles))
+        self.panel._button_font("Overwrite...", self.pg.Rect(0, 0, 90, 24))
+        self.assertTrue(self.panel._button_fonts)
+        handles = [weakref.ref(font) for font in self.panel._button_fonts.values()]
+        self.panel = None
+        gc.collect()
+        self.assertTrue(all(handle() is None for handle in handles))
 
     def test_compact_largest_character_keeps_health_and_focus_visible_with_long_names(self):
         screen = self.pg.Surface((760, 560))

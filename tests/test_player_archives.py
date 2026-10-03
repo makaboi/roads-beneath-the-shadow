@@ -59,6 +59,8 @@ class PlayerArchiveTests(unittest.TestCase):
                 executable.with_name("FONT-LICENSE.txt").read_bytes(),
                 (desktop_release.ROOT / "roads_beneath_shadow/font_assets/LICENSE.txt").read_bytes(),
             )
+        self.assertEqual(executable.with_name("FONT-FALLBACK-LICENSE.txt").read_bytes(),
+                         (desktop_release.ROOT / "roads_beneath_shadow/font_assets/FALLBACK-OFL.txt").read_bytes())
         if os.name != "nt":
             self.assertTrue(executable.stat().st_mode & 0o111)
             self.assertTrue(launcher.stat().st_mode & 0o111)
@@ -92,6 +94,7 @@ class PlayerArchiveTests(unittest.TestCase):
                 "README.md": b"![Gameplay](assets/missing.gif)\n",
                 "CHANGELOG.md": b"Changes",
                 "FONT-LICENSE.txt": b"Font license fixture",
+                "FONT-FALLBACK-LICENSE.txt": b"Fallback font license fixture",
                 "THIRD-PARTY-NOTICES.md": b"License fixture",
                 "THIRD-PARTY-INVENTORY.json": json.dumps({"schema_version": 1, "payload": [{
                     "path": "_internal/shared-library.bin", "sha256": hashlib.sha256(b"Runtime fixture").hexdigest(),
@@ -182,7 +185,10 @@ class PlayerArchiveTests(unittest.TestCase):
             if "--version" in args:
                 return subprocess.CompletedProcess(args, 0, "Roads Beneath the Shadow 0.5.0\n", "")
             if "--check-runtime-assets" in args:
-                return subprocess.CompletedProcess(args, 0, '{"images":35,"world_maps":13,"fonts":2,"audio":10,"metadata":1,"audio_driver":"dummy","controller_backend":"pygame._sdl2.controller"}\n', "")
+                decoded = {"images": 35, "world_maps": 13, "fonts": 4, "audio": 10, "metadata": 2,
+                           "audio_driver": "dummy", "controller_backend": "pygame._sdl2.controller",
+                           "font_fallbacks": desktop_release.expected_font_fallbacks()}
+                return subprocess.CompletedProcess(args, 0, json.dumps(decoded) + "\n", "")
             if "--screenshot" in args:
                 Path(args[args.index("--screenshot") + 1]).write_bytes(b"\x89PNG\r\n\x1a\n")
             return subprocess.CompletedProcess(args, 0, "May a star shine upon your road.", "")

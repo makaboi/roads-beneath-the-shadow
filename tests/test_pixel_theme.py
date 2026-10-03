@@ -12,7 +12,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 from roads_beneath_shadow.pixel_theme import (
     AMBER, CARD, INK, MUTED, PANEL, PARCHMENT, RED, TEAL,
-    FONT_DIRECTORY, draw_medallion, draw_pixel_frame,
+    FONT_DIRECTORY, SELECTED, SELECTED_TEAL, draw_medallion, draw_pixel_frame,
     initial_window_size, load_font, missing_font_assets,
 )
 
@@ -46,6 +46,10 @@ class DisplayFitTests(unittest.TestCase):
                 with self.subTest(ink=ink, surface=surface):
                     ratio = (luminance(ink) + .05) / (luminance(surface) + .05)
                     self.assertGreaterEqual(ratio, 4.5)
+        for ink in (PARCHMENT, MUTED, AMBER, SELECTED_TEAL, RED):
+            with self.subTest(ink=ink, surface=SELECTED):
+                ratio = (luminance(ink) + .05) / (luminance(SELECTED) + .05)
+                self.assertGreaterEqual(ratio, 4.5)
 
 
 @unittest.skipUnless(importlib.util.find_spec("pygame"), "pygame-ce is needed for font checks")

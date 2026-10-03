@@ -16,9 +16,9 @@ import tempfile
 from time import perf_counter
 
 if __package__:
-    from .desktop_release import archive_digest, project_version
+    from .desktop_release import archive_digest, native_decoder_report_matches, project_version
 else:
-    from desktop_release import archive_digest, project_version
+    from desktop_release import archive_digest, native_decoder_report_matches, project_version
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,8 +132,7 @@ def check_installation(interpreter: Path, *, expected_version: str | None = None
         run("console_entrypoint", ["--check-install"], executable=console)
         run("asset_check", ["-m", "roads_beneath_shadow", "--check-install"])
         decoded_assets = json.loads(run("runtime_decode", ["-m", "roads_beneath_shadow", "--check-runtime-assets"]).stdout)
-        if (not isinstance(decoded_assets, dict) or decoded_assets.get("audio_driver") != "dummy"
-                or decoded_assets.get("controller_backend") != "pygame._sdl2.controller"):
+        if not native_decoder_report_matches(decoded_assets):
             raise ValueError("The installed game did not verify its native resource decoders")
         screenshot = work / "installed title.png"
         run("pixel_render", ["-m", "roads_beneath_shadow", "--pixel", "--screenshot", str(screenshot)])

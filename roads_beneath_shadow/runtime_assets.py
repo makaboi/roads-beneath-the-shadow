@@ -13,6 +13,7 @@ import re
 
 from .audio import SoundPlayer
 from .pixel_theme import FONT_FILES
+from .pixel_font import validate_fallback_assets
 from .pixel_world import (
     CHARACTER_ATLAS_ROWS, CHARACTER_CELL, DEPTH_CELL, DEPTH_COLUMNS, DEPTH_OBJECTS,
     MOTION_CHARACTERS, MOTION_FRAMES, MOTION_ROWS, ORIGIN_PORTRAITS, WORLD_MAPS, WORLD_SIZE,
@@ -76,9 +77,9 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
     if missing:
         raise ValueError("Runtime assets are missing: " + ", ".join(missing))
     images = sorted(pixels.glob("*.png"))
-    font_files = sorted(fonts.glob("*.ttf"))
+    font_files = sorted((*fonts.glob("*.ttf"), *fonts.glob("*.otf")))
     wav_files = sorted(audio.glob("*.wav"))
-    metadata = sorted(pixels.glob("*.json"))
+    metadata = sorted((*pixels.glob("*.json"), *fonts.glob("*.json")))
     previous_driver = os.environ.get("SDL_AUDIODRIVER")
     previous_prompt = os.environ.get("PYGAME_HIDE_SUPPORT_PROMPT")
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
@@ -119,10 +120,16 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
         for path in font_files:
             font = None
             try:
-                # Load the bundled TTF directly: a system-font fallback must
+                # Load each bundled font directly: a system-font fallback must
                 # not conceal a damaged or omitted release font.
                 font = pg.font.Font(str(path), 17)
-                rendered = font.render("A traveller’s road — an eight-pointed star", True, (239, 225, 188))
+                sample = "A traveller’s road — an eight-pointed star"
+                if path.name == "RBSRoadCJK-Regular.otf":
+                    sample = "夜道の旅人 한길"
+                elif path.name == "NotoSansDevanagari-Regular.ttf":
+                    font.set_script("Deva")
+                    sample = "अर्जुन श्रीकृष्ण श्रद्धा"
+                rendered = font.render(sample, True, (239, 225, 188))
                 if min(rendered.get_size()) <= 0:
                     raise ValueError("font produced no glyphs")
             except (OSError, ValueError, pg.error) as error:
@@ -132,6 +139,7 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
                 # Release it while the font subsystem is still initialized,
                 # including when a later decoder leaves a traceback alive.
                 font = None
+        fallback_fonts = validate_fallback_assets(fonts)
         initialized_mixer = True
         pg.mixer.init(frequency=16_000, size=-16, channels=2, buffer=512)
         for path in wav_files:
@@ -148,6 +156,7 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
             "images": len(images), "world_maps": len(WORLD_MAPS), "fonts": len(font_files),
             "audio": len(wav_files), "metadata": len(metadata), "audio_driver": "dummy",
             "controller_backend": controller.__name__,
+            "font_fallbacks": fallback_fonts,
         }
     finally:
         if pg is not None:

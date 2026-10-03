@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 — Clearer Names and Cards
+
+- Added bundled CJK and Devanagari font fallbacks for names and mixed-script text, preserving the existing pixel typography for supported characters.
+- Fit fallback glyphs into the existing line heights and measure the same glyph runs for wrapping, name editing, and rendering.
+- Keep supported combining sequences whole during wrapping and horizontal field scrolling; stabilize carets and selection feedback inside shaped text while retaining original characters.
+- Brightened secondary text on selected cards while preserving the surrounding palette.
+- Reuse fitted button fonts during panel redraws and release them when the reading size changes.
+- Keep combat commands under the pointer while hovering their forecasts, and space help text with its actual font height on large displays.
+- Bundled font coverage, source provenance, and licenses for offline play and verified native decoding in desktop downloads.
+
 ## 0.7.0 — The Road in Your Hands
 
 - Added mapped gamepad controls for creation, exploration, combat, menus, and adventure panels, with hotplug support and protection against held inputs crossing decisions.

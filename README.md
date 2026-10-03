@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.7.0 puts the road in your hands.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return. The expressive pixel cast, atmospheric locations, both complete episodes, and existing saves carry forward.
+**Version 0.7.1 makes the road clearer to play.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Bundled fallback fonts make CJK and Devanagari names readable, and selected panel details have stronger contrast. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
@@ -54,7 +54,7 @@ On Windows, use `py` in place of `python3` when creating the environment, then:
 .venv\Scripts\python.exe -m roads_beneath_shadow
 ```
 
-The pixel edition uses **pygame-ce**. World maps, character animation, illustrations, readable DejaVu fonts, and original audio are bundled locally; the game does not need an internet connection while playing. The macOS source launcher, `Play Roads Beneath the Shadow.command`, uses the local `.venv` when available.
+The pixel edition uses **pygame-ce**. World maps, character animation, illustrations, DejaVu and Noto-derived fonts, and original audio are bundled locally; the game does not need an internet connection while playing. The macOS source launcher, `Play Roads Beneath the Shadow.command`, uses the local `.venv` when available.
 
 ### Explore the road
 
@@ -64,7 +64,7 @@ Thirty-five unnumbered diamond markers offer small details of these places. Appr
 
 Continue illustrated story pages with **Space** or **Enter**. **F1** opens Controls while keeping your place. At a story choice, **Escape** or **P** opens Pause for saves, Settings, and Controls. Larger reading text and reduced motion are available there.
 
-During battle, read each enemy's next intention before choosing a command. Click an enemy or use **[** and **]** to change targets; Inspect and changing targets spend no turn. Action details forecast direct damage against the selected target, including its defenses; counterattacks are marked conditional. Health changes when the visible blow lands, and a short summary keeps your strike, healing, guard, and incoming damage clear. Enemy phase changes are announced. Survival encounters state how long you must hold out; the Black Rider is marked **Cannot be wounded** instead of showing an ordinary Health target.
+During battle, read each enemy's next intention before choosing a command. Click an enemy or use **[** and **]** to change targets; Inspect and changing targets spend no turn. Action details forecast direct damage against the selected target, including its defenses; counterattacks are marked conditional. Hovering these details keeps the command area stable for clicking. Health changes when the visible blow lands, and a short summary keeps your strike, healing, guard, and incoming damage clear. Enemy phase changes are announced. Survival encounters state how long you must hold out; the Black Rider is marked **Cannot be wounded** instead of showing an ordinary Health target.
 
 Inventory, character, and journal panels keep equipment, relationships, quests, and clues close at hand. Companion cards distinguish traveling companions from those who returned above, left the company, or remained at a seal. Conversations and recovery choices update as you complete them; the Last Lantern offers only the companions who are actually present.
 
@@ -103,6 +103,8 @@ The game records a separate automatic checkpoint at safe story transitions. **Re
 | Escape | Close a panel, end transcript search, or return from a menu with Back |
 
 Enter your traveler's name with the keyboard or the **On-screen keyboard** button. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Physical typing supports Unicode text and input-method composition. Escape closes the on-screen keyboard first, then cancels name entry or background selection; **Choose again** returns from the confirmation screen to background selection. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
+
+The bundled fonts cover the game's English text, common accented names, CJK characters, and Devanagari text. Name entry and archive search keep supported combining sequences together when scrolling. Names retain their original characters and the 24-character limit. The story is in English; this font coverage does not provide translations or a complete editor for every writing system.
 
 ### Gamepad controls
 
@@ -229,14 +231,14 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
 
 On Windows, set `$env:SDL_VIDEODRIVER="dummy"` and `$env:SDL_AUDIODRIVER="dummy"` in PowerShell before the same command. Pixel scenes use nearest-neighbor scaling; the renderer keeps all graphics operations on the main thread while the story engine waits for choices in a worker.
 
-The Quality Gate runs eight combinations of Python 3.10 and 3.13 on Linux, Windows, Apple-silicon macOS, and Intel macOS. It also verifies a regular installed wheel from outside the checkout, comparing every module and bundled resource with the source. The desktop workflow builds all four standalone downloads, checks their version, decodes every PNG, TTF, and WAV through the bundled SDL runtime, renders a title screen, and exercises terminal input. It repeats those checks through the extracted player launcher from a folder containing spaces. All four archives and their SHA-256 checksums publish together only after the exact commit passes every Quality Gate job and GitHub's uploaded digests match. Pull requests build the same four native archives as preview artifacts without creating a tag or release. The workflow can also be started manually with `preview_only` enabled. On `main`, an unpublished project version can publish after the required checks; an existing published version is retained.
+The Quality Gate runs eight combinations of Python 3.10 and 3.13 on Linux, Windows, Apple-silicon macOS, and Intel macOS. It also verifies a regular installed wheel from outside the checkout, comparing every module and bundled resource with the source. The desktop workflow builds all four standalone downloads, checks their version, decodes every PNG, TTF, OTF, and WAV through the bundled SDL runtime, verifies font coverage fingerprints, renders a title screen, and exercises terminal input. It repeats those checks through the extracted player launcher from a folder containing spaces. All four archives and their SHA-256 checksums publish together only after the exact commit passes every Quality Gate job and GitHub's uploaded digests match. Pull requests build the same four native archives as preview artifacts without creating a tag or release. The workflow can also be started manually with `preview_only` enabled. On `main`, an unpublished project version can publish after the required checks; an existing published version is retained.
 
 The code is split into portable systems:
 
 - `pixel_ui.py` — desktop controls and the main-thread bridge to the story engine
 - `pixel_world.py` / `world_atmosphere.py` / `pixel_assets/` — walkable maps, regional lighting and weather, collision, interaction points, and character animation
 - `narrative.py` / `pixel_transcript.py` — illustrated story pages, source-anchored reading position, and searchable transcripts
-- `pixel_theme.py` / `font_assets/` — bundled typography and measured wrapping
+- `pixel_theme.py` / `pixel_font.py` / `font_assets/` — bundled typography, measured script fallbacks, and cluster-preserving wrapping
 - `controls.py` — shared in-game help
 - `text_input.py` — Unicode caret editing shared by name entry and archive search
 - `runtime_assets.py` — display-free native decoder verification for release candidates
@@ -253,6 +255,8 @@ The code is split into portable systems:
 - `content.py` — items, backgrounds, and chapter content
 
 Pixel artwork provenance is bundled in `pixel_assets/manifest.json`, including generated-source and native-image hashes, palette choices, and conversion details. `scripts/generate_pixel_assets.py` and `scripts/build_story_scene.py` convert the story illustrations; `scripts/build_origin_portraits.py`, `scripts/build_battle_cast.py`, `scripts/build_battle_enemies.py`, and `scripts/build_battle_locations.py` pack the generated portraits, actors, and battle floors. `scripts/generate_world_assets.py` rebuilds the authored world maps, walking animation, depth atlas, and small world portraits; `scripts/generate_soundscapes.py` reproduces the five original ambient WAVs using Python's standard library. Original terminal references remain in `assets/ascii-sources/`; `scripts/generate_marketing_assets.py` regenerates the terminal preview collection. Pillow is a development tool and is not needed to play. The unmodified DejaVu fonts retain their license in `font_assets/LICENSE.txt`; standalone archives also include `FONT-LICENSE.txt`. Desktop downloads retain third-party licenses, LGPL library source archives, and build provenance in `third-party/`, with a guide in `THIRD-PARTY-NOTICES.md` and file hashes in `THIRD-PARTY-INVENTORY.json`. Their pygame libraries remain separate files for compatible replacement; the game's copyright terms are unchanged.
+
+The fallback fonts retain their copyrights and SIL Open Font License 1.1 in `font_assets/FALLBACK-OFL.txt` and the desktop download's `FONT-FALLBACK-LICENSE.txt`. `font_assets/fallback-coverage.json` records the original managed Noto binaries, exact extracted font hashes, and Unicode coverage. To reproduce the assets, install the development-only `fonttools==4.61.1` and run `tools/build_font_assets.py --cjk-source /path/to/NotoSansCJK-Regular.ttc --devanagari-source /path/to/NotoSansDevanagari-Regular.ttf --output-directory /path/to/output`. The builder requires the documented source hashes and renames the extracted CJK derivative. FontTools and the original collection are not needed to play.
 
 ## Roadmap
 

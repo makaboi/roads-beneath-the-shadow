@@ -7,6 +7,7 @@ engine to validate.  Closing a panel leaves the caller's story page intact.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ from typing import Any
 
 from .content import ORIGINS
 from .pixel_theme import (
-    AMBER, CARD, EDGE, INK, MUTED, PANEL, PARCHMENT, RED, SELECTED, STEEL, TEAL,
+    AMBER, CARD, EDGE, INK, MUTED, PANEL, PARCHMENT, RED, SELECTED, SELECTED_TEAL, STEEL, TEAL,
     ORIGIN_PORTRAIT_FILE, ORIGIN_PORTRAIT_SIZE, draw_medallion, draw_pixel_frame,
     load_font, origin_face_rect,
 )
@@ -131,6 +132,7 @@ class PanelView:
         self._dragging: tuple[str, int] | None = None
         self._ensure_selection = True
         self._font_size = 0
+        self._button_fonts: OrderedDict[int, Any] = OrderedDict()
         self._portraits: dict[tuple[Any, int], Any] = {}
         self._save_layout_key: tuple[int, int, int] | None = None
         self._fonts(16)
@@ -139,6 +141,7 @@ class PanelView:
         if self._font_size == size:
             return
         self._font_size = size
+        self._button_fonts.clear()
         self.font = load_font(self.pg, size)
         self.small_font = load_font(self.pg, max(11, size - 3))
         self.bold_font = load_font(self.pg, size, bold=True)
@@ -507,11 +510,20 @@ class PanelView:
             if font.size(label)[0] <= rect.width - 12 and font.get_linesize() <= rect.height - 6:
                 return font
         size = max(11, self._font_size - 4)
-        font = load_font(self.pg, size, bold=True)
+        font = self._fitted_button_font(size)
         while size > 11 and (font.size(label)[0] > rect.width - 12 or font.get_linesize() > rect.height - 6):
             size -= 1
-            font = load_font(self.pg, size, bold=True)
+            font = self._fitted_button_font(size)
         return font
+
+    def _fitted_button_font(self, size: int) -> Any:
+        """Reuse fitted captions without retaining fonts from old text sizes."""
+        if size not in self._button_fonts:
+            self._button_fonts[size] = load_font(self.pg, size, bold=True)
+        self._button_fonts.move_to_end(size)
+        while len(self._button_fonts) > 12:
+            self._button_fonts.popitem(last=False)
+        return self._button_fonts[size]
 
     def _button(self, screen: Any, rect: Any, label: str, target: str, value: Any = None, *, primary: bool = False, enabled: bool = True) -> None:
         pg = self.pg
@@ -721,7 +733,7 @@ class PanelView:
             text_y += self.line_height
             attributes = f"STR {origin.get('strength', '?')}  CUN {origin.get('cunning', '?')}  WILL {origin.get('will', '?')}"
             self._text(screen, attributes, card.left + 12, text_y, MUTED, font=self.small_font)
-            self._paragraph(screen, origin.get("ability_name", ""), card.left + 12, text_y + self.line_height, card.width - 24, TEAL, font=self.small_font)
+            self._paragraph(screen, origin.get("ability_name", ""), card.left + 12, text_y + self.line_height, card.width - 24, SELECTED_TEAL if index == self.selected else TEAL, font=self.small_font)
             visible = card.clip(region)
             if visible.width and visible.height:
                 self.hit_targets.append((visible, "origin", index))
@@ -819,7 +831,8 @@ class PanelView:
                                  edge=AMBER if index == self.selected else EDGE)
                 self._item_icon(screen, item, card.left + 13, card.top + 17)
                 bottom = self._paragraph(screen, item.get("name", "Unnamed item"), card.left + 49, card.top + 12, card.width - 58, PARCHMENT, font=self.bold_font)
-                self._paragraph(screen, self._item_markers(item), card.left + 49, bottom + 5, card.width - 58, TEAL if item.get("equipped") else MUTED, font=self.small_font)
+                marker_color = SELECTED_TEAL if index == self.selected else TEAL
+                self._paragraph(screen, self._item_markers(item), card.left + 49, bottom + 5, card.width - 58, marker_color if item.get("equipped") else MUTED, font=self.small_font)
                 self.hit_targets.append((card.clip(pack_rect), "item", index))
             y += height + 8
         if not items:
@@ -1366,6 +1379,8 @@ class PanelView:
             self._text(screen, label, x + 16, y + 11, AMBER, font=self.small_font)
             bottom = self._paragraph(screen, title, x + 16, y + 33, text_width, RED if corrupt else MUTED if empty else PARCHMENT, font=self.bold_font)
             for text, color, font in self._slot_lines(slot, mode):
+                if index == self.selected and color == TEAL:
+                    color = SELECTED_TEAL
                 bottom = self._paragraph(screen, text, x + 16, bottom + 6, text_width, color, font=font)
             button_label = "Load memory" if mode == "load" else "Save here" if empty else "Overwrite..."
             illustrated = width >= 500 and not (empty or corrupt)

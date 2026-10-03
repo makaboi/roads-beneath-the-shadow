@@ -111,7 +111,7 @@ class DesktopReleaseTests(unittest.TestCase):
 
         original = {"SystemRoot": r"C:\Windows", "PATH": r"C:\Java\bin;C:\Python", "PYTHONPATH": r"C:\checkout",
                     "PYTHONHOME": r"C:\Python", "COMSPEC": r"C:\Windows\System32\cmd.exe"}
-        decoded = {"images": 36, "world_maps": 13, "metadata": 1, "fonts": 2, "audio": 10, "audio_driver": "dummy", "controller_backend": "pygame._sdl2.controller"}
+        decoded = {"images": 36, "world_maps": 13, "metadata": 2, "fonts": 4, "audio": 10, "audio_driver": "dummy", "controller_backend": "pygame._sdl2.controller", "font_fallbacks": desktop_release.expected_font_fallbacks()}
         calls = []
         def run(arguments, **kwargs):
             environment = kwargs["env"]
@@ -155,6 +155,8 @@ class DesktopReleaseTests(unittest.TestCase):
             archive = desktop_release.assemble_archive(executable, "Windows-x64", "0.5.0", root / "downloads")
             with zipfile.ZipFile(archive) as source:
                 guide = source.read(desktop_release.GAME_NAME + "/START-HERE.txt").decode("utf-8")
+                notice = source.read(desktop_release.GAME_NAME + "/FONT-FALLBACK-LICENSE.txt")
+            self.assertEqual(notice, (desktop_release.ROOT / "roads_beneath_shadow/font_assets/FALLBACK-OFL.txt").read_bytes())
             self.assertIn("Requires Windows 10 or later (64-bit).", guide)
             self.assertIn("Keep the executable and the complete _internal folder together.", guide)
 
@@ -173,6 +175,21 @@ class DesktopReleaseTests(unittest.TestCase):
                         desktop_release.smoke_test(
                             self.output / "Roads-Beneath-the-Shadow", expected_version="0.5.0"
                         )
+                self.assertEqual(run.call_count, 2)
+
+    def test_native_smoke_rejects_omitted_or_unbound_font_coverage_before_rendering(self):
+        coverage = desktop_release.expected_font_fallbacks()
+        wrong_coverage = json.loads(json.dumps(coverage))
+        wrong_coverage["fonts"]["RBSRoadCJK-Regular.otf"]["sha256"] = "0" * 64
+        for fallback in (None, {"schema": 1, "fonts": {}}, wrong_coverage):
+            with self.subTest(fallback=fallback):
+                decoded = {"audio_driver": "dummy", "controller_backend": "pygame._sdl2.controller",
+                           "fonts": 4, "font_fallbacks": fallback}
+                outputs = [subprocess.CompletedProcess([], 0, "Roads Beneath the Shadow 0.5.0\n", ""),
+                           subprocess.CompletedProcess([], 0, json.dumps(decoded), "")]
+                with patch.object(desktop_release.subprocess, "run", side_effect=outputs) as run:
+                    with self.assertRaisesRegex(ValueError, "native resource decoders"):
+                        desktop_release.smoke_test(self.output / "Roads-Beneath-the-Shadow", expected_version="0.5.0")
                 self.assertEqual(run.call_count, 2)
 
     def setUp(self):

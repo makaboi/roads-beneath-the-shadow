@@ -233,6 +233,69 @@ class CombatControlsTests(unittest.TestCase):
         self.ui.events.put(UIEvent("combat_feedback", {"feedback": CombatFeedback("damage", "player", "enemy_0", 4, "Mira hits the captain.")}))
         self.window.drain()
 
+    def test_hovering_a_partial_command_keeps_the_actual_click_point_actionable(self):
+        self.pg.display.set_mode((1200, 900), self.pg.RESIZABLE)
+        self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=1200, h=900))
+        actions = (
+            CombatActionView("attack", "Attack", 0, True, "", "Strike your target with your equipped weapon. Costs no Focus."),
+            CombatActionView("power", "Power attack (-1 Focus, become Exposed)", 1, True, "", "Commit to a stronger weapon strike."),
+            CombatActionView("defend", "Defend (halve physical hits, recover 1 Focus)", 0, True, "", "Guard and recover one Focus."),
+            CombatActionView("item", "Use an item", 0, True, "", "Choose a provision."),
+            CombatActionView("inspect", "Inspect enemy", 0, True, "", "Read your target."),
+            CombatActionView("flank", "Flanking Strike (spent)", 1, False, "This ability has been used.", ""),
+            CombatActionView("mara", "Mara: Crossing Blades (-1 Focus, disrupt)", 1, True, "", "Mara disrupts the enemy's next move."),
+            CombatActionView("tobin", "Tobin: Pinning Shot (-1 Focus, weaken)", 1, True, "", "13–15 damage to Ash-Hand Archer. Damage through Armor and weaken your target's next two landed attacks."),
+        )
+        snapshot = replace(self.snapshot, actions=actions)
+        request = InputRequest(42, "combat", "Choose your action", tuple(action.label for action in actions))
+        self.ui.events.put(UIEvent("combat_snapshot", {"snapshot": snapshot}))
+        self.ui.events.put(UIEvent("request", {"request": request, "hud": None}))
+        self.window.drain()
+        self.window.render()
+        dimensions = self.window._choice_dimensions()
+        last_top = sum(height + 10 for height, _ in dimensions[:-1])
+        self.window._menu_focused = False
+        self.window.choice_scroll = last_top - self.window.menu_rect.height + 10
+        self.window.render()
+        partial = next(rect for rect, answer in self.window.choice_hits if answer == 8)
+        self.assertEqual(partial.height, 10)
+        point = partial.center
+        viewport = self.window.menu_rect.copy()
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=point, rel=(0, 0), buttons=(0, 0, 0)))
+        self.window.render()
+        self.assertEqual(self.window.selected, 7)
+        self.assertEqual(self.window.menu_rect, viewport, "Hover changed the command viewport")
+        self.assertTrue(next(rect for rect, answer in self.window.choice_hits if answer == 8).collidepoint(point))
+        self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=point))
+        self.assertEqual(self.ui.responses.get_nowait(), (42, 8))
+
+    def test_enlarged_action_help_uses_nonoverlapping_native_font_rows(self):
+        self.ui.text_size = "larger"
+        self.pg.display.set_mode((1920, 1080), self.pg.RESIZABLE)
+        self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=1920, h=1080))
+        description = "A distinctive forecast explains the equipped weapon, target armor, and the next two landed attacks."
+        action = replace(self.snapshot.actions[0], description=description)
+        snapshot = replace(self.snapshot, actions=(action, *self.snapshot.actions[1:]))
+        request = InputRequest(43, "combat", "Choose your action", tuple(item.label for item in snapshot.actions))
+        self.ui.events.put(UIEvent("combat_snapshot", {"snapshot": snapshot}))
+        self.ui.events.put(UIEvent("request", {"request": request, "hud": None}))
+        self.window.drain()
+        self.window.render()
+        from roads_beneath_shadow.pixel_ui import wrap_pixels
+        lines = wrap_pixels(description, self.window.small_font, self.window.menu_rect.width - 18)
+        calls = []
+        original = self.window._text
+        def text(value, position, color=None, font=None):
+            if font is self.window.small_font and (value in lines or value.startswith("No Focus cost") or value == "[ / ] Target  ·  Tab Log"):
+                ink = font.render(value, False, (255, 255, 255))
+                calls.append((value, ink.get_rect(topleft=position)))
+            return original(value, position, color, font)
+        self.window._text = text
+        self.window.render()
+        self.assertEqual(len(calls), len(lines) + 2)
+        for (_, first), (_, second) in zip(calls, calls[1:]):
+            self.assertLessEqual(first.bottom, second.top, "Enlarged help rows overlap")
+
     def test_paid_action_waits_for_impact_then_accepts_the_same_key(self):
         self.queue_hit()
         self.key(self.pg.K_1, "1")
