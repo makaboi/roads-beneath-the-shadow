@@ -217,6 +217,8 @@ class ProfileManager:
             with os.fdopen(handle, "w", encoding="utf-8") as temporary:
                 json.dump(asdict(profile), temporary, ensure_ascii=False, indent=2)
                 temporary.write("\n")
+            if os.stat(temporary_name).st_size > MAX_SAVE_BYTES:
+                raise ValueError("Completion record file is too large; the existing Chronicle has been kept")
             os.replace(temporary_name, self.path)
         except Exception:
             try:

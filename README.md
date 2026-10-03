@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.7.2 makes the road clearer to play.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Bundled fallback fonts make CJK and Devanagari names readable, and selected panel details have stronger contrast. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return. Drawing pauses while the window is minimized and resumes at the same page or combat moment.
+**Version 0.7.3 makes the road clearer to play.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Bundled fallback fonts make CJK and Devanagari names readable, and selected panel details have stronger contrast. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return. Drawing pauses while the window is minimized and resumes at the same page or combat moment.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
@@ -55,6 +55,8 @@ On Windows, use `py` in place of `python3` when creating the environment, then:
 ```
 
 The pixel edition uses **pygame-ce**. World maps, character animation, illustrations, DejaVu and Noto-derived fonts, and original audio are bundled locally; the game does not need an internet connection while playing. The macOS source launcher, `Play Roads Beneath the Shadow.command`, uses the local `.venv` when available.
+
+The `--text-speed` option overrides narration for the current launch. Changing Text speed in Settings saves that selected pace for future launches.
 
 ### Explore the road
 

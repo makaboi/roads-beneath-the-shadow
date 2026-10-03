@@ -84,8 +84,6 @@ def main() -> None:
         settings.color_mode = "off"
     if args.sound:
         settings.sound = True
-    if args.text_speed:
-        settings.text_speed = args.text_speed
     if args.reduced_motion:
         settings.reduced_motion = True
     if args.screen_reader:
@@ -103,7 +101,7 @@ def main() -> None:
         color=color,
         sound=settings.sound,
         fast=args.fast,
-        text_speed=settings.text_speed,
+        text_speed=args.text_speed or settings.text_speed,
         reduced_motion=settings.reduced_motion,
         screen_reader=settings.screen_reader if terminal else False,
     )
