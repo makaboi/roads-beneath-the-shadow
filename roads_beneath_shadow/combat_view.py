@@ -53,6 +53,7 @@ class CombatEnemyView:
     statuses: tuple[CombatStatusView, ...]
     targeted: bool
     invulnerable: bool = False
+    weapon_resistance: int = 0
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,9 @@ class CombatActionView:
     enabled: bool
     disabled_reason: str
     description: str
+    damage_min: int | None = None
+    damage_max: int | None = None
+    damage_conditional: bool = False
 
 
 @dataclass(frozen=True)

@@ -53,6 +53,8 @@ class SaveManager:
             with os.fdopen(handle, "w", encoding="utf-8") as temporary:
                 json.dump(payload, temporary, ensure_ascii=False, indent=2)
                 temporary.write("\n")
+            if os.stat(temporary_name).st_size > MAX_SAVE_BYTES:
+                raise ValueError("Save file is too large; existing saved journeys have been kept")
             os.replace(temporary_name, path)
         except Exception:
             try:
@@ -162,6 +164,9 @@ class SaveManager:
             raise ValueError(f"Unknown ending: {state.ending}")
         if state.scene not in VALID_SCENE_IDS:
             raise ValueError(f"Unknown scene: {state.scene}")
+        from .part_two import validate_pending_answers
+
+        validate_pending_answers(state)
         if (state.scene == "complete") != (state.ending is not None):
             raise ValueError("scene must be 'complete' if and only if an ending is set")
         if not 1 <= state.chapter <= 1_000:

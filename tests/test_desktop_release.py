@@ -111,7 +111,7 @@ class DesktopReleaseTests(unittest.TestCase):
 
         original = {"SystemRoot": r"C:\Windows", "PATH": r"C:\Java\bin;C:\Python", "PYTHONPATH": r"C:\checkout",
                     "PYTHONHOME": r"C:\Python", "COMSPEC": r"C:\Windows\System32\cmd.exe"}
-        decoded = {"images": 36, "world_maps": 13, "metadata": 1, "fonts": 2, "audio": 10, "audio_driver": "dummy"}
+        decoded = {"images": 36, "world_maps": 13, "metadata": 1, "fonts": 2, "audio": 10, "audio_driver": "dummy", "controller_backend": "pygame._sdl2.controller"}
         calls = []
         def run(arguments, **kwargs):
             environment = kwargs["env"]
@@ -157,6 +157,23 @@ class DesktopReleaseTests(unittest.TestCase):
                 guide = source.read(desktop_release.GAME_NAME + "/START-HERE.txt").decode("utf-8")
             self.assertIn("Requires Windows 10 or later (64-bit).", guide)
             self.assertIn("Keep the executable and the complete _internal folder together.", guide)
+
+    def test_native_smoke_rejects_missing_or_wrong_controller_backend_before_rendering(self):
+        for backend in (None, "pygame.joystick"):
+            with self.subTest(backend=backend):
+                decoded = {"audio_driver": "dummy"}
+                if backend is not None:
+                    decoded["controller_backend"] = backend
+                outputs = [
+                    subprocess.CompletedProcess([], 0, "Roads Beneath the Shadow 0.5.0\n", ""),
+                    subprocess.CompletedProcess([], 0, json.dumps(decoded), ""),
+                ]
+                with patch.object(desktop_release.subprocess, "run", side_effect=outputs) as run:
+                    with self.assertRaisesRegex(ValueError, "native resource decoders"):
+                        desktop_release.smoke_test(
+                            self.output / "Roads-Beneath-the-Shadow", expected_version="0.5.0"
+                        )
+                self.assertEqual(run.call_count, 2)
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

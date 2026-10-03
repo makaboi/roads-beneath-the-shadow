@@ -108,7 +108,7 @@ def main() -> None:
         screen_reader=settings.screen_reader if terminal else False,
     )
     if terminal:
-        ui = TerminalUI(**options, sound_fn=sound_player.play)
+        ui = TerminalUI(**options, checkpoint_support=True, sound_fn=sound_player.play)
     else:
         try:
             from .pixel_ui import PixelUI, launch_pixel_game
@@ -120,6 +120,7 @@ def main() -> None:
                 'Or play without installing packages: python3 -m roads_beneath_shadow --terminal'
             ) from None
         ui = PixelUI(**options)
+    game: Game | None = None
     try:
         game = Game(
             ui,
@@ -135,9 +136,11 @@ def main() -> None:
             except RuntimeError as error:
                 raise SystemExit(str(error)) from None
     except (KeyboardInterrupt, InputClosed):
-        message = "\nYour journey has paused."
-        if not (getattr(ui, "supports_checkpoints", False) and settings.autosave):
-            message += " Unsaved progress was not kept."
+        message = "\n" + (
+            game.interruption_notice()
+            if game is not None
+            else "Your journey has paused. Automatic recovery could not be checked."
+        )
         if terminal:
             ui.write(message)
         else:

@@ -89,6 +89,17 @@ class WorldRouteTests(unittest.TestCase):
         self.assertEqual(bound.point.key, "rest")
         self.assertEqual(bound.option, option)
 
+    def test_only_the_two_authored_north_gate_prerequisite_labels_bind_to_bree(self):
+        spec = WORLD_MAPS["bree"]
+        point = spec.points[-1]
+        labels = (point.option, "Go to the north gate and find the third stone (investigate 2 more places first)", "Go to the north gate and find the third stone (investigate 1 more place first)")
+        for label in labels:
+            with self.subTest(label=label):
+                options = (label, spec.points[0].option)
+                self.assertIs(map_for_request("WHERE WILL YOU INVESTIGATE?", options), spec)
+                self.assertEqual([(bound.point.key, bound.answer, bound.option) for bound in bind_points(spec, options)], [("north_gate", 1, label), ("messenger_room", 2, spec.points[0].option)])
+        self.assertIsNone(map_for_request("WHERE WILL YOU INVESTIGATE?", (point.option + " (investigate 3 more places first)",)))
+
     def test_unreachable_and_outside_targets_do_not_create_a_path(self):
         spec = WORLD_MAPS["wayhouse"]
         self.assertEqual(shortest_path(spec, spec.spawn, (0, 0)), ())
@@ -281,6 +292,283 @@ class WorldSDLTests(unittest.TestCase):
         self.assertEqual(self.world._clicked_point, point.key)
         self.step(90)
         self.assertEqual(self.world.focused_option, 1)
+
+    def test_second_click_confirms_the_selected_place_when_another_is_equally_near(self):
+        self.world.set_request(request_for("north-gate", identifier=2))
+        self.world._position = (120.0, 104.0)
+        self.assertTrue(self.world._position_clear(self.world.player_position))
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480))
+        point = WORLD_MAPS["north-gate"].points[2]
+        click = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=tuple(round(value * 2) for value in point.position))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.step()
+        self.assertFalse(self.world._path)
+        self.assertEqual(self.world._nearest().point.key, "star")
+        self.assertEqual(self.world.focused_option, 3)
+        self.assertEqual(self.world.handle_event(click), (True, 3))
+
+    def test_north_gate_token_number_walks_to_and_confirms_the_token_instead_of_the_star(self):
+        self.world.set_request(request_for("north-gate", identifier=2))
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480))
+        point = WORLD_MAPS["north-gate"].points[1]
+        marker = (point.position[0] + 7, point.position[1] - 17)
+        self.assertEqual(self.world._point_at(marker).point.key, "token")
+        click = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=tuple(round(value * 2) for value in marker))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.assertEqual(self.world._clicked_point, "token")
+        self.step(220)
+        self.assertFalse(self.world._path)
+        self.assertEqual(self.world.focused_option, 2)
+        self.assertEqual(self.world.handle_event(click), (True, 2))
+        self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e)), (True, 2))
+
+    def test_number_marker_hit_bounds_stay_narrow_and_equal_distance_prefers_last_painted(self):
+        self.world.set_request(request_for("north-gate", identifier=2))
+        point = WORLD_MAPS["north-gate"].points[1]
+        x, y = point.position[0] + 7, point.position[1] - 17
+        self.assertEqual(self.world._point_at((x - 8, y)).point.key, "token")
+        self.assertIsNone(self.world._point_at((x - 8.01, y)))
+        self.assertEqual(self.world._point_at((x + 8, y)).point.key, "token")
+        self.assertEqual(self.world._point_at((x + 8.01, y)).point.key, "star")
+
+        # At the padded zones' exact midpoint, later markers are painted last.
+        self.world.set_request(request_for("pony", identifier=3))
+        left = replace(self.world.points[0].point, tile=(8, 7))
+        right = replace(self.world.points[1].point, tile=(9, 7))
+        self.world.points = bind_points(replace(self.world.spec, points=(left, right)), (left.option, right.option))
+        midpoint = (left.position[0] + 15, left.position[1] - 17)
+        self.assertEqual(self.world._point_at(midpoint).point.key, right.key)
+        self.assertEqual(self.world._point_at((midpoint[0] - 0.01, midpoint[1])).point.key, left.key)
+
+    def test_all_authored_marker_centers_hit_their_current_point_or_detail_and_hidden_choices_do_not_hit(self):
+        checked = 0
+        for key, spec in WORLD_MAPS.items():
+            self.world.set_request(request_for(key, identifier=key))
+            for bound in self.world.points:
+                with self.subTest(map=key, point=bound.point.key):
+                    x, y = bound.point.position
+                    self.assertEqual(self.world._point_at((x + 7, y - 17)), bound)
+                    checked += 1
+            for look in spec.looks:
+                with self.subTest(map=key, look=look.key):
+                    x, y = look.position
+                    self.assertIsNone(self.world._point_at((x, y - 10)))
+                    self.assertEqual(self.world._look_at((x, y - 10)), look)
+                    checked += 1
+        self.assertEqual(checked, 87)
+
+        bridge = WORLD_MAPS["bridge"]
+        self.world.set_request(request_for("bridge", (bridge.points[0].option,), identifier="hidden"))
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480))
+        x, y = bridge.points[1].position
+        self.assertIsNone(self.world._point_at((x + 7, y - 17)))
+        click = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=(round((x + 7) * 2), round((y - 17) * 2)))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.assertIsNone(self.world._clicked_point)
+        self.assertNotIn("hidden_stair", {bound.point.key for bound in self.world.points})
+
+    def test_repeated_clicks_do_not_confirm_a_destination_at_distance_or_through_a_wall(self):
+        point = WORLD_MAPS["pony"].points[0]
+        click = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=tuple(round(value * 2) for value in point.position))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.assertGreaterEqual(self.world.player_position[1] - point.position[1], 26)
+
+        # A wall corner still blocks a selected point that is in range.
+        self.world._position = (point.position[0] + 16, point.position[1] + 16)
+        grid = [list(row) for row in self.world._navigation_spec.grid]
+        grid[8][8] = "#"
+        self.world._navigation_spec = replace(self.world._navigation_spec, grid=tuple("".join(row) for row in grid))
+        self.assertTrue(self.world._position_clear(self.world.player_position))
+        self.world._clicked_point = point.key
+        self.assertFalse(self.world._can_interact(point))
+        self.assertEqual(self.world.handle_event(click), (True, None))
+
+    def test_analog_walking_preserves_partial_speed_and_does_not_exceed_keyboard_speed(self):
+        start = self.world.player_position
+        for vector, expected in (((0.25, 0.0), (1.65, 0.0)), ((0.0, -0.5), (0.0, -3.3)), ((4.0, 3.0), (5.28, 3.96))):
+            with self.subTest(vector=vector):
+                self.world._position = start
+                self.world.update(0.1, movement_vector=vector)
+                self.assertAlmostEqual(self.world.player_position[0] - start[0], expected[0])
+                self.assertAlmostEqual(self.world.player_position[1] - start[1], expected[1])
+
+    def test_analog_and_keyboard_combine_at_bounded_speed_and_can_cancel_each_other(self):
+        from math import hypot
+
+        start = self.world.player_position
+        self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_d))
+        self.world.update(0.1, movement_vector=(1.0, 1.0))
+        displacement = tuple(value - before for value, before in zip(self.world.player_position, start))
+        self.assertAlmostEqual(hypot(*displacement), 6.6)
+        self.assertGreater(displacement[0], displacement[1])
+        self.world._position = start
+        self.world.update(0.1, movement_vector=(-1.0, 0.0))
+        self.assertEqual(self.world.player_position, start)
+        self.world.handle_event(self.pg.event.Event(self.pg.KEYUP, key=self.pg.K_d))
+        self.world.update(0.1, movement_vector=(1.0, 1.0))
+        displacement = tuple(value - before for value, before in zip(self.world.player_position, start))
+        self.assertAlmostEqual(hypot(*displacement), 6.6)
+        self.assertAlmostEqual(displacement[0], displacement[1])
+
+    def test_invalid_analog_input_never_moves_or_suppresses_valid_keyboard_input(self):
+        vectors = ((float("nan"), 0), (0, float("inf")), (float("-inf"), 0), ("bad", 0), (None, 0), (1j, 0), (1,), (1, 0, 0), "10", object())
+        start = self.world.player_position
+        for vector in vectors:
+            with self.subTest(vector=vector):
+                self.world._position = start
+                self.world.update(0.1, movement_vector=vector)
+                self.assertEqual(self.world.player_position, start)
+                self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_d))
+                self.world.update(0.1, movement_vector=vector)
+                self.assertAlmostEqual(self.world.player_position[0] - start[0], 6.6)
+                self.assertEqual(self.world.player_position[1], start[1])
+                self.world.handle_event(self.pg.event.Event(self.pg.KEYUP, key=self.pg.K_d))
+
+    def test_analog_movement_cancels_click_walking_and_cannot_cross_a_table_after_a_stall(self):
+        point = WORLD_MAPS["pony"].points[0]
+        self.world._clicked_point = point.key
+        self.assertTrue(self.world.walk_to(point.tile, point=point))
+        self.world.update(0.05, movement_vector=(-0.5, 0.0))
+        self.assertFalse(self.world._path)
+        self.assertIsNone(self.world._clicked_point)
+
+        self.world._position = (6 * TILE + 8, 7 * TILE + 8)
+        for _ in range(10):
+            self.world.update(5.0, movement_vector=(0.0, -1.0))
+        self.assertGreaterEqual(self.world.player_position[1], 7 * TILE + 3)
+        self.assertTrue(self.world._position_clear(self.world.player_position))
+
+    def test_analog_walking_uses_the_optional_key_snapshot_and_closes_an_inspection(self):
+        start = self.world.player_position
+        self.world._inspected_look = WORLD_MAPS["pony"].looks[0]
+        keys = {self.pg.K_w: False, self.pg.K_a: True, self.pg.K_s: False, self.pg.K_d: False}
+        self.world.update(0.1, keys, movement_vector=(0.0, 0.5), reduced_motion=True)
+        self.assertFalse(self.world.inspection_open)
+        self.assertLess(self.world.player_position[0], start[0])
+        self.assertGreater(self.world.player_position[1], start[1])
+        self.assertTrue(self.world._position_clear(self.world.player_position))
+
+    def test_menu_preview_highlights_the_current_destination_without_changing_navigation(self):
+        point = self.world.points[0]
+        self.world._clicked_point = point.point.key
+        self.world.walk_to(point.point.tile, point=point.point)
+        before = (self.world.player_position, self.world._direction, tuple(self.world._path), self.world._clicked_point, set(self.world._held), self.world.focused_option)
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        x, y = point.point.position
+        marker = self.pg.Rect(x + 1, y - 23, 13, 13)
+        normal = self.pg.image.tobytes(self.world._native.subsurface(marker), "RGB")
+        captions = []
+        font = self.world._small_font
+        recording_font = SimpleNamespace(render=lambda text, *args: (captions.append(text), font.render(text, *args))[1])
+        with patch.object(self.world, "_small_font", recording_font):
+            self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True, preview_answer=1)
+        self.assertIn("1  Mara", captions)
+        self.assertNotEqual(normal, self.pg.image.tobytes(self.world._native.subsurface(marker), "RGB"))
+        self.assertEqual((self.world.player_position, self.world._direction, tuple(self.world._path), self.world._clicked_point, set(self.world._held), self.world.focused_option), before)
+
+    def test_menu_preview_uses_reordered_live_choices_and_never_reveals_a_missing_choice(self):
+        spec = WORLD_MAPS["bree"]
+        request = request_for("bree", (spec.points[-1].option, spec.points[1].option), identifier=2)
+        self.world.set_request(request)
+        captions = []
+        font = self.world._small_font
+        recording_font = SimpleNamespace(render=lambda text, *args: (captions.append(text), font.render(text, *args))[1])
+        with patch.object(self.world, "_small_font", recording_font):
+            self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True, preview_answer=1)
+            self.assertIn("1  North gate", captions)
+            captions.clear()
+            self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True, preview_answer=2)
+            self.assertIn("2  Stable yard", captions)
+
+        bridge = WORLD_MAPS["bridge"]
+        self.world.set_request(request_for("bridge", (bridge.points[0].option,), identifier=3))
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        baseline = self.pg.image.tobytes(self.world._native, "RGB")
+        for answer in (2, -1, 100, "2", 1.0, True):
+            with self.subTest(answer=answer):
+                self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True, preview_answer=answer)
+                self.assertEqual(baseline, self.pg.image.tobytes(self.world._native, "RGB"))
+        self.assertNotIn("hidden_stair", self.world._revealed_details["bridge"])
+
+    def test_every_destination_preview_caption_fits_compact_worlds_at_all_text_sizes(self):
+        for key, spec in WORLD_MAPS.items():
+            self.world.set_request(request_for(key, identifier=key))
+            for point in self.world.points:
+                for preference in ("standard", "large", "larger"):
+                    with self.subTest(map=key, point=point.point.key, size=preference):
+                        fitted = self.world.draw(self.surface, self.pg.Rect(10, 0, 360, 270), reduced_motion=True, text_size=preference, preview_answer=point.answer)
+                        caption = self.world._small_font.render(f"{point.answer}  {point.point.name}", False, (225, 216, 184))
+                        strip = caption.get_rect(midbottom=(160, 235)).inflate(12, 8)
+                        self.assertTrue(self.pg.Rect(0, 0, *WORLD_SIZE).contains(strip))
+                        self.assertLessEqual(fitted.width, 360)
+                        self.assertLessEqual(fitted.height, 270)
+
+    def test_environment_mark_is_earned_only_by_actual_inspection_and_is_static(self):
+        state = GameState(Character.from_origin("Mira", ORIGINS[0]), scene="chapter1_decision")
+        request = request_for("pony", identifier=2)
+        request.context = {"journey_id": state.journey_id, "presentation_id": 1}
+        self.world.set_request(request)
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        before = state.to_dict()
+        look = WORLD_MAPS["pony"].looks[-1]
+        key = ("pony", look.key)
+        marker = tuple(round(value * 2) for value in (look.position[0], look.position[1] - 10))
+        self.world.handle_event(self.pg.event.Event(self.pg.MOUSEMOTION, pos=marker))
+        self.assertNotIn(key, self.world._observed_looks)
+        self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=marker)), (True, None))
+        self.assertNotIn(key, self.world._observed_looks)
+        self.step(220, reduced_motion=True)
+        self.assertNotIn(key, self.world._observed_looks)
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        x, y = look.position
+        box = self.pg.Rect(x - 4, y - 14, 9, 9)
+        unchecked = self.pg.image.tobytes(self.world._native.subsurface(box), "RGB")
+        self.assertEqual(self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_e)), (True, None))
+        self.assertEqual(self.world.inspection_title, look.name)
+        self.assertIn(key, self.world._observed_looks)
+        self.world.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=self.pg.K_ESCAPE))
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        checked = self.pg.image.tobytes(self.world._native.subsurface(box), "RGB")
+        self.assertNotEqual(unchecked, checked)
+        self.step(5, reduced_motion=True)
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480), reduced_motion=True)
+        self.assertEqual(checked, self.pg.image.tobytes(self.world._native.subsurface(box), "RGB"))
+        self.assertEqual(state.to_dict(), before)
+
+    def test_clicked_inspection_marks_survive_utilities_and_map_returns_but_reset_on_load(self):
+        request = request_for("pony", identifier=2)
+        request.context = {"journey_id": "journey-one", "presentation_id": 1}
+        self.world.set_request(request)
+        self.world.draw(self.surface, self.pg.Rect(0, 0, 640, 480))
+        look = WORLD_MAPS["pony"].looks[-1]
+        click = self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=tuple(round(value * 2) for value in (look.position[0], look.position[1] - 10)))
+        self.world.handle_event(click)
+        self.step(220)
+        self.assertEqual(self.world.handle_event(click), (True, None))
+        self.assertTrue(self.world.inspection_open)
+        earned = {("pony", look.key)}
+        self.assertEqual(self.world._observed_looks, earned)
+        self.world.set_request(None, preserve_inspection=True)
+        request.identifier = 3
+        self.world.set_request(request)
+        self.assertEqual(self.world._observed_looks, earned)
+        bree = request_for("bree", identifier=4)
+        bree.context = dict(request.context)
+        self.world.set_request(bree)
+        self.world.set_request(request)
+        self.assertEqual(self.world._observed_looks, earned)
+        self.world.reset_observations()
+        self.assertEqual(self.world._observed_looks, set())
+
+        self.world._observed_looks.update(earned)
+        request.context["presentation_id"] = 2
+        self.world.set_request(request)
+        self.assertEqual(self.world._observed_looks, set())
+        self.world._observed_looks.update(earned)
+        request.context["journey_id"] = "journey-two"
+        self.world.set_request(request)
+        self.assertEqual(self.world._observed_looks, set())
 
     def test_visible_npcs_block_walking_and_interactions_remain_available(self):
         self.world._position = (8 * TILE + 8, 8 * TILE + 8)

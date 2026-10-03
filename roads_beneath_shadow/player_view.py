@@ -10,7 +10,10 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
-from .content import ENDING_TEXT, ITEMS, ORIGINS, PART_ONE_ENDINGS, QUEST_NAMES_LOST, QUEST_REACH_CALENOR
+from .content import (
+    ENDING_TEXT, ITEMS, ORIGINS, PART_ONE_ENDINGS,
+    QUEST_NAMES_LOST, QUEST_REACH_CALENOR, QUEST_THIRD_STONE,
+)
 from .models import GameState
 from .profile import ACHIEVEMENTS, PlayerProfile
 
@@ -48,6 +51,13 @@ EXPLORED_PLACES = {
     "part2_cipher_archive": "The Cipher Archive",
     "part2_erased_statue": "The Erased Statue",
 }
+
+BREE_INVESTIGATIONS = frozenset({"messenger_room", "stable_yard", "pony_kitchen", "mara_fire"})
+
+
+def bree_investigation_count(state: GameState) -> int:
+    """Count witnessed investigations, independently of stored visit order."""
+    return len(BREE_INVESTIGATIONS.intersection(state.visited))
 
 
 def background_snapshot() -> dict[str, Any]:
@@ -168,6 +178,15 @@ def quest_details(state: GameState) -> list[dict[str, Any]]:
         guidance, terms = notes.get(title, ("Keep this promise in mind as you weigh the choices on the road.", ()))
         related = [clue for clue in reversed(state.journal) if any(term in clue.casefold() for term in terms)][:3]
         entry = {"title": title, "guidance": guidance, "related_clues": related}
+        if state.scene == "bree_exploration" and title in {
+            "Find Calenor's mark at Bree's north gate", QUEST_THIRD_STONE,
+        }:
+            investigated = bree_investigation_count(state)
+            entry["progress"] = f"{investigated} of 4 places investigated"
+            entry["guidance"] += (
+                " Investigate at least two places around the Pony before leaving for the north gate."
+                if investigated < 2 else " You have investigated enough places to leave for the north gate."
+            )
         if title == QUEST_NAMES_LOST:
             recovered = sum(bool(state.flags.get(f"part2_testimony_{number}")) for number in ("first", "second", "third"))
             entry["progress"] = f"{recovered} of 3 testimonies recovered"

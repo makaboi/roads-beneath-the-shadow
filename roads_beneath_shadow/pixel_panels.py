@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .content import ORIGINS
 from .pixel_theme import (
     AMBER, CARD, EDGE, INK, MUTED, PANEL, PARCHMENT, RED, SELECTED, STEEL, TEAL,
     ORIGIN_PORTRAIT_FILE, ORIGIN_PORTRAIT_SIZE, draw_medallion, draw_pixel_frame,
@@ -36,6 +37,7 @@ _TABS = {
     "map": (("This stop", "here"), ("Remembered roads", "route")),
     "chronicle": (("Overview", "all"), ("Earned", "earned"), ("Still to discover", "open")),
 }
+_SAVE_ORIGIN_NAMES = {origin.origin_id: origin.name for origin in ORIGINS}
 _ICONS = {
     "weapon": ("..........aa", ".........aa.", "........aa..", ".......aa...", "......aa....", ".....aa.....", "..a.aa......", "...aaa......", "...aaa......", "..aa..a.....", ".aa.........", "............"),
     "armor": ("..aaaaaa....", ".aaaaaaaa...", ".aa....aa...", ".aa....aa...", ".aaa..aaa...", "..aaaaaa....", "..aaaaaa....", "...aaaa.....", "....aa......", "............", "............", "............"),
@@ -130,6 +132,7 @@ class PanelView:
         self._ensure_selection = True
         self._font_size = 0
         self._portraits: dict[tuple[Any, int], Any] = {}
+        self._save_layout_key: tuple[int, int, int] | None = None
         self._fonts(16)
 
     def _fonts(self, size: int) -> None:
@@ -154,6 +157,7 @@ class PanelView:
         self._scrollbars = {}
         self._dragging = None
         self._ensure_selection = True
+        self._save_layout_key = None
         memory = self._inventory_memory
         if kind == "inventory" and memory and data.get("journey_id") and memory["journey_id"] == data["journey_id"]:
             self.tab_index = memory["tab_index"]
@@ -1280,8 +1284,19 @@ class PanelView:
         place = str(slot.get("location", ""))
         episode = f"Part {part}{' complete' if slot.get('ending') else ''}"
         lines = [(f"{episode} / {place}" if place else episode, TEAL, self.font)]
+        origin = slot.get("origin")
+        if isinstance(origin, str) and origin in _SAVE_ORIGIN_NAMES:
+            lines.append((_SAVE_ORIGIN_NAMES[origin], MUTED, self.small_font))
+        condition: list[str] = []
         if "hp" in slot and "max_hp" in slot:
-            lines.append((f"Health {_number(slot['hp'])}/{_number(slot.get('max_hp'))}", MUTED, self.small_font))
+            condition.append(f"Health {_number(slot['hp'])}/{_number(slot.get('max_hp'))}")
+        minutes = slot.get("play_minutes")
+        if isinstance(minutes, int) and not isinstance(minutes, bool) and 0 <= minutes <= 10_000_000:
+            hours, remainder = divmod(minutes, 60)
+            elapsed = f"{hours}h {remainder:02d}m" if hours else f"{minutes} min"
+            condition.append(f"Played {elapsed}")
+        if condition:
+            lines.append((" · ".join(condition), MUTED, self.small_font))
         saved_at = slot.get("saved_at")
         if isinstance(saved_at, str) and saved_at != "unknown":
             try:
@@ -1292,12 +1307,33 @@ class PanelView:
                 pass
         return lines
 
+    def _save_identity(self, screen: Any, slot: dict[str, Any], rect: Any) -> None:
+        """Show only the saved background, using bounded native portrait sizes.
+
+        A slot's present location remains text.  Showing a generic story scene
+        could imply an encounter or a route that this traveler never reached.
+        Missing face art falls back to the existing world identity; unknown
+        origins or entirely missing artwork retain a neutral road mark.
+        """
+        rect = self.pg.Rect(rect)
+        draw_pixel_frame(self.pg, screen, rect, fill=INK, edge=EDGE)
+        origin = slot.get("origin")
+        portrait = self.pg.Rect(0, 0, 64, 80)
+        portrait.center = rect.center
+        if (not isinstance(origin, str) or origin not in _SAVE_ORIGIN_NAMES or
+                not self._identity_portrait(screen, origin, portrait)):
+            draw_medallion(self.pg, screen, rect.center, radius=20, accent=MUTED)
+
     def _draw_saves(self, screen: Any, x: int, y: int, width: int) -> int:
         start_y = y
         mode = self.data.get("mode", "save")
         slots = self.data.get("slots", [])
         if not slots:
             return self._paragraph(screen, "There are no campfire memories yet.", x + 18, y + 20, width - 36) - start_y + 25
+        layout_key = (width, self.content_rect.height, self._font_size)
+        if layout_key != self._save_layout_key:
+            self._save_layout_key = layout_key
+            self._ensure_selection = True
         self.selected = max(0, min(self.selected, len(slots) - 1))
         text_width = max(80, width - 210) if width >= 500 else width - 32
         card_heights = []
@@ -1306,7 +1342,8 @@ class PanelView:
             height = 48 + len(_wrap(title, self.bold_font, text_width)) * self.line_height
             for text, _, font in self._slot_lines(slot, mode):
                 height += len(_wrap(text, font, text_width)) * (font.get_linesize() + 3) + 6
-            card_heights.append(max(109, height) + (42 if width < 500 else 0))
+            illustrated = width >= 500 and not (slot.get("empty") or slot.get("corrupt"))
+            card_heights.append(max(178 if illustrated else 109, height) + (42 if width < 500 else 0))
         if self._ensure_selection:
             top = sum(height + 12 for height in card_heights[:self.selected])
             bottom = top + card_heights[self.selected]
@@ -1331,7 +1368,12 @@ class PanelView:
             for text, color, font in self._slot_lines(slot, mode):
                 bottom = self._paragraph(screen, text, x + 16, bottom + 6, text_width, color, font=font)
             button_label = "Load memory" if mode == "load" else "Save here" if empty else "Overwrite..."
-            button = self.pg.Rect(x + width - 164, y + (height - 37) // 2, 148, 37) if width >= 500 else self.pg.Rect(x + 16, y + height - 47, min(180, width - 32), 35)
+            illustrated = width >= 500 and not (empty or corrupt)
+            button_y = y + height - 53 if illustrated else y + (height - 37) // 2
+            button = self.pg.Rect(x + width - 164, button_y, 148, 37) if width >= 500 else self.pg.Rect(x + 16, y + height - 47, min(180, width - 32), 35)
+            if illustrated:
+                portrait = self.pg.Rect(button.centerx - 45, y + 14, 90, 98)
+                self._save_identity(screen, slot, portrait)
             visible = card.clip(self.content_rect)
             if visible.width and visible.height:
                 self.hit_targets.append((visible, "slot", index))

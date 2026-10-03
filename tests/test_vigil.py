@@ -220,9 +220,9 @@ class VigilTests(unittest.TestCase):
                     )
 
     def test_descent_corruption_requires_accepting_the_marks_power(self) -> None:
-        for choice, flag, corruption, memory in (
-            ("Anger at the secrets", "part2_descent_anger", 2, "You have a right to be angry"),
-            ("Let the star-mark turn", "part2_descent_mark_bargain", 3, "Let the words be mine"),
+        for choice, answer_id, flag, corruption, memory in (
+            ("Anger at the secrets", "anger", "part2_descent_anger", 2, "You have a right to be angry"),
+            ("Let the star-mark turn", "mark", "part2_descent_mark_bargain", 3, "Let the words be mine"),
         ):
             with self.subTest(choice=choice):
                 state = self.state()
@@ -231,8 +231,16 @@ class VigilTests(unittest.TestCase):
                 before = state.to_dict()
                 before["visited"] = ["part2_descent"]
                 self.assertFalse(self.episode((choice, None)).run_scene(state))
+                before["flags"][f"part2_descent_pending_carried_{answer_id}"] = True
                 self.assertEqual(state.to_dict(), before)
-                self.assertTrue(self.episode((choice, "Warn her")).run_scene(state))
+                with tempfile.TemporaryDirectory() as directory:
+                    saves = SaveManager(Path(directory))
+                    saves.save(1, state)
+                    state = saves.load(1)
+                menus = []
+                self.assertTrue(self.episode(("Warn her",), menus=menus).run_scene(state))
+                self.assertEqual(len(menus), 1)
+                self.assertFalse(any("_pending_" in key for key in state.flags))
                 self.assertEqual(state.character.corruption, corruption)
                 self.assertTrue(state.flags[flag])
                 self.assertEqual(len(state.journal), 1)

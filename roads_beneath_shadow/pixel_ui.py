@@ -19,7 +19,9 @@ from typing import Any
 from .lighting import Color
 from .narrative import NarrativeDirector
 from .combat_view import CombatCommand, CombatTurnSummary
+from .controller_input import GamepadInput
 from .pixel_battle import BattleView
+from .pixel_keyboard import NameKeyboard
 from .pixel_panels import PanelView
 from .pixel_theme import draw_pixel_frame, initial_window_size, load_font
 from .pixel_transcript import TranscriptView
@@ -79,6 +81,7 @@ class PixelUI(TerminalUI):
     """A drop-in UI adapter; no graphical dependency is imported here."""
 
     supports_checkpoints = True
+    supports_graphical_settings = True
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("color", True)
@@ -203,6 +206,13 @@ class PixelUI(TerminalUI):
         if not options:
             raise ValueError("choose requires at least one option")
         return self._request("choice", title, options, allow_back=allow_back)
+
+    def choose_settings(self, title: str, options: Sequence[str], *, allow_back: bool = False) -> int | None:
+        """Keep the adjusted control in view while this settings visit lasts."""
+        if not options:
+            raise ValueError("choose_settings requires at least one option")
+        return self._request("choice", title, options, allow_back=allow_back,
+                             context={"navigation_group": "settings"})
 
     def choose_story(self, heading: str, options: Sequence[str]) -> int | str | None:
         if not options:
@@ -348,6 +358,9 @@ class PixelWindow:
         self.world = WorldView(pygame)
         self.battle = BattleView(pygame)
         self.panels = PanelView(pygame)
+        self.name_keyboard = NameKeyboard(pygame)
+        self._name_keyboard_hit = pygame.Rect(0, 0, 0, 0)
+        self.gamepad = GamepadInput(pygame)
         self.archive = TranscriptView(pygame)
         self.soundscape = SoundscapePlayer(pygame)
         self.transcript_open = False
@@ -355,6 +368,8 @@ class PixelWindow:
         self._saved_journey: str | None = None
         self._saved_decision: tuple[Any, ...] | None = None
         self._saved_navigation: tuple[int, int, bool] | None = None
+        self._settings_navigation: tuple[int, int, bool] | None = None
+        self._choice_view_key: tuple[Any, ...] | None = None
         self._creation_archive_start: int | None = None
         self._read_boundaries: Any = WeakKeyDictionary()
         self._page_token: Any = None
@@ -469,6 +484,12 @@ class PixelWindow:
                 self.selected = 0
                 self.choice_scroll = 0
                 self._menu_focused = False
+                if self.request.context.get("navigation_group") == "settings":
+                    if self._settings_navigation is not None:
+                        self.selected, self.choice_scroll, self._menu_focused = self._settings_navigation
+                        self.selected = min(self.selected, max(0, len(self.request.options) - 1))
+                else:
+                    self._settings_navigation = None
                 self._entry_editor = TextEntry(max_length=self.request.context.get("max_length", 64))
                 self._entry_view_start = 0
                 self.entry_composition = ""
@@ -568,16 +589,21 @@ class PixelWindow:
         self._history_layout_key = None
         self._reveals.clear()
         self.archive.reset()
+        self.name_keyboard.close()
+        self.gamepad.reset()
         self.transcript_open = False
         self.narrative = NarrativeDirector()
         self._saved_narrative = None
         self._saved_decision = None
         self._saved_navigation = None
+        self._settings_navigation = None
+        self._choice_view_key = None
         self._creation_archive_start = None
         self._read_boundaries.clear()
         self._page_token = None
         self._page_reveal = 0.0
         self.world.set_request(None)
+        self.world.reset_observations()
         self.battle.set_snapshot(None)
         self._battle_log.clear()
         self._turn_summary = CombatTurnSummary()
@@ -681,9 +707,12 @@ class PixelWindow:
             self._page_reveal = self._visible_to_source(current.text, boundary - self._page_source_offset(current))
 
     def _sync_world(self) -> None:
+        was_active = self.world.active
         request = self.request if not self.reading and not self.panels.active and not self.transcript_open else None
         suspended = self._saved_narrative is not None or self.panels.active or self.transcript_open or self.reading
         self.world.set_request(request, preserve_inspection=suspended)
+        if self.world.active and not was_active:
+            self.gamepad.reset()
 
     def _record_world_inspection(self) -> None:
         if not self.world.inspection_open:
@@ -702,6 +731,7 @@ class PixelWindow:
     def _set_transcript(self, opened: bool, *, scroll: int | None = None) -> None:
         self._finish_narration()
         self.entry_composition = ""
+        self.gamepad.reset()
         self.transcript_open = opened
         if opened:
             self.archive.open(self.history, scroll=scroll)
@@ -751,6 +781,11 @@ class PixelWindow:
             if self.reading:
                 return
             self._finish_narration()
+            if self.request.context.get("navigation_group") == "settings":
+                if type(answer) is int and 1 <= answer < len(self.request.options):
+                    self._settings_navigation = (answer - 1, self.choice_scroll, True)
+                else:
+                    self._settings_navigation = None
             utility = self.request.story and isinstance(answer, str) and answer in dict(STORY_COMMANDS)
             if utility:
                 self._saved_narrative = self.narrative
@@ -765,11 +800,87 @@ class PixelWindow:
                 self.history_scroll = 0
             self.ui.submit(self.request, answer)
             self.request = None
+            self.name_keyboard.close()
+            self.gamepad.reset()
             self.panels.close()
             self.world.set_request(None, preserve_inspection=utility or self._saved_narrative is not None)
             self.choice_hits = []
             self.utility_hits = []
             self.pg.key.stop_text_input()
+
+    def _open_name_keyboard(self) -> None:
+        if (self.request is not None and self.request.kind == "text"
+                and not self.reading and not self.panels.active and not self.transcript_open):
+            if self.entry_composition:
+                self._toast("Finish composing the name before opening the keyboard.")
+                return
+            self.name_keyboard.open()
+            self.gamepad.reset()
+
+    def _apply_keyboard_edit(self, edit: Any) -> None:
+        if edit is None or self.request is None or self.request.kind != "text":
+            return
+        if edit.kind == "close":
+            self.gamepad.reset()
+            return
+        # An input-method composition still belongs to the physical editor.
+        if self.entry_composition:
+            return
+        if edit.kind == "insert":
+            self._entry_editor.insert(edit.text)
+        elif edit.kind == "backspace":
+            self._entry_editor.backspace()
+        elif edit.kind == "confirm" and self.entry.strip():
+            self.answer(self.entry)
+
+    def _dispatch_pad(self, action: Any) -> None:
+        """Use the existing request and modal rules for mapped pad actions."""
+        pg = self.pg
+        command = action.id
+        if self.name_keyboard.active:
+            if command in {"up", "down", "left", "right", "confirm", "back"}:
+                self._apply_keyboard_edit(self.name_keyboard.command(command))
+            return
+        if command == "inventory" and self.request is not None and self.request.kind == "text":
+            self._open_name_keyboard()
+            return
+        if command in {"up", "down", "left", "right"}:
+            # Horizontal menu navigation must never inherit the keyboard's
+            # Right-to-confirm shortcut: held directions may repeat.
+            if command in {"left", "right"} and not self.panels.active and not self.transcript_open:
+                return
+            key = {"up": pg.K_UP, "down": pg.K_DOWN, "left": pg.K_LEFT, "right": pg.K_RIGHT}[command]
+        elif command == "confirm":
+            key = pg.K_RETURN
+        elif command == "back":
+            key = pg.K_BACKSPACE if self.reading and not self.panels.active and not self.transcript_open else pg.K_ESCAPE
+        elif command == "archive":
+            key = pg.K_TAB
+        elif command == "pause":
+            # Pause also closes an existing modal through its normal Back.
+            key = pg.K_ESCAPE
+        elif command in {"previous_target", "next_target"}:
+            if self.transcript_open or self.panels.active:
+                key = pg.K_PAGEUP if command == "previous_target" else pg.K_PAGEDOWN
+            elif self._combat_active and self.request is not None and self.request.kind == "combat":
+                key = pg.K_LEFTBRACKET if command == "previous_target" else pg.K_RIGHTBRACKET
+            else:
+                return
+        elif command == "inventory" and self._combat_active and self.request is not None and self.request.kind == "combat":
+            actions = self.battle.snapshot.actions if self.battle.snapshot else ()
+            index = next((i for i, item in enumerate(actions, 1) if item.id == "inspect"), None)
+            if index is not None:
+                self._choose(index)
+            return
+        elif command in {"inventory", "journal", "map", "character"}:
+            if self.request is None or not self.request.story or self.panels.active or self.transcript_open or self.reading:
+                return
+            character = {"inventory": "i", "journal": "j", "map": "r", "character": "c"}[command]
+            self.handle_event(pg.event.Event(pg.KEYDOWN, key=pg.key.key_code(character), unicode=character, mod=0))
+            return
+        else:
+            return
+        self.handle_event(pg.event.Event(pg.KEYDOWN, key=key, unicode="", mod=0))
 
     def _toggle_fullscreen(self) -> None:
         pg = self.pg
@@ -810,6 +921,8 @@ class PixelWindow:
 
     def handle_event(self, event: Any) -> None:
         pg = self.pg
+        for action in self.gamepad.handle_event(event):
+            self._dispatch_pad(action)
         if event.type == pg.QUIT:
             self.ui.close()
             return
@@ -825,8 +938,14 @@ class PixelWindow:
                     return
                 # A real later drag changes SDL's size before its event arrives.
                 self._restoring_window_size = None
-            self.window_size = (max(760, event.w), max(560, event.h))
-            self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
+            # Pygame 2 has already resized the live display surface. Asking
+            # SDL to resize it again for every queued notification creates
+            # unnecessary native transitions and can replay an obsolete size.
+            self.screen = pg.display.get_surface() or self.screen
+            native_size = self.screen.get_size()
+            self.window_size = (max(760, native_size[0]), max(560, native_size[1]))
+            if native_size != self.window_size:
+                self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
             return
         if event.type == pg.KEYDOWN and event.key == pg.K_F11:
             self._toggle_fullscreen()
@@ -844,12 +963,27 @@ class PixelWindow:
             from .controls import controls_snapshot
 
             self._local_help = True
+            self.name_keyboard.close()
+            self.gamepad.reset()
             self.entry_composition = ""
             self.panels.open("information", controls_snapshot())
             self.world.stop_moving()
             self._sync_world()
             pg.key.stop_text_input()
             return
+        if self.name_keyboard.active:
+            handled, edit = self.name_keyboard.handle_event(event)
+            self._apply_keyboard_edit(edit)
+            if handled:
+                return
+            if event.type == pg.KEYDOWN:
+                command = {pg.K_UP: "up", pg.K_DOWN: "down", pg.K_LEFT: "left", pg.K_RIGHT: "right",
+                           pg.K_RETURN: "confirm", pg.K_KP_ENTER: "confirm", pg.K_ESCAPE: "back"}.get(event.key)
+                if command:
+                    self._apply_keyboard_edit(self.name_keyboard.command(command))
+                    return
+                if event.key not in (pg.K_BACKSPACE, pg.K_DELETE, pg.K_HOME, pg.K_END, pg.K_a):
+                    return
         if self.transcript_open:
             if event.type == pg.KEYDOWN and event.key == pg.K_TAB:
                 self._set_transcript(False)
@@ -864,6 +998,7 @@ class PixelWindow:
                 if self._local_help:
                     self._local_help = False
                     self.panels.close()
+                    self.gamepad.reset()
                     self._sync_world()
                     if self.request and self.request.kind == "text":
                         pg.key.start_text_input()
@@ -899,6 +1034,10 @@ class PixelWindow:
             self._sync_world()
             return
         if self.world.active and not self.transcript_open:
+            if event.type == pg.KEYDOWN and event.key in (pg.K_w, pg.K_a, pg.K_s, pg.K_d):
+                # Walking also closes inspections on update. Transfer focus
+                # now, so Enter/A follows the nearby prompt afterwards.
+                self._menu_focused = False
             if self._menu_focused and not self.world.inspection_open and event.type == pg.KEYDOWN and event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_SPACE, pg.K_RIGHT):
                 self._choose(self.selected + 1)
                 return
@@ -927,6 +1066,11 @@ class PixelWindow:
                 self.answer(CombatCommand("target", target))
             if handled:
                 return
+        if (event.type == pg.MOUSEBUTTONDOWN and event.button == 1
+                and self.request is not None and self.request.kind == "text"
+                and self._name_keyboard_hit.collidepoint(event.pos)):
+            self._open_name_keyboard()
+            return
         if event.type == pg.MOUSEMOTION:
             hovered = next((answer - 1 for rect, answer in self.choice_hits if isinstance(answer, int) and rect.collidepoint(event.pos)), None)
             if hovered is not None:
@@ -1041,7 +1185,7 @@ class PixelWindow:
         top = sum(height + 10 for height, _ in dimensions[:self.selected])
         bottom = top + dimensions[self.selected][0]
         viewport = max(1, self.menu_rect.height)
-        if top < self.choice_scroll:
+        if bottom - top > viewport or top < self.choice_scroll:
             self.choice_scroll = top
         elif bottom > self.choice_scroll + viewport:
             self.choice_scroll = bottom - viewport
@@ -1075,14 +1219,21 @@ class PixelWindow:
         dt = min(0.25, elapsed)
         self._frame_tick = now
         self._advance_narration()
+        walking_context = (self.world.active and not self.reading and not self.panels.active
+                           and not self.transcript_open and not self.name_keyboard.active)
+        for action in self.gamepad.update(dt, stick_navigation=not walking_context):
+            self._dispatch_pad(action)
         if self._layout_size != (width, height):
             self._layout_size = (width, height)
             _, rows, text_width = self._reading_dimensions()
             self._reflow_narrative(rows=rows, width=text_width)
             self._sync_world()
-        if self.world.active and not self.panels.active and not self.transcript_open:
+        if self.world.active and not self.panels.active and not self.transcript_open and not self.name_keyboard.active:
             before = self.world.player_position
-            self.world.update(dt, reduced_motion=self.ui.reduced_motion)
+            movement = self.gamepad.movement
+            if movement != (0.0, 0.0):
+                self._menu_focused = False
+            self.world.update(dt, reduced_motion=self.ui.reduced_motion, movement_vector=movement)
             focused = self.world.focused_option
             if not self._menu_focused and focused is not None:
                 self.selected = focused - 1
@@ -1136,7 +1287,8 @@ class PixelWindow:
         self._panel(self.art_rect, ornate=True)
         inner = self.art_rect.inflate(-8, -8)
         if self.world.active and not self.reading:
-            self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion, text_size=self.ui.text_size)
+            self.world.draw(self.screen, inner, now_ms=now, reduced_motion=self.ui.reduced_motion,
+                            text_size=self.ui.text_size, preview_answer=self.selected + 1 if self._menu_focused else None)
         elif self._combat_active and not self.reading and self.battle.snapshot is not None:
             backdrop_key = BATTLE_BACKDROPS.get((self.hud or {}).get("scene"))
             self.battle.set_scene(self._battle_backdrop(), ground_y=BATTLE_GROUND_Y.get(backdrop_key))
@@ -1182,6 +1334,7 @@ class PixelWindow:
         self.menu_rect = pg.Rect(right.left + 12, label_y + 22, right.width - 24, max(50, right.bottom - label_y - 44))
         self.choice_hits = []
         self.utility_hits = []
+        self._name_keyboard_hit = pg.Rect(0, 0, 0, 0)
         request = self.request
         if self.reading:
             page = self.narrative.current
@@ -1211,6 +1364,10 @@ class PixelWindow:
             limit = request.context.get("max_length", 64)
             self._text(f"1–{limit} printable characters", (field.left + 3, field.bottom + 86), MUTED, self.small_font)
             self._text("Ctrl/Cmd+A selects all", (field.left + 3, field.bottom + 105), MUTED, self.small_font)
+            self._name_keyboard_hit = pg.Rect(field.left, field.bottom + 134, field.width, 36)
+            self._panel(self._name_keyboard_hit)
+            self._text("On-screen keyboard", (self._name_keyboard_hit.left + 10,
+                                              self._name_keyboard_hit.top + 10), TEAL, self.small_font)
         elif not self.reading and request is not None and request.kind == "pause":
             self._render_continue("Continue", self.menu_rect.top + 12)
         elif self.finished:
@@ -1230,8 +1387,23 @@ class PixelWindow:
             footer = "ARROWS Select   ENTER Act   [ / ] Target   TAB Archive   F1 Controls   F11 Fullscreen"
         else:
             footer = "ARROWS Select   ENTER Confirm   1-9 Choose   TAB Archive   F1 Controls   F11 Fullscreen"
+        if self.gamepad.available:
+            if self.panels.active or self.transcript_open:
+                footer = "D-pad / Stick Navigate   A Select   B Close   LB / RB Scroll"
+            elif self.reading:
+                footer = "A Read   B Previous page   View Archive   F1 Controls"
+            elif request is not None and request.kind == "text":
+                footer = "A Continue   X Naming keyboard   B Back   View Archive"
+            elif self.world.active:
+                footer = "Stick Walk   D-pad Choices   A Interact / Choose   Menu Pause"
+            elif self._combat_active:
+                footer = "D-pad Actions   A Act   X Inspect   LB / RB Target   View Archive"
+            else:
+                footer = "D-pad / Stick Select   A Confirm   B Back   View Archive"
         if self.small_font.size(footer)[0] > width - margin * 2:
             footer = footer.replace("   ", "  ").replace("F11 Fullscreen", "F11 Full").replace("TAB Archive", "TAB Log").replace("F1 Controls", "F1 Help")
+        while self.small_font.size(footer)[0] > width - margin * 2 and len(footer) > 1:
+            footer = footer[:-2].rstrip("…") + "…"
         self._text(footer, (margin, height - 26), MUTED, self.small_font)
         # The compact battle canvas has no spare banner area: stacking notices
         # over its cards hides Health and Armor. Keep their remaining display
@@ -1256,12 +1428,14 @@ class PixelWindow:
             self._panel(toast, INK)
             for row, line in enumerate(lines):
                 self._text(line, (toast.x + 13, toast.y + 8 + row * 17), AMBER, self.small_font)
-        if self.panels.active or self.transcript_open:
+        if self.panels.active or self.transcript_open or self.name_keyboard.active:
             shade = pg.Surface((width, height), pg.SRCALPHA)
             shade.fill((6, 10, 15, 205))
             self.screen.blit(shade, (0, 0))
             modal_rect = pg.Rect(margin + 8, 75, width - margin * 2 - 16, height - 113)
-            if self.transcript_open:
+            if self.name_keyboard.active:
+                self.name_keyboard.draw(self.screen, modal_rect, self.font, self.small_font, self.entry)
+            elif self.transcript_open:
                 self.archive.set_entries(self.history)
                 self.archive.draw(self.screen, modal_rect, text_size=self.ui.text_size)
                 self.history_scroll = self.archive.scroll
@@ -1385,6 +1559,15 @@ class PixelWindow:
                 self._sync_world()
 
     def _render_choices(self) -> None:
+        # Action help and reading-size changes can alter the final viewport
+        # after a navigation event. Refit the focused choice once for that
+        # new layout, while leaving ordinary wheel browsing free to scroll.
+        view_key = (self.request.identifier if self.request else None,
+                    self._font_key, self.menu_rect.size, self.selected)
+        if view_key != self._choice_view_key:
+            self._choice_view_key = view_key
+            if self._menu_focused:
+                self._keep_selection_visible()
         dimensions = self._choice_dimensions()
         total = sum(height + 10 for height, _ in dimensions) - 10
         self.choice_scroll = min(self.choice_scroll, max(0, total - self.menu_rect.height))
@@ -1517,4 +1700,5 @@ def launch_pixel_game(game: Any, ui: PixelUI, *, screenshot: Path | None = None)
     finally:
         ui.close()
         worker.join(timeout=1.0)
+        window.gamepad.close()
         window.pg.quit()

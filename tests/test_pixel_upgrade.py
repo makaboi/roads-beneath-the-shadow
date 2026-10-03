@@ -81,6 +81,9 @@ class PixelUpgradeSDLTests(unittest.TestCase):
         self.window.handle_event(self.pg.event.Event(self.pg.MOUSEBUTTONDOWN, button=1, pos=rect.center))
 
     def resize(self, size):
+        # SDL 2 resizes the display surface before posting VIDEORESIZE.
+        # Reproduce that contract even with the dummy driver's synthetic event.
+        self.pg.display.set_mode(size, self.pg.RESIZABLE)
         self.window.handle_event(self.pg.event.Event(self.pg.VIDEORESIZE, w=size[0], h=size[1]))
         self.window.render()
 
@@ -209,6 +212,44 @@ class PixelUpgradeSDLTests(unittest.TestCase):
         self.window.world.update(0.1)
         self.assertEqual(self.window.world.player_position, position, "a released key remained held after reading the transcript")
         self.assertIs(self.window.request, request)
+
+    def test_walking_out_of_inspection_transfers_enter_and_pad_confirm_to_local_prompt(self):
+        from roads_beneath_shadow.controller_input import PadAction
+
+        spec = WORLD_MAPS["bree"]
+        worker = self.start(lambda: self.ui.choose_story(
+            "WHERE WILL YOU INVESTIGATE?", tuple(point.option for point in spec.points)
+        ))
+        request = self.window.request
+        for confirm in ("Enter", "gamepad A"):
+            with self.subTest(confirm=confirm):
+                self.window.world._position = (184.0, 104.0)
+                self.key(self.pg.K_DOWN)
+                self.assertTrue(self.window._menu_focused)
+                self.key(self.pg.K_e, "e")
+                self.assertEqual(self.window.world.inspection_title, "Hanging horse sign")
+                self.key(self.pg.K_w, "w")
+                self.window.world.update(0.05)
+                self.window.handle_event(self.pg.event.Event(self.pg.KEYUP, key=self.pg.K_w))
+                self.window.render()
+                self.assertFalse(self.window.world.inspection_open)
+                self.assertFalse(self.window._menu_focused)
+                self.assertIn("Look at Hanging horse sign", self.window.world.hint_text)
+                if confirm == "Enter":
+                    self.key(self.pg.K_RETURN)
+                else:
+                    self.window._dispatch_pad(PadAction("confirm"))
+                self.assertEqual(self.window.world.inspection_title, "Hanging horse sign")
+                self.assertIs(self.window.request, request)
+                self.assertEqual(self.results, [])
+                self.key(self.pg.K_ESCAPE)
+        # An explicit menu navigation afterwards still owns confirmation.
+        self.key(self.pg.K_DOWN)
+        expected = self.window.selected + 1
+        self.assertTrue(self.window._menu_focused)
+        self.key(self.pg.K_RETURN)
+        worker.join(timeout=1)
+        self.assertEqual(self.results, [expected])
 
     def test_character_and_journal_panels_restore_the_exact_story_scene(self):
         game = Game(self.ui)

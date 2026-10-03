@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 — The Road in Your Hands
+
+- Added mapped gamepad controls for creation, exploration, combat, menus, and adventure panels, with hotplug support and protection against held inputs crossing decisions.
+- Added a mouse and gamepad naming keyboard while preserving physical Unicode typing and input-method composition.
+- Preview direct combat damage against the selected target, disclose Shadow weapon resistance, and show effective healing before consuming a remedy. Conditional counterattacks remain explicit.
+- Highlight map destinations when browsing choices, mark inspected details, and fix second-click interaction at nearby tied markers.
+- Added save-card portraits, origin, Health, and elapsed time; preserve selected slots and Settings rows through layout changes.
+- Remember submitted answers across saves and checkpoints in ten multi-question Part II scenes without applying unfinished scene consequences early.
+- Added terminal and screen-reader checkpoint controls, clearer investigation requirements, and quest completion that follows earned destinations.
+- Reject oversized saves before replacing an existing slot and validate temporary saved answer combinations.
+- Acknowledge SDL's resized display surface without reopening the window for every resize notification; retain minimum-size and fullscreen restoration handling.
+- Added a real X11 resize and fullscreen check to the Linux Quality Gate alongside the existing cross-platform suite and installed-wheel checks.
+
 ## 0.6.2 — Keep the Window on the Road
 
 - Preserve the current window position as well as its size when returning from F11 fullscreen, including after moving the window between fullscreen visits.

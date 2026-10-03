@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field, replace
-from math import hypot
+from math import hypot, isfinite
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -193,7 +193,7 @@ def _maps() -> dict[str, WorldMap]:
         WorldPoint("stable_yard", "Stable yard", (6, 10), "Search the stable yard with Tobin", "Tobin lowers his lantern beside the churned stable mud.", "tobin"),
         WorldPoint("pony_kitchen", "Pony kitchen", (18, 7), "Gather one set of supplies from the Pony's kitchen", "Warm light spills from the pantry's open back door."),
         WorldPoint("mara_fire", "Pony hearth", (14, 8), "Speak privately with Mara beside the dying fire", "Mara waits inside, beside the last warmth of the hearth.", "mara"),
-        WorldPoint("north_gate", "North gate", (10, 1), "Go to the north gate and find the third stone", "Calenor's letter points toward the gate's third stone."),
+        WorldPoint("north_gate", "North gate", (10, 1), "Go to the north gate and find the third stone", "Calenor's letter points toward the gate's third stone.", aliases=("Go to the north gate and find the third stone (investigate 2 more places first)", "Go to the north gate and find the third stone (investigate 1 more place first)")),
     )
 
     wayhouse = _grid(":")
@@ -588,6 +588,7 @@ class WorldView:
         self._hovered: BoundPoint | None = None
         self._hovered_look: WorldLook | None = None
         self._inspected_look: WorldLook | None = None
+        self._observed_looks: set[tuple[str, str]] = set()
         self._world_fingerprint: tuple[Any, ...] | None = None
         self._inspection_resume: tuple[tuple[Any, ...], str] | None = None
         self._blocked_until = 0.0
@@ -615,6 +616,10 @@ class WorldView:
         for follower in self._followers:
             follower.path.clear()
             follower.walking = False
+
+    def reset_observations(self) -> None:
+        """Forget scenery inspection marks when a new presentation begins."""
+        self._observed_looks.clear()
 
     @property
     def active(self) -> bool:
@@ -671,6 +676,7 @@ class WorldView:
             self._follower_positions.clear()
             self._trail_maps.clear()
             self._revealed_details.clear()
+            self.reset_observations()
             self._inspection_resume = None
             self._world_fingerprint = None
             # Reloading an earlier save creates a new presentation of the
@@ -969,7 +975,7 @@ class WorldView:
         elif dy:
             self._direction = 0 if dy > 0 else 3
 
-    def update(self, dt: float, keys: Any = None, *, reduced_motion: bool = False) -> None:
+    def update(self, dt: float, keys: Any = None, *, reduced_motion: bool = False, movement_vector: tuple[float, float] | None = None) -> None:
         if not self.active:
             return
         # Bounded substeps avoid tunneling through a tile when a frame stalls.
@@ -979,7 +985,22 @@ class WorldView:
         held = self._held if keys is None else {key for key in (pg.K_w, pg.K_a, pg.K_s, pg.K_d) if keys[key]}
         dx = float(pg.K_d in held) - float(pg.K_a in held)
         dy = float(pg.K_s in held) - float(pg.K_w in held)
+        # A controller supplies an already dead-zoned vector. Bound it here
+        # too, so malformed input cannot corrupt positions or bypass walls.
+        if isinstance(movement_vector, (tuple, list)) and len(movement_vector) == 2:
+            try:
+                analog_x, analog_y = map(float, movement_vector)
+            except (TypeError, ValueError, OverflowError):
+                analog_x = analog_y = 0.0
+            if isfinite(analog_x) and isfinite(analog_y):
+                analog_length = hypot(analog_x, analog_y)
+                if analog_length > 1:
+                    analog_x /= analog_length
+                    analog_y /= analog_length
+                dx += analog_x
+                dy += analog_y
         length = hypot(dx, dy)
+        normalizer = max(1.0, length)
         if length:
             self._path.clear()
             self._clicked_point = None
@@ -991,7 +1012,7 @@ class WorldView:
             remaining -= step
             before = self._position
             if length:
-                self._move(dx / length * self.SPEED * step, dy / length * self.SPEED * step)
+                self._move(dx / normalizer * self.SPEED * step, dy / normalizer * self.SPEED * step)
             elif self._path:
                 tx, ty = self._path[0]
                 x, y = self._position
@@ -1021,10 +1042,13 @@ class WorldView:
         return ((screen_position[0] - self._rect.left) * WORLD_SIZE[0] / self._rect.width, (screen_position[1] - self._rect.top) * WORLD_SIZE[1] / self._rect.height)
 
     def _point_at(self, position: tuple[float, float]) -> BoundPoint | None:
-        nearby = [bound for bound in self.points if (
-            hypot(position[0] - bound.point.position[0], position[1] - bound.point.position[1]) <= 13
-            or hypot(position[0] - bound.point.position[0] - 7, position[1] - bound.point.position[1] + 17) <= 8
-        )]
+        # Numbers are drawn above their destinations. A nearby object's
+        # larger body hit area must not steal a click on a visible number.
+        markers = [(hypot(position[0] - bound.point.position[0] - 7, position[1] - bound.point.position[1] + 17), index, bound) for index, bound in enumerate(self.points)]
+        markers = [marker for marker in markers if marker[0] <= 8]
+        if markers:
+            return min(markers, key=lambda marker: (marker[0], -marker[1]))[2]
+        nearby = [bound for bound in self.points if hypot(position[0] - bound.point.position[0], position[1] - bound.point.position[1]) <= 13]
         return min(nearby, key=lambda bound: hypot(position[0] - bound.point.position[0], position[1] - bound.point.position[1])) if nearby else None
 
     def _look_at(self, position: tuple[float, float]) -> WorldLook | None:
@@ -1090,6 +1114,7 @@ class WorldView:
                     return False, None
                 if isinstance(focus, WorldLook):
                     self._inspected_look = focus
+                    self._observed_looks.add((self.spec.key, focus.key))
                     self._path.clear()
                     self._held.clear()
                 return True, focus.answer if isinstance(focus, BoundPoint) else None
@@ -1114,14 +1139,14 @@ class WorldView:
             self._inspected_look = None
             bound = self._point_at(local)
             if bound:
-                nearest = self._nearest()
-                if self._clicked_point == bound.point.key and nearest and nearest.point.key == bound.point.key:
+                if self._clicked_point == bound.point.key and self._can_interact(bound.point):
                     return True, bound.answer
                 self._clicked_point = bound.point.key
                 self.walk_to(bound.point.tile, point=bound.point)
             elif (look := self._look_at(local)) is not None:
                 if self._clicked_point == "look:" + look.key and self._can_interact(look):
                     self._inspected_look = look
+                    self._observed_looks.add((self.spec.key, look.key))
                     self._path.clear()
                     self._held.clear()
                 else:
@@ -1222,7 +1247,7 @@ class WorldView:
                         self.pg.draw.line(self._native, (72, 84, 82), (px + offset, py + 1), (px + offset, py + 14))
                     self.pg.draw.line(self._native, (98, 105, 99), (px, py + 13), (px + 15, py + 13))
 
-    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False, text_size: str = "standard") -> Any:
+    def draw(self, surface: Any, rect: Any, *, now_ms: int | None = None, reduced_motion: bool = False, text_size: str = "standard", preview_answer: int | None = None) -> Any:
         if not self.spec:
             return self.pg.Rect(rect)
         self._assets()
@@ -1268,11 +1293,14 @@ class WorldView:
         self._foreground()
         self.atmosphere.finish(self._native, self.spec, self._time, reduced_motion=reduced_motion)
         focus = self._focus()
-        nearest = focus if isinstance(focus, BoundPoint) else None
+        # The menu may preview a current destination without moving the
+        # traveler or changing which nearby interaction E would confirm.
+        preview = next((bound for bound in self.points if bound.answer == preview_answer), None) if type(preview_answer) is int else None
+        nearest = preview or (focus if isinstance(focus, BoundPoint) else None)
         for bound in self.points:
             x, y = map(round, bound.point.position)
             focused = nearest is not None and nearest.point.key == bound.point.key
-            hovered = self._hovered is not None and self._hovered.point.key == bound.point.key
+            hovered = preview is None and self._hovered is not None and self._hovered.point.key == bound.point.key
             color = (248, 213, 126) if focused or hovered else (139, 184, 170)
             pg.draw.circle(self._native, (14, 21, 24), (x + 7, y - 17), 5)
             pg.draw.circle(self._native, color, (x + 7, y - 17), 5, 1)
@@ -1282,15 +1310,18 @@ class WorldView:
                 pg.draw.ellipse(self._native, color, (x - 8, y - 4, 17, 8), 1)
         for look in self.spec.looks:
             x, y = map(round, look.position)
-            selected = focus is look or self._hovered_look is look
+            selected = preview is None and (focus is look or self._hovered_look is look)
+            observed = (self.spec.key, look.key) in self._observed_looks
             color = (219, 185, 112) if selected else (82, 128, 117)
             pg.draw.polygon(self._native, (12, 19, 23), ((x, y - 14), (x + 4, y - 10), (x, y - 6), (x - 4, y - 10)))
-            pg.draw.polygon(self._native, color, ((x, y - 13), (x + 3, y - 10), (x, y - 7), (x - 3, y - 10)), 1)
+            pg.draw.polygon(self._native, color, ((x, y - 13), (x + 3, y - 10), (x, y - 7), (x - 3, y - 10)), 0 if observed else 1)
+            if observed:
+                pg.draw.lines(self._native, (12, 19, 23), False, ((x - 1, y - 10), (x, y - 9), (x + 2, y - 11)))
         # Native-size labels stay crisp after the same nearest-neighbor scale
         # as the map.  Opaque slim bands keep names legible over busy artwork.
         pg.draw.rect(self._native, (13, 18, 22), (7, 7, min(306, self._font.size(self.spec.name)[0] + 12), 15))
         self._native.blit(self._font.render(self.spec.name, False, (220, 186, 115)), (13, 10))
-        bound = self._hovered or self._hovered_look or focus
+        bound = preview or self._hovered or self._hovered_look or focus
         if isinstance(bound, BoundPoint):
             caption = f"{bound.answer}  {bound.point.name}"
         elif isinstance(bound, WorldLook):

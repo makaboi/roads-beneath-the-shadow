@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.6.2 redraws the road.** Refreshed pixel illustrations give the inn, marshes, buried halls, and major encounters a richer dark-fantasy atmosphere. Expressive origin portraits, distinct party and enemy sprites, and animated battle poses carry each traveler into the scene. Regional mist, shadows, and lamplight bring depth to thirteen walkable locations; pixel panel frames and clearer compact battle text keep choices readable. Both complete episodes, existing saves, and the same story and combat rules remain playable in the desktop and terminal editions.
+**Version 0.7.0 puts the road in your hands.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return. The expressive pixel cast, atmospheric locations, both complete episodes, and existing saves carry forward.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
@@ -60,11 +60,11 @@ The pixel edition uses **pygame-ce**. World maps, character animation, illustrat
 
 Thirteen walkable locations carry the journey through Bree and the Dead Road, including the north gate, Midgewater camp and watch-post, Echo Bridge, the Drowned Mile, and the prisoners' sluice. Use **WASD** to walk and **E** beside a character, clue, or doorway to interact. Click a marked place to walk there, then press E or click it again to interact. Nearby points show what they offer. The side menu offers the same story choices, so you can also click an option or use its number.
 
-Thirty-five unnumbered diamond markers offer small details of these places. Approach one and press **E** to look closer; reading these descriptions is free and leaves your story choices open. Close a description with E, Enter, Escape, or its X button; the discovery remains searchable in Archive.
+Thirty-five unnumbered diamond markers offer small details of these places. Approach one and press **E** to look closer; reading these descriptions is free and leaves your story choices open. Close a description with E, Enter, Escape, or its X button; the discovery remains searchable in Archive. Inspected details receive a check mark during the current visit. Browsing a story choice highlights its matching place on the map.
 
 Continue illustrated story pages with **Space** or **Enter**. **F1** opens Controls while keeping your place. At a story choice, **Escape** or **P** opens Pause for saves, Settings, and Controls. Larger reading text and reduced motion are available there.
 
-During battle, read each enemy's next intention before choosing a command. Click an enemy or use **[** and **]** to change targets; Inspect and changing targets spend no turn. Health changes when the visible blow lands, and a short summary keeps your strike, healing, guard, and incoming damage clear. Enemy phase changes are announced. Survival encounters state how long you must hold out; the Black Rider is marked **Cannot be wounded** instead of showing an ordinary Health target.
+During battle, read each enemy's next intention before choosing a command. Click an enemy or use **[** and **]** to change targets; Inspect and changing targets spend no turn. Action details forecast direct damage against the selected target, including its defenses; counterattacks are marked conditional. Health changes when the visible blow lands, and a short summary keeps your strike, healing, guard, and incoming damage clear. Enemy phase changes are announced. Survival encounters state how long you must hold out; the Black Rider is marked **Cannot be wounded** instead of showing an ordinary Health target.
 
 Inventory, character, and journal panels keep equipment, relationships, quests, and clues close at hand. Companion cards distinguish traveling companions from those who returned above, left the company, or remained at a seal. Conversations and recovery choices update as you complete them; the Last Lantern offers only the companions who are actually present.
 
@@ -102,7 +102,26 @@ The game records a separate automatic checkpoint at safe story transitions. **Re
 | F11 | Toggle fullscreen |
 | Escape | Close a panel, end transcript search, or return from a menu with Back |
 
-Enter your traveler's name with the keyboard. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Unicode text and input-method composition are supported. Escape cancels name entry or background selection; **Choose again** returns from the confirmation screen to background selection. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
+Enter your traveler's name with the keyboard or the **On-screen keyboard** button. Move the caret with Left/Right or Home/End, click to position it, and hold Shift to select text; Ctrl+A or Command+A selects the whole name. Physical typing supports Unicode text and input-method composition. Escape closes the on-screen keyboard first, then cancels name entry or background selection; **Choose again** returns from the confirmation screen to background selection. Resize the window to fit your display; reading and battle text also scale on larger displays. Every exploration choice remains available through the side menu, so walking is optional.
+
+### Gamepad controls
+
+Connect a gamepad recognized by SDL's controller mappings. Button names below use the common Xbox layout; A/B/X/Y are the bottom/right/left/top face buttons.
+
+| Control | Action |
+| --- | --- |
+| Left stick | Walk in exploration; navigate other menus |
+| D-pad | Browse choices, panels, and the on-screen keyboard |
+| A | Confirm, interact with the selected choice, or advance the story |
+| B | Back or close; revisit the previous story page while reading |
+| X | Inventory at story decisions; Inspect in combat; open the naming keyboard |
+| Y | Journal at story decisions |
+| Left / right bumper | Change combat target; scroll panels and Archive |
+| View / Back | Open or close Archive |
+| Menu / Start | Pause at a story decision; close an open panel |
+| Left / right stick click | Road map / character panel at story decisions |
+
+Release held controls after switching menus or reconnecting. Keyboard and mouse remain available alongside the gamepad; physical typing can enter characters outside the on-screen keyboard.
 
 ### Terminal and accessibility
 
@@ -113,7 +132,7 @@ python3 -m roads_beneath_shadow --terminal
 python3 -m roads_beneath_shadow --screen-reader
 ```
 
-Screen-reader mode uses numbered terminal prompts, scene descriptions, full enemy names, and numeric Health and Focus. It omits decorative art and color escapes, even when Color is enabled. If this preference was saved, the next launch uses terminal mode; `--pixel` explicitly opens the graphical game.
+Screen-reader mode uses numbered terminal prompts, scene descriptions, full enemy names, and numeric Health and Focus. It omits decorative art and color escapes, even when Color is enabled. If this preference was saved, the next launch uses terminal mode; `--pixel` explicitly opens the graphical game. Terminal and screen-reader launches also offer automatic checkpoints and Resume checkpoint. Submitted answers in multi-question scenes survive manual saves and checkpoints while later questions remain open.
 
 These options apply to either presentation:
 
@@ -133,11 +152,11 @@ Set persistent preferences from **Settings**, including Standard, Large, or Larg
 - Illustrated story pages with adjustable reading text, paragraph-aware pagination, preserved reveal and reading position during resizing, and a searchable archive of the current journey and its discoveries
 - Animated tactical battles with visible Health impacts, enemy phase changes, concise turn summaries, intentions, status, selectable targets, and clear survival objectives
 - Graphical inventory, character, journal, road map, Chronicle, and enemy inspection panels with readable equipment comparisons and companion whereabouts that follow earned story outcomes
-- A separate automatic story checkpoint alongside three manual save slots, with atomic writes and compatible existing saves
+- A separate automatic story checkpoint alongside three manual save slots, with atomic writes, portrait previews, remembered multi-question answers, and compatible existing saves
 - Twenty-seven bundled scene and battle illustrations, thirteen world maps, dedicated battle and portrait sheets, shared exploration and depth atlases, and bundled fonts in a restrained dark fantasy palette
 - Five original, seamless ambient scores, terrain footsteps, and battle and story cues, with shared mute/volume controls and graceful audio-device recovery
 - Two complete episodes with branching routes, optional conversations, and consequences carried into their endings
-- Editable Unicode character names, three distinct backgrounds, and a formative lesson from Calenor
+- Editable Unicode character names, an on-screen naming keyboard, mapped gamepad controls, three distinct backgrounds, and a formative lesson from Calenor
 - Five opening tactics that alter clues, trust, resources, and later options
 - Substantive conversations with Mara and watchman Tobin Reed
 - Rescue, testimony, and prisoner quests whose outcomes carry into later scenes and endings

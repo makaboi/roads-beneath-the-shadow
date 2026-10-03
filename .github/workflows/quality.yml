@@ -37,3 +37,17 @@ jobs:
         env:
           RBS_SAVE_DIR: ${{ runner.temp }}/rbs-smoke-saves
         run: python scripts/check_installed_game.py --report "${{ runner.temp }}/installed-game-qa.json"
+      - name: Install Linux native display tools
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y xvfb openbox xdotool x11-utils
+      - name: Check real X11 resize and fullscreen lifecycle
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        timeout-minutes: 3
+        run: python scripts/check_native_display.py --output-dir "${{ runner.temp }}/native-display-check" --timeout 90
+      - name: Retain native display report and raw logs
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-display-check
+          path: ${{ runner.temp }}/native-display-check/
+          if-no-files-found: warn
