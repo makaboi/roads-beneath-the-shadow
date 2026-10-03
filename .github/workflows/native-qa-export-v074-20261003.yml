@@ -1,0 +1,51 @@
+name: Export retained native QA for v0.7.4
+on:
+  push:
+    branches: [codex/native-qa-export-v074-20261003]
+    paths:
+      - .github/workflows/native-qa-export-v074-20261003.yml
+      - qa-export-v074-staging/export_native_qa.py
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    if: github.repository == 'makaboi/roads-beneath-the-shadow' && github.ref == 'refs/heads/codex/native-qa-export-v074-20261003'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Read metadata for the sealed existing release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api 'repos/makaboi/roads-beneath-the-shadow/actions/runs/37127903810/artifacts?per_page=100' > retained-artifact-metadata.json
+      - name: Verify exact four artifact IDs, run, source and recorded digests
+        run: python qa-export-v074-staging/export_native_qa.py metadata --metadata retained-artifact-metadata.json
+      - name: Read only the four original release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: makaboi/roads-beneath-the-shadow
+          run-id: 37127903810
+          artifact-ids: "11274768702,11275890619,11274704015,11276280065"
+          merge-multiple: true
+          path: retained-native-artifacts
+      - name: Bind native QA to actual public archive and checksum bytes
+        run: >-
+          python qa-export-v074-staging/export_native_qa.py export
+          --metadata retained-artifact-metadata.json
+          --input-dir retained-native-artifacts
+          --output-dir retained-native-qa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retained-native-qa-v074-ed78
+          path: retained-native-qa
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
