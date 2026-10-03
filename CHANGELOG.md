@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 — Quieter in the Background
+
+- Pause drawing while minimized and keep window events responsive; resume the current page and combat animation without counting the hidden interval.
+- Preserve pending names, story choices, and queued notices across minimization, and require held controller inputs to return to neutral before resuming.
+- Label save-card time as Journey time and explain that it advances with resolved story events rather than the time spent reading or exploring.
+
 ## 0.7.1 — Clearer Names and Cards
 
 - Added bundled CJK and Devanagari font fallbacks for names and mixed-script text, preserving the existing pixel typography for supported characters.
@@ -16,7 +22,7 @@
 - Added a mouse and gamepad naming keyboard while preserving physical Unicode typing and input-method composition.
 - Preview direct combat damage against the selected target, disclose Shadow weapon resistance, and show effective healing before consuming a remedy. Conditional counterattacks remain explicit.
 - Highlight map destinations when browsing choices, mark inspected details, and fix second-click interaction at nearby tied markers.
-- Added save-card portraits, origin, Health, and elapsed time; preserve selected slots and Settings rows through layout changes.
+- Added save-card portraits, origin, Health, and journey time; preserve selected slots and Settings rows through layout changes.
 - Remember submitted answers across saves and checkpoints in ten multi-question Part II scenes without applying unfinished scene consequences early.
 - Added terminal and screen-reader checkpoint controls, clearer investigation requirements, and quest completion that follows earned destinations.
 - Reject oversized saves before replacing an existing slot and validate temporary saved answer combinations.

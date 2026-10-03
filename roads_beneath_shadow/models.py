@@ -166,7 +166,7 @@ class GameState:
     journal: list[str] = field(default_factory=list)
     visited: list[str] = field(default_factory=list)
     completed_quests: list[str] = field(default_factory=list)
-    play_minutes: int = 0
+    play_minutes: int = 0  # Scripted journey time, advanced by resolved story events.
     ending: str | None = None
     save_version: int = SAVE_VERSION
 

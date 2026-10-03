@@ -7,7 +7,7 @@
 [![Quality Gate](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml/badge.svg)](https://github.com/makaboi/roads-beneath-the-shadow/actions/workflows/quality.yml)
 [![GitHub stars](https://img.shields.io/github/stars/makaboi/roads-beneath-the-shadow?style=social)](https://github.com/makaboi/roads-beneath-the-shadow/stargazers)
 
-**Version 0.7.1 makes the road clearer to play.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Bundled fallback fonts make CJK and Devanagari names readable, and selected panel details have stronger contrast. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return.
+**Version 0.7.2 makes the road clearer to play.** Play with a mapped gamepad, name your traveler with the on-screen keyboard, and preview damage before committing a combat action. Bundled fallback fonts make CJK and Devanagari names readable, and selected panel details have stronger contrast. Exploration highlights the choice you are browsing and marks details you have inspected. Save cards show your traveler's portrait and progress; multi-question scenes remember your submitted answers when you return. Drawing pauses while the window is minimized and resumes at the same page or combat moment.
 
 *Roads Beneath the Shadow* is a story-driven RPG set in Middle-earth during the War of the Ring. You play an unknown traveler whose guardian has vanished and whose quiet life ends when a dying messenger delivers a broken silver star.
 
@@ -188,6 +188,8 @@ Set `RBS_SAVE_DIR` to use a different save location.
 On Windows and Linux, the default save directory is `~/.roads_beneath_shadow/saves/`. Both presentations share the same save slots.
 
 The automatic checkpoint is `checkpoint.json` inside the same save directory. Settings and Chronicle progress are stored beside the `saves` folder. Completed journeys have stable IDs, so reopening an ending save cannot duplicate its Chronicle credit.
+
+Save cards show **Journey time**, which advances when story events resolve. This is the journey's scripted time; time spent reading, exploring, or leaving the game open does not increase it.
 
 ![Character panel showing the traveler's equipment and relationships](assets/pixel-character.png)
 

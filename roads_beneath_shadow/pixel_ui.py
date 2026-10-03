@@ -322,6 +322,8 @@ class PixelWindow:
         self.history_rect = pygame.Rect(0, 0, 0, 0)
         self.menu_rect = pygame.Rect(0, 0, 0, 0)
         self.fullscreen = False
+        self.minimized = False
+        self._minimized_at: int | None = None
         self.window_size = size
         self._windowed_position: tuple[int, int] | None = None
         self._restoring_window_size: tuple[int, int] | None = None
@@ -903,9 +905,33 @@ class PixelWindow:
     def handle_event(self, event: Any) -> None:
         pg = self.pg
         for action in self.gamepad.handle_event(event):
-            self._dispatch_pad(action)
+            if not self.minimized:
+                self._dispatch_pad(action)
         if event.type == pg.QUIT:
             self.ui.close()
+            return
+        if event.type == pg.WINDOWMINIMIZED:
+            if not self.minimized:
+                self._minimized_at = pg.time.get_ticks()
+            self.minimized = True
+            self.entry_composition = ""
+            self.world.stop_moving()
+            self.gamepad.reset()
+            return
+        if event.type in (pg.WINDOWRESTORED, pg.WINDOWMAXIMIZED):
+            now = pg.time.get_ticks()
+            if self.minimized and self._minimized_at is not None:
+                pause_start = self._minimized_at / 1000
+                hidden_seconds = max(0, now - self._minimized_at) / 1000
+                self._toasts[:] = [
+                    (text, min(now / 1000 + 4.0, expires + hidden_seconds))
+                    for text, expires in self._toasts if expires > pause_start
+                ]
+            self.minimized = False
+            self._minimized_at = None
+            self.gamepad.reset()
+            # Hidden time must not finish a page reveal or skip an impact.
+            self._frame_tick = self._last_tick = now
             return
         if event.type == pg.VIDEORESIZE and not self.fullscreen:
             if self._restoring_window_size is not None:
@@ -928,9 +954,6 @@ class PixelWindow:
             if native_size != self.window_size:
                 self.screen = pg.display.set_mode(self.window_size, pg.RESIZABLE)
             return
-        if event.type == pg.KEYDOWN and event.key == pg.K_F11:
-            self._toggle_fullscreen()
-            return
         if event.type == getattr(pg, "WINDOWFOCUSLOST", -1):
             self.entry_composition = ""
             self.world.stop_moving()
@@ -939,6 +962,11 @@ class PixelWindow:
                 self.archive.handle_event(event)
             elif self.panels.active:
                 self.panels.handle_event(event)
+            return
+        if self.minimized:
+            return
+        if event.type == pg.KEYDOWN and event.key == pg.K_F11:
+            self._toggle_fullscreen()
             return
         if event.type == pg.KEYDOWN and event.key == pg.K_F1 and not self.panels.active and not self.transcript_open:
             from .controls import controls_snapshot
@@ -1193,6 +1221,8 @@ class PixelWindow:
         self._layout_size = None
 
     def render(self) -> None:
+        if self.minimized:
+            return
         pg = self.pg
         width, height = self.screen.get_size()
         self._sync_fonts(width)
@@ -1685,13 +1715,13 @@ def launch_pixel_game(game: Any, ui: PixelUI, *, screenshot: Path | None = None)
             for event in window.pg.event.get():
                 window.handle_event(event)
             window.render()
-            if screenshot is not None and window.request is not None:
+            if screenshot is not None and window.request is not None and not window.minimized:
                 screenshot_frames += 1
                 if screenshot_frames >= 2:
                     screenshot.parent.mkdir(parents=True, exist_ok=True)
                     window.pg.image.save(window.screen, str(screenshot))
                     ui.close()
-            window.clock.tick(60)
+            window.clock.tick(15 if window.minimized else 60)
     finally:
         ui.close()
         worker.join(timeout=1.0)
