@@ -1,6 +1,7 @@
 """Exercise release diagnostics with the real SDL decoders and damaged assets."""
 
 import importlib.util
+import builtins
 import json
 import os
 from pathlib import Path
@@ -46,8 +47,28 @@ class RuntimeAssetTests(unittest.TestCase):
         self.assertEqual(report["fonts"], 2)
         self.assertEqual(report["audio"], 10)
         self.assertEqual(report["audio_driver"], "dummy")
+        self.assertEqual(report["controller_backend"], "pygame._sdl2.controller")
         self.assertGreaterEqual(report["images"], 35)
         self.assertEqual(self.pg.display.get_init(), display_initialized)
+        self.assertEqual(self.pg.font.get_init(), self.font_initialized)
+        self.assertIsNone(self.pg.mixer.get_init())
+
+    def test_missing_controller_extension_fails_without_initializing_any_devices(self):
+        from pygame._sdl2 import controller
+
+        original_import = builtins.__import__
+
+        def import_without_controller(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "pygame._sdl2" and "controller" in fromlist:
+                raise ImportError("native extension omitted")
+            return original_import(name, globals, locals, fromlist, level)
+
+        initialized = controller.get_init()
+        with patch.object(builtins, "__import__", side_effect=import_without_controller), self.assertRaisesRegex(
+            RuntimeError, "mapped gamepad backend is missing"
+        ):
+            self.verify()
+        self.assertEqual(controller.get_init(), initialized)
         self.assertEqual(self.pg.font.get_init(), self.font_initialized)
         self.assertIsNone(self.pg.mixer.get_init())
 

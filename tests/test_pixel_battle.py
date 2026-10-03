@@ -769,6 +769,42 @@ class BattleSDLTests(unittest.TestCase):
         self.assertNotIn("Mara", help_text)
         self.assertEqual(self.view._interrupt_label(self.snapshot.enemies[0]), "◇ HOLD YOUR GROUND")
 
+    def test_shadow_resistance_is_visible_separate_from_armor_and_explained_on_hover(self):
+        enemy = replace(self.snapshot.enemies[0], armor=3, weapon_resistance=2)
+        self.view.set_snapshot(replace(self.snapshot, enemies=(enemy,)))
+        self.view.draw(self.surface, self.canvas)
+        self.assertEqual(self.view._armor_label(enemy), "ARMOR 3 + 2 RESIST")
+        text = self.view._intent_help(enemy)
+        self.assertIn("Shadow resistance 2 reduces weapon damage", text)
+        self.assertIn("Companions, Flanking Strike, and counters bypass it", text)
+        sprite = next(rect for rect, identity in self.view.sprite_hits if identity == enemy.id)
+        help_text = next(text for rect, text in self.view.tooltip_hits if rect == sprite)
+        self.assertIn("Armor 3", help_text)
+        self.assertIn("Shadow resistance 2", help_text)
+        self.assertIn("Companions, Flanking Strike, and counters bypass it", help_text)
+
+    def test_resistance_phase_and_statuses_fit_inside_compact_and_large_enemy_cards(self):
+        surface = self.pg.Surface((2400, 1500))
+        guarded = CombatStatusView("guarded", "Guarded", 1, "+2 Armor until struck.")
+        for size in ((419, 290), (620, 480), (1488, 842), (2256, 1310)):
+            for preference in ("standard", "larger"):
+                for count in (1, 2, 3):
+                    with self.subTest(canvas=size, preference=preference, enemies=count):
+                        snapshot = battle_snapshot(count)
+                        enemies = tuple(replace(enemy, phase=2, weapon_resistance=2, statuses=(guarded,))
+                                        for enemy in snapshot.enemies)
+                        self.view.set_snapshot(replace(snapshot, enemies=enemies))
+                        canvas = self.pg.Rect(14, 14, *size)
+                        self.view.draw(surface, canvas, text_size=preference)
+                        self.assertTrue(all(canvas.contains(rect) for rect, _ in self.view.enemy_hits))
+                        for stats, (card, _) in zip(self.view.enemy_stat_rects, self.view.enemy_hits):
+                            self.assertTrue(card.contains(stats), (card, stats))
+                        for card, identity in self.view.enemy_hits:
+                            enemy = next(enemy for enemy in enemies if enemy.id == identity)
+                            wide = count == 1
+                            compact, *fonts = self.view._card_typography(card, enemy, wide)
+                            self.assertLessEqual(self.view._card_content_height(card, enemy, wide, compact, tuple(fonts)), card.h)
+
     def test_survival_victory_caption_explains_the_living_invulnerable_foe(self):
         self.view.set_snapshot(replace(self.snapshot, phase="victory", defensive_objective=True, max_rounds=3, round_number=3))
         rendered = []

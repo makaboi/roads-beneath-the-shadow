@@ -1081,7 +1081,12 @@ class BattleView:
 
     @staticmethod
     def _armor_label(enemy: Any) -> str:
-        return f"ARMOR {enemy.armor}" + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
+        resistance = getattr(enemy, "weapon_resistance", 0)
+        return (
+            f"ARMOR {enemy.armor}"
+            + (f" + {resistance} RESIST" if resistance else "")
+            + (f"  •  PHASE {enemy.phase}" if enemy.phase > 1 else "")
+        )
 
     def _interrupt_label(self, enemy: Any, *, compact: bool = False) -> str:
         if self.snapshot and self.snapshot.defensive_objective:
@@ -1093,6 +1098,9 @@ class BattleView:
 
     def _intent_help(self, enemy: Any) -> str:
         lines = [f"{enemy.intent_label}: {enemy.telegraph}"]
+        resistance = getattr(enemy, "weapon_resistance", 0)
+        if resistance:
+            lines.append(f"Shadow resistance {resistance} reduces weapon damage. Companions, Flanking Strike, and counters bypass it.")
         if enemy.damage_max or enemy.threat in {"attack", "danger"}:
             lines.append(f"Current stance: {enemy.damage_min}–{enemy.damage_max} Health damage. Defend and new effects can change this forecast.")
         elif enemy.threat == "setup":

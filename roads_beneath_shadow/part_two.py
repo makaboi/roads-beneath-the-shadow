@@ -32,10 +32,80 @@ from .ui import Color, TerminalUI
 
 
 PART_TWO_FIRST_SCENE = "part2_descent"
+QUEST_GATE_MARK = "Find Calenor's mark at Bree's north gate"
+QUEST_DEAD_ROAD_LEAD = "Find the Dead Road before Calenor is taken there"
 LEGACY_PART_ONE_QUESTS = (
-    "Find Calenor's mark at Bree's north gate",
-    "Find the Dead Road before Calenor is taken there",
+    QUEST_GATE_MARK,
+    QUEST_DEAD_ROAD_LEAD,
 )
+
+# These IDs describe submitted answers, never menu positions or permanent
+# outcomes. Existing saves contain none of these optional flags.
+PENDING_STORY_ANSWERS = {
+    "part2_descent": {
+        "carried": ("lesson", "anger", "truth", "mark"),
+        "rear": ("trust", "warn", "demand", "sword", "road_name", "mark"),
+    },
+    "part2_hall": {"name": ("silence", "road_name", "hidden_name"), "holder": ("shared", "mara", "tobin")},
+    "part2_echo_bridge": {"approach": ("exposed", "stair"), "objective": ("ropes", "sapper")},
+    "part2_prisoners": {"priority": ("rescue", "wards", "onward"), "rescue": ("locks", "sword", "drain")},
+    "part2_chain_troll": {"tactic": ("break_chain", "wheel", "keep_chain"), "flood": ("drain", "preserve", "collapse")},
+    "part2_house_under_ash": {"truth": ("share", "leave"), "route": ("handprints", "service", "dormitory")},
+    "part2_burning_memory": {"search": ("rooms", "child", "star"), "floor": ("board", "call", "distance"), "bond": ("hand", "house", "ask")},
+    "part2_teren": {"approach": ("evidence", "token", "attack"), "fate": ("spare", "bind", "kill")},
+    "part2_calenor_prison": {"method": ("sword", "star", "oath"), "words": ("home", "name", "finish")},
+    "part2_last_seal": {"ritual": ("calenor", "shared", "collapse"), "star": ("reject", "bargain")},
+}
+
+
+def validate_pending_answers(state: GameState) -> None:
+    """Reject damaged temporary answers without changing a legacy save."""
+    allowed = {
+        f"{state.scene}_pending_{stage}_{answer}": stage
+        for stage, answers in PENDING_STORY_ANSWERS.get(state.scene, {}).items()
+        for answer in answers
+    }
+    recorded: dict[str, str] = {}
+    for flag, value in state.flags.items():
+        if not value or not flag.startswith("part2_") or "_pending_" not in flag:
+            continue
+        stage = allowed.get(flag)
+        if stage is None:
+            raise ValueError("Save contains an unknown or misplaced pending story answer")
+        if stage in recorded:
+            raise ValueError("Save contains conflicting pending story answers")
+        recorded[stage] = flag
+
+    stages = tuple(PENDING_STORY_ANSWERS.get(state.scene, {}))
+    for index, stage in enumerate(stages):
+        if stage in recorded and any(previous not in recorded for previous in stages[:index]):
+            raise ValueError("Save is missing an earlier pending story answer")
+
+    def chosen(stage: str, answer: str) -> bool:
+        return bool(state.flags.get(f"{state.scene}_pending_{stage}_{answer}"))
+
+    invalid_option = False
+    if state.scene == "part2_descent" and "rear" in recorded:
+        present = state.flags.get("part_two_mara_present") or state.flags.get("part_two_tobin_present")
+        unavailable = ("sword", "road_name", "mark") if present else ("trust", "warn", "demand")
+        invalid_option = any(chosen("rear", answer) for answer in unavailable)
+    elif state.scene == "part2_hall":
+        invalid_option = (chosen("holder", "mara") and not state.flags.get("part_two_mara_present")) or (
+            chosen("holder", "tobin") and not state.flags.get("part_two_tobin_present")
+        )
+    elif state.scene == "part2_echo_bridge":
+        invalid_option = chosen("approach", "stair") and not state.flags.get("part_two_hidden_route_known")
+    elif state.scene == "part2_prisoners":
+        invalid_option = "rescue" in recorded and not chosen("priority", "rescue")
+    elif state.scene == "part2_teren":
+        invalid_option = chosen("approach", "token") and not state.character.inventory.get("ranger_token", 0)
+    elif state.scene == "part2_calenor_prison":
+        testimonies = sum(bool(state.flags.get(f"part2_testimony_{number}")) for number in ("first", "second", "third"))
+        invalid_option = (chosen("method", "sword") and not state.character.inventory.get("calenor_broken_sword", 0)) or (
+            chosen("method", "oath") and testimonies < 2
+        )
+    if invalid_option:
+        raise ValueError("Save contains an unavailable pending story answer")
 
 StoryChoice = Callable[[str, Sequence[str]], int | None]
 CombatRunner = Callable[[GameState, list[Enemy], CombatConfig], CombatResult]
@@ -70,11 +140,54 @@ class PartTwoEpisode:
         combat: CombatRunner,
         *,
         difficulty_provider: Callable[[], CombatDifficulty | str] | None = None,
+        checkpoint: Callable[[], None] | None = None,
     ) -> None:
         self.ui = ui
         self.story_choice = story_choice
         self.combat = combat
         self.difficulty_provider = difficulty_provider or (lambda: CombatDifficulty.NORMAL)
+        self.checkpoint = checkpoint
+
+    def _remembered_choice(
+        self,
+        state: GameState,
+        stage: str,
+        heading: str,
+        options: Sequence[str],
+        *,
+        option_ids: Sequence[str],
+    ) -> int | None:
+        """Keep a submitted answer while the scene waits for later answers.
+
+        Stable option IDs use the existing version-two boolean flags. The
+        scene's consequences remain deferred until its questions are complete;
+        a resumed journey can therefore skip an answered question safely.
+        """
+        if len(options) != len(option_ids) or len(set(option_ids)) != len(option_ids):
+            raise ValueError("Story answers require distinct stable option IDs")
+        if not set(option_ids).issubset(PENDING_STORY_ANSWERS.get(state.scene, {}).get(stage, ())):
+            raise ValueError("Story answers must use their registered stable option IDs")
+        prefix = f"{state.scene}_pending_{stage}_"
+        remembered = [index for index, key in enumerate(option_ids, 1) if state.flags.get(prefix + key)]
+        if len(remembered) == 1:
+            return remembered[0]
+        if remembered:
+            raise ValueError("The saved story decision contains conflicting answers")
+        answer = self.story_choice(heading, options)
+        if answer is None:
+            return None
+        state.flags[prefix + option_ids[answer - 1]] = True
+        if self.checkpoint is not None:
+            self.checkpoint()
+        return answer
+
+    @staticmethod
+    def _finish_choices(state: GameState) -> None:
+        """Discard only this scene's temporary answers after applying effects."""
+        prefix = f"{state.scene}_pending_"
+        for flag in tuple(state.flags):
+            if flag.startswith(prefix):
+                del state.flags[flag]
 
     def run_scene(self, state: GameState) -> bool:
         scene = state.scene
@@ -166,7 +279,8 @@ class PartTwoEpisode:
             (text for flag, text, _memory in CALENOR_LESSONS if state.flags.get(flag)),
             "keep your own judgment on a dark road",
         )
-        carried = self.story_choice(
+        carried = self._remembered_choice(
+            state, "carried",
             "WHAT DO YOU CARRY DOWN?",
             [
                 f"Calenor's lesson: {lesson}",
@@ -174,6 +288,7 @@ class PartTwoEpisode:
                 "The unnamed truth the Shadow fears",
                 "Let the star-mark turn your anger into power",
             ],
+            option_ids=("lesson", "anger", "truth", "mark"),
         )
         if carried is None:
             return False
@@ -200,7 +315,10 @@ class PartTwoEpisode:
                 "Speak only your road-name into the dark",
                 "Let the star-mark choose your steps",
             ]
-        rear_response = self.story_choice(rear_heading, rear_options)
+        rear_response = self._remembered_choice(
+            state, "rear", rear_heading, rear_options,
+            option_ids=("trust", "warn", "demand") if mara_present or tobin_present else ("sword", "road_name", "mark"),
+        )
         if rear_response is None:
             return False
 
@@ -263,6 +381,7 @@ class PartTwoEpisode:
             )
 
         state.play_minutes += 5
+        self._finish_choices(state)
         state.scene = "part2_pursuit"
         return True
 
@@ -373,13 +492,15 @@ class PartTwoEpisode:
             "No throne stands here. Eight low seats face one another across a map of roads, and "
             "the empty seat waits for a voice."
         )
-        name_choice = self.story_choice(
+        name_choice = self._remembered_choice(
+            state, "name",
             "THE HALL ASKS FOR A NAME",
             [
                 "Refuse to speak any name",
                 "Offer only your road-name",
                 "Speak the hidden syllable the star already knows",
             ],
+            option_ids=("silence", "road_name", "hidden_name"),
         )
         if name_choice is None:
             return False
@@ -391,9 +512,11 @@ class PartTwoEpisode:
             holders.append(("mara", "Mara holds it with me"))
         if state.flags.get("part_two_tobin_present", False):
             holders.append(("tobin", "Tobin holds it with me"))
-        holder_choice = self.story_choice(
+        holder_choice = self._remembered_choice(
+            state, "holder",
             "WHO HOLDS THE DARK WITH YOU?",
             [label for _key, label in holders],
+            option_ids=[key for key, _label in holders],
         )
         if holder_choice is None:
             return False
@@ -423,6 +546,7 @@ class PartTwoEpisode:
             state.character.tobin_trust += 1
 
         state.play_minutes += 5
+        self._finish_choices(state)
         state.scene = "part2_hall_exploration"
         return True
 
@@ -536,18 +660,22 @@ class PartTwoEpisode:
         approaches = [("exposed", "Cross the exposed bridgehead")]
         if state.flags.get("part_two_hidden_route_known", False):
             approaches.append(("stair", "Descend the hidden Warden stair"))
-        approach_choice = self.story_choice(
+        approach_choice = self._remembered_choice(
+            state, "approach",
             "HOW DO YOU REACH ECHO BRIDGE?",
             [label for _key, label in approaches],
+            option_ids=[key for key, _label in approaches],
         )
         if approach_choice is None:
             return False
-        objective_choice = self.story_choice(
+        objective_choice = self._remembered_choice(
+            state, "objective",
             "WHAT MUST SURVIVE AT ECHO BRIDGE?",
             [
                 "Defend the ropes and keep the road open",
                 "Hunt the sapper before the pitch is lit",
             ],
+            option_ids=("ropes", "sapper"),
         )
         if objective_choice is None:
             return False
@@ -613,6 +741,7 @@ class PartTwoEpisode:
             )
 
         state.play_minutes += 8
+        self._finish_choices(state)
         state.scene = "part2_drowned_mile"
         return True
 
@@ -682,26 +811,30 @@ class PartTwoEpisode:
             Color.BLUE,
             alt_text="An enormous eight-spoked floodgate wheel rises above rushing water.",
         )
-        choice = self.story_choice(
+        choice = self._remembered_choice(
+            state, "priority",
             "THE SLUICE HORN SOUNDS. CHOOSE.",
             [
                 "Rescue the captives before the water reaches them",
                 "Preserve the flood wards and keep the old road alive",
                 "Race onward while the Ash-Hand is still unready",
             ],
+            option_ids=("rescue", "wards", "onward"),
         )
         if choice is None:
             return False
 
         rescue_method = None
         if choice == 1:
-            rescue_method = self.story_choice(
+            rescue_method = self._remembered_choice(
+                state, "rescue",
                 "HOW DO YOU FREE THEM?",
                 [
                     "Pick the cage locks beneath the horn's next note",
                     "Break the rusted hinges with Calenor's sword",
                     "Open the Warden drain and lead them through the dry channel",
                 ],
+                option_ids=("locks", "sword", "drain"),
             )
             if rescue_method is None:
                 return False
@@ -737,6 +870,7 @@ class PartTwoEpisode:
             )
 
         state.play_minutes += 10 + (4 if choice == 1 else 0)
+        self._finish_choices(state)
         state.scene = "part2_chain_troll"
         return True
 
@@ -752,23 +886,27 @@ class PartTwoEpisode:
             "The troll rises with the floodgate on its back, blind eyes sewn shut, every chain "
             "stamped with a dead oath."
         )
-        tactic = self.story_choice(
+        tactic = self._remembered_choice(
+            state, "tactic",
             "THE CHAINS ARE ARMOR AND LEASH",
             [
                 "Break the restraining chain and strip away its armor",
                 "Turn the flood wheel against the troll",
                 "Preserve the restraining chain and fight within its reach",
             ],
+            option_ids=("break_chain", "wheel", "keep_chain"),
         )
         if tactic is None:
             return False
-        flood_outcome = self.story_choice(
+        flood_outcome = self._remembered_choice(
+            state, "flood",
             "WHAT BECOMES OF THE DROWNED MILE?",
             [
                 "Drain the Drowned Mile into the lower dark",
                 "Preserve the Drowned Mile's ancient wards",
                 "Collapse the flooded branch behind you",
             ],
+            option_ids=("drain", "preserve", "collapse"),
         )
         if flood_outcome is None:
             return False
@@ -855,6 +993,7 @@ class PartTwoEpisode:
             "The floodgate's oath-chain carried the second Warden testimony through the Drowned Mile."
         )
         state.play_minutes += 9
+        self._finish_choices(state)
         state.scene = "part2_house_under_ash"
         return True
 
@@ -890,7 +1029,10 @@ class PartTwoEpisode:
             truth_heading = "THE COLD SHACKLE REMAINS"
             truth_options = ["Name the forge truth aloud", "Keep moving"]
 
-        truth_choice = self.story_choice(truth_heading, truth_options)
+        truth_choice = self._remembered_choice(
+            state, "truth", truth_heading, truth_options,
+            option_ids=("share", "leave"),
+        )
         if truth_choice is None:
             return False
         routes = (
@@ -898,9 +1040,11 @@ class PartTwoEpisode:
             "Take the Warden service passage",
             "Cross the ruined dormitory",
         )
-        route_choice = self.story_choice(
+        route_choice = self._remembered_choice(
+            state, "route",
             "CHOOSE A WAY THROUGH THE REFUGE",
             routes,
+            option_ids=("handprints", "service", "dormitory"),
         )
         if route_choice is None:
             return False
@@ -935,6 +1079,7 @@ class PartTwoEpisode:
             )
 
         state.play_minutes += 6
+        self._finish_choices(state)
         state.scene = "part2_burning_memory"
         return True
 
@@ -952,33 +1097,39 @@ class PartTwoEpisode:
             "The refuge becomes the house from your childhood. Flame climbs walls that have "
             "already been ash for years."
         )
-        search_choice = self.story_choice(
+        search_choice = self._remembered_choice(
+            state, "search",
             "THE HOUSE BURNS AGAIN",
             [
                 "Search every room before the roof falls",
                 "Follow the child-self through the smoke",
                 "Ask the star-mark beneath your skin to remember",
             ],
+            option_ids=("rooms", "child", "star"),
         )
         if search_choice is None:
             return False
-        floor_choice = self.story_choice(
+        floor_choice = self._remembered_choice(
+            state, "floor",
             "A WOMAN HIDES SOMETHING BENEATH THE FLOOR",
             [
                 "Lift the board and see what she protected",
                 "Call to her through the memory",
                 "Mark the place and keep your distance",
             ],
+            option_ids=("board", "call", "distance"),
         )
         if floor_choice is None:
             return False
-        bond_choice = self.story_choice(
+        bond_choice = self._remembered_choice(
+            state, "bond",
             "THE CHILD REACHES FOR CALENOR",
             [
                 "Take his hand",
                 "Look back at the burning house",
                 "Ask why he knew the way out",
             ],
+            option_ids=("hand", "house", "ask"),
         )
         if bond_choice is None:
             return False
@@ -1016,6 +1167,7 @@ class PartTwoEpisode:
             self.ui.narrate("The memory gives no answer. Calenor's living voice must do that.")
 
         state.play_minutes += 8 + (4 if search_choice == 1 else 0)
+        self._finish_choices(state)
         state.scene = "part2_teren"
         return True
 
@@ -1044,15 +1196,19 @@ class PartTwoEpisode:
         if state.character.inventory.get("ranger_token", 0):
             approaches.append(("token", "Invoke Calenor's Ranger token"))
         approaches.append(("attack", "Attack before Teren can speak again"))
-        approach_choice = self.story_choice(
+        approach_choice = self._remembered_choice(
+            state, "approach",
             "HOW DO YOU ANSWER TEREN?",
             [label for _key, label in approaches],
+            option_ids=[key for key, _label in approaches],
         )
         if approach_choice is None:
             return False
-        fate_choice = self.story_choice(
+        fate_choice = self._remembered_choice(
+            state, "fate",
             "IF TEREN YIELDS, WHAT FATE WILL FOLLOW?",
             ["Spare Teren", "Bind Teren for judgment", "Kill Teren"],
+            option_ids=("spare", "bind", "kill"),
         )
         if fate_choice is None:
             return False
@@ -1125,6 +1281,7 @@ class PartTwoEpisode:
             self.ui.narrate("Teren dies without giving the Shadow any name to carry.")
 
         state.play_minutes += 10
+        self._finish_choices(state)
         state.scene = "part2_calenor_prison"
         return True
 
@@ -1154,19 +1311,23 @@ class PartTwoEpisode:
         )
         if testimony_count >= 2:
             methods.append(("oath", "Speak the Warden oath carried by two testimonies"))
-        method_choice = self.story_choice(
+        method_choice = self._remembered_choice(
+            state, "method",
             "HOW DO YOU BREAK THE SPOKE-CHAIN?",
             [label for _key, label in methods],
+            option_ids=[key for key, _label in methods],
         )
         if method_choice is None:
             return False
-        words_choice = self.story_choice(
+        words_choice = self._remembered_choice(
+            state, "words",
             "WHAT ARE YOUR FIRST WORDS TO CALENOR?",
             [
                 "Bring him home",
                 "Demand why he buried the name",
                 "Command him to finish the road",
             ],
+            option_ids=("home", "name", "finish"),
         )
         if words_choice is None:
             return False
@@ -1194,6 +1355,7 @@ class PartTwoEpisode:
 
         state.complete_quest(QUEST_REACH_CALENOR)
         state.play_minutes += 8
+        self._finish_choices(state)
         state.scene = "part2_calenor_reunion"
         return True
 
@@ -1569,19 +1731,23 @@ class PartTwoEpisode:
                 "Tobin sets his lantern beyond the spoke-circle, facing the way home. "
                 "Whatever you make of the road, there must still be a way to leave it."
             )
-        ritual_choice = self.story_choice(
+        ritual_choice = self._remembered_choice(
+            state, "ritual",
             "SET THE RITUAL",
             [
                 "Calenor anchors the failing spoke",
                 "Divide among willing voices",
                 "Prepare the vault for collapse",
             ],
+            option_ids=("calenor", "shared", "collapse"),
         )
         if ritual_choice is None:
             return False
-        star_choice = self.story_choice(
+        star_choice = self._remembered_choice(
+            state, "star",
             "THE STAR WHISPERS BENEATH YOUR SKIN",
             ["Reject the star's bargain", "Bargain for enough power to hold the road"],
+            option_ids=("reject", "bargain"),
         )
         if star_choice is None:
             return False
@@ -1627,6 +1793,7 @@ class PartTwoEpisode:
             )
         state.add_quest(QUEST_DEAD_ROAD_FATE)
         state.play_minutes += 6
+        self._finish_choices(state)
         state.scene = "part2_final_battle"
         return True
 
@@ -2084,7 +2251,8 @@ def begin_part_two(state: GameState) -> None:
         raise ValueError("Part II can begin only from a completed Part I journey")
 
     for quest in LEGACY_PART_ONE_QUESTS:
-        state.complete_quest(quest)
+        if quest in state.quests:
+            state.complete_quest(quest)
     state.character.remove_item("star_key")
     state.character.add_item("calenor_broken_sword")
     state.character.hp = max(state.character.hp, (state.character.max_hp + 1) // 2)

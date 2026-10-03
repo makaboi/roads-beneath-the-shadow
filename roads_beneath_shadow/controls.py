@@ -42,6 +42,17 @@ _CONTROLS = {'title': 'HOW TO PLAY',
                        'separate music and sound-effect volumes. Sound starts off. F11 '
                        'toggles fullscreen. Screen-reader mode opens the terminal '
                        'presentation on your next launch.'},
+              {'heading': 'Play with a gamepad',
+               'text': 'With a compatible mapped gamepad, the left stick walks and the '
+                       'D-pad selects choices. A confirms or interacts; B goes back. '
+                       'View/Back opens the archive, and Menu/Start pauses at story choices. '
+                       'X opens inventory, inspects in combat, or opens the naming keyboard. '
+                       'Y opens the journal. Press the left stick for the road map or the '
+                       'right stick for your character. The shoulder buttons change battle '
+                       'targets or scroll an open panel. A/B/X/Y mean the bottom/right/left/top '
+                       'face buttons. In the naming keyboard, select letters and then Done; '
+                       'B closes the keyboard while keeping your name. Physical typing, '
+                       'including Unicode names, remains available.'},
               {'heading': 'The road remembers',
                'text': 'Hope, corruption, trust, clues, and surviving companions change the '
                        'paths ahead. Your journal keeps the promises and truths you have '

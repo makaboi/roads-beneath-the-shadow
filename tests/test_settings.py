@@ -123,6 +123,7 @@ class SettingsManagerTests(unittest.TestCase):
     def test_graphical_settings_apply_audio_volumes_and_checkpoint_preference(self) -> None:
         class GraphicalSettingsUI(TerminalUI):
             supports_checkpoints = True
+            supports_graphical_settings = True
 
         with tempfile.TemporaryDirectory() as temporary:
             manager = SettingsManager(Path(temporary) / "settings.json")
@@ -139,6 +140,7 @@ class SettingsManagerTests(unittest.TestCase):
     def test_graphical_volume_controls_can_mute_without_enabling_sound(self) -> None:
         class GraphicalSettingsUI(TerminalUI):
             supports_checkpoints = True
+            supports_graphical_settings = True
 
         choices = iter(["7", "8", "11"])
         ui = GraphicalSettingsUI(color=False, fast=True, input_fn=lambda _: next(choices), output_fn=lambda _: None)
@@ -150,6 +152,7 @@ class SettingsManagerTests(unittest.TestCase):
     def test_graphical_reading_size_cycles_and_persists_without_changing_audio(self) -> None:
         class GraphicalSettingsUI(TerminalUI):
             supports_checkpoints = True
+            supports_graphical_settings = True
 
         with tempfile.TemporaryDirectory() as temporary:
             manager = SettingsManager(Path(temporary) / "settings.json")

@@ -312,7 +312,8 @@ def smoke_test(
         )
         timings["runtime_decode"] = round(perf_counter() - start, 3)
         decoded_assets = json.loads(decoded.stdout)
-        if not isinstance(decoded_assets, dict) or decoded_assets.get("audio_driver") != "dummy":
+        if (not isinstance(decoded_assets, dict) or decoded_assets.get("audio_driver") != "dummy"
+                or decoded_assets.get("controller_backend") != "pygame._sdl2.controller"):
             raise ValueError("The frozen game did not verify its native resource decoders")
         for label, arguments in (
             ("asset_check", ["--check-install"]),

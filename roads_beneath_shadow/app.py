@@ -77,7 +77,13 @@ from .content import (
 )
 from .models import Character, GameState
 from .journey_artwork import MIDGEWATER_CAMP_ART
-from .part_two import PartTwoEpisode, begin_part_two, part_two_ending_breakdown
+from .part_two import (
+    PartTwoEpisode,
+    QUEST_DEAD_ROAD_LEAD,
+    QUEST_GATE_MARK,
+    begin_part_two,
+    part_two_ending_breakdown,
+)
 from .profile import ACHIEVEMENTS, PlayerProfile, ProfileManager
 from .savegame import SaveManager
 from .settings import SettingsManager, UserSettings
@@ -133,6 +139,7 @@ class Game:
             self._story_choice,
             lambda state, enemies, config: self.combat.run(state, enemies, config),
             difficulty_provider=lambda: getattr(self.combat, "default_difficulty", DIFFICULTY_MODES[self.user_settings.difficulty]),
+            checkpoint=self._record_checkpoint,
         )
         self.state: GameState | None = None
 
@@ -402,6 +409,36 @@ class Game:
         if callable(toast) and self._checkpoint_stamp(path) != before:
             toast("Checkpoint saved.")
 
+    def interruption_notice(self) -> str:
+        """Describe recovery from a readable checkpoint, rather than a setting."""
+        message = "Your journey has paused."
+        if not getattr(self.ui, "supports_checkpoints", False):
+            return message + " Unsaved progress was not kept."
+        try:
+            saved = self.checkpoints.resume()
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            return message + " No usable automatic checkpoint is available. Unsaved progress was not kept."
+
+        saved_journey = (
+            f"Revisit {saved.character.name}'s saved ending from the main menu."
+            if saved.ending
+            else f"Resume checkpoint restores {saved.character.name}'s saved journey."
+        )
+        if self.state is None:
+            return message + " " + saved_journey
+        if saved.journey_id != self.state.journey_id:
+            return (
+                message + " Unsaved progress in this journey was not kept. "
+                + saved_journey
+            )
+        if saved.ending:
+            recovery = " Revisit your saved ending from the main menu."
+        else:
+            recovery = " Resume checkpoint restores the last saved story decision."
+        if saved.to_dict() != self.state.to_dict():
+            recovery += " Progress since that save was not kept."
+        return message + recovery
+
     def _resume_checkpoint(self) -> bool:
         try:
             state = self.checkpoints.resume()
@@ -560,7 +597,7 @@ class Game:
         character.hp = max(1, character.hp - 2)
         character.mara_trust += 1
         self.state.flags["found_ranger_cipher"] = True
-        self.state.add_quest("Find Calenor's mark at Bree's north gate")
+        self.state.add_quest(QUEST_GATE_MARK)
         self.state.add_journal("The messenger hid a token directing me to the north gate's third stone.")
         self.ui.write("An Orc blade grazes you while you search. You lose 2 Health.", color=Color.RED)
         result = self.combat.run(
@@ -680,7 +717,7 @@ class Game:
         elif choice == 1:
             self.ui.write('"The Ranger lives," the captain says. "For now. The Dead Road needs his blood."', color=Color.RED)
             self.state.flags["calenor_may_live"] = True
-            self.state.add_quest("Find the Dead Road before Calenor is taken there")
+            self.state.add_quest(QUEST_DEAD_ROAD_LEAD)
             self.state.add_journal("The Orc captain claimed Calenor is alive and named the Dead Road.")
             character.mara_trust += 1
             result = self.combat.run(
@@ -819,6 +856,10 @@ class Game:
                 "beyond those gates a horn answers at long intervals. Whoever commanded the Orcs "
                 "has not given up the hunt."
             )
+            self.ui.narrate(
+                "Investigate at least two of the Pony's four places before leaving for the north gate. "
+                "You can investigate all four if you wish."
+            )
             self.state.flags["bree_map_seen"] = True
 
         while True:
@@ -836,7 +877,15 @@ class Game:
             if "mara_fire" not in self.state.visited:
                 options.append("Speak privately with Mara beside the dying fire")
                 routes.append("mara_fire")
-            options.append("Go to the north gate and find the third stone")
+            from .player_view import bree_investigation_count
+
+            investigated = bree_investigation_count(self.state)
+            self.ui.write(f"Investigated {investigated} of 4 places around the Pony.", color=Color.CYAN)
+            gate_option = "Go to the north gate and find the third stone"
+            if investigated < 2:
+                remaining = 2 - investigated
+                gate_option += f" (investigate {remaining} more {'place' if remaining == 1 else 'places'} first)"
+            options.append(gate_option)
             routes.append("north_gate")
 
             choice = self._story_choice("WHERE WILL YOU INVESTIGATE?", options)
@@ -844,8 +893,7 @@ class Game:
                 return False
             route = routes[choice - 1]
             if route == "north_gate":
-                investigations = {"messenger_room", "stable_yard", "pony_kitchen", "mara_fire"}
-                if len(investigations.intersection(self.state.visited)) < 2:
+                if investigated < 2:
                     self.ui.write(
                         "The letter gives you a destination, but too much about tonight remains unknown. "
                         "Investigate at least two places before leaving the Pony.",
@@ -1175,6 +1223,9 @@ class Game:
             self.state.add_quest(QUEST_WAYHOUSE)
             self.state.add_journal("Calenor hid a map to a Midgewater wayhouse built above the Dead Road.")
             self.state.flags["north_gate_cache_opened"] = True
+
+        if QUEST_GATE_MARK in self.state.quests:
+            self.state.complete_quest(QUEST_GATE_MARK)
 
         if not self.state.flags.get("north_gate_promise_chosen"):
             promise = self._story_choice(
@@ -1648,6 +1699,12 @@ class Game:
             )
             self.state.flags["wayhouse_opened"] = True
             self.state.visit("wayhouse_entry")
+
+        if QUEST_DEAD_ROAD_LEAD in self.state.quests:
+            self.state.complete_quest(QUEST_DEAD_ROAD_LEAD)
+            self.state.add_journal(
+                "I found the Dead Road beneath the wayhouse. Calenor is still a prisoner; finding the road has not yet brought him home."
+            )
 
         while True:
             options: list[str] = []
@@ -2380,8 +2437,15 @@ class Game:
             return
         self.ui.title("JOURNAL")
         self.ui.write("Active quests", color=Color.YELLOW, bold=True)
-        for quest in self.state.quests:
-            self.ui.write(f"- {quest}")
+        from .player_view import quest_details
+
+        for detail in quest_details(self.state):
+            self.ui.write(f"- {detail['title']}")
+            self.ui.write(detail["guidance"])
+            if detail.get("progress"):
+                self.ui.write(detail["progress"], color=Color.CYAN)
+            for clue in detail["related_clues"]:
+                self.ui.write(f"Known clue: {clue}")
         if self.state.completed_quests:
             self.ui.write()
             self.ui.write("Completed quests", color=Color.GREEN, bold=True)
@@ -2518,12 +2582,22 @@ class Game:
             "choices, use I for inventory, C for character status, J for the journal, S to save, "
             "R for the road map, P for the pause menu, H for controls, or M to return to the main menu."
         )
+        if getattr(self.ui, "supports_checkpoints", False):
+            self.ui.narrate(
+                "The game keeps a separate automatic checkpoint at safe story decisions. "
+                "Resume checkpoint on the main menu restores it. Your three manual save slots "
+                "remain separate, and Settings can turn automatic checkpoints off."
+            )
         self.ui.write("Combat", color=Color.YELLOW, bold=True)
         self.ui.narrate(
-            "Enemies announce their next intent before you act. Attack is dependable. Power attacks "
-            "spend Focus, interrupt marked moves, and leave you Exposed. Defending halves incoming "
-            "physical hits that round and restores Focus; Bleeding and setup effects still resolve. Each background has a unique ability, "
-            "while companions can disrupt or weaken a chosen enemy."
+            "Enemies announce their next intent before you act. Inspect and changing targets spend "
+            "no turn. Attack costs no Focus. Power attacks spend Focus, can interrupt marked moves, "
+            "and leave you Exposed. Defending halves incoming physical hits that round and restores "
+            "1 Focus; Bleeding and setup effects still resolve. When available, your background's "
+            "special ability costs 1 Focus and can be used once per battle. The Scout's offensive "
+            "ability is unavailable while surviving an invulnerable foe. Available companion "
+            "commands can disrupt or weaken a chosen enemy. When you cannot interrupt an intent, "
+            "read its warning and consider Defend."
         )
         self.ui.write("Choices and consequences", color=Color.YELLOW, bold=True)
         self.ui.narrate(
@@ -2540,7 +2614,8 @@ class Game:
             motion = "Reduced" if self.ui.reduced_motion else "Full"
             reader = "On" if self.user_settings.screen_reader else "Off"
             difficulty = DIFFICULTY_DESCRIPTIONS[self.user_settings.difficulty]
-            graphical = bool(getattr(self.ui, "supports_checkpoints", False))
+            graphical = bool(getattr(self.ui, "supports_graphical_settings", False))
+            checkpoints = bool(getattr(self.ui, "supports_checkpoints", False))
             options = [
                 f"Sound: {sound}" if graphical else f"Original sound cues: {sound}",
                 f"Color: {'Grayscale' if self.user_settings.color_mode == 'off' else 'Full'}" if graphical else f"Color mode: {color}",
@@ -2556,8 +2631,11 @@ class Game:
                     f"Automatic checkpoints: {'On' if self.user_settings.autosave else 'Off'}",
                     f"Reading text size: {self.user_settings.text_size.title()}",
                 ])
+            elif checkpoints:
+                options.append(f"Automatic checkpoints: {'On' if self.user_settings.autosave else 'Off'}")
             options.append("Back")
-            choice = self.ui.choose("SETTINGS", options, allow_back=True)
+            choose_settings = getattr(self.ui, "choose_settings", self.ui.choose)
+            choice = choose_settings("SETTINGS", options, allow_back=True)
             if choice == 1:
                 self.ui.sound_enabled = not self.ui.sound_enabled
                 self.user_settings.sound = self.ui.sound_enabled
@@ -2595,7 +2673,7 @@ class Game:
                 volume = next((step for step in steps if step > current + 0.001), 0.0)
                 setattr(self.user_settings, field, volume)
                 setattr(self.ui, field, volume)
-            elif graphical and choice == 9:
+            elif (graphical and choice == 9) or (not graphical and checkpoints and choice == 7):
                 self.user_settings.autosave = not self.user_settings.autosave
             elif graphical and choice == 10:
                 sizes = ("standard", "large", "larger")

@@ -182,7 +182,7 @@ class PlayerArchiveTests(unittest.TestCase):
             if "--version" in args:
                 return subprocess.CompletedProcess(args, 0, "Roads Beneath the Shadow 0.5.0\n", "")
             if "--check-runtime-assets" in args:
-                return subprocess.CompletedProcess(args, 0, '{"images":35,"world_maps":13,"fonts":2,"audio":10,"metadata":1,"audio_driver":"dummy"}\n', "")
+                return subprocess.CompletedProcess(args, 0, '{"images":35,"world_maps":13,"fonts":2,"audio":10,"metadata":1,"audio_driver":"dummy","controller_backend":"pygame._sdl2.controller"}\n', "")
             if "--screenshot" in args:
                 Path(args[args.index("--screenshot") + 1]).write_bytes(b"\x89PNG\r\n\x1a\n")
             return subprocess.CompletedProcess(args, 0, "May a star shine upon your road.", "")

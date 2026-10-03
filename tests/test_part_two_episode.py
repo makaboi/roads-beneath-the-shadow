@@ -61,6 +61,13 @@ def label_choices(*targets):
 
 
 class PartTwoEpisodeTestCase(unittest.TestCase):
+    def assert_deferred_effects(self, state, before, pending_answers):
+        """A submitted answer is remembered while its consequences still wait."""
+        current = state.to_dict()
+        self.assertEqual(current["flags"], {**before["flags"], **pending_answers})
+        current["flags"] = before["flags"]
+        self.assertEqual(current, before)
+
     @staticmethod
     def _episode(choose, combat=None, output=None) -> PartTwoEpisode:
         return PartTwoEpisode(
@@ -199,7 +206,7 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
 
         self.assertFalse(episode.run_scene(state))
 
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_hall_pending_name_road_name": True})
 
     def test_hall_name_effects_are_distinct_and_companion_options_require_presence(self) -> None:
         cases = (
@@ -427,10 +434,10 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
         self.assertFalse(
             self._episode(label_choices("Rescue the captives", None)).run_scene(state)
         )
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_prisoners_pending_priority_rescue": True})
 
         self.assertTrue(
-            self._episode(label_choices("Rescue the captives", "Pick the cage locks")).run_scene(state)
+            self._episode(label_choices("Pick the cage locks")).run_scene(state)
         )
         self.assertTrue(state.flags["part2_prisoners_rescued"])
         self.assertIn(QUEST_PRISONERS_ASH, state.completed_quests)
@@ -534,7 +541,7 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
             ).run_scene(state)
         )
 
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_chain_troll_pending_tactic_break_chain": True})
         self.assertEqual(combat.calls, [])
 
     def test_chain_troll_applies_each_post_battle_flood_outcome(self) -> None:
@@ -716,7 +723,7 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
         self.assertIn("Mara", transcript)
         self.assertIn("Tobin", transcript)
 
-    def test_descent_menu_exit_at_either_prompt_leaves_state_unchanged(self) -> None:
+    def test_descent_menu_exit_keeps_submitted_answers_and_defers_effects(self) -> None:
         for answers in ((None,), (1, None)):
             with self.subTest(answers=answers):
                 choices = iter(answers)
@@ -746,7 +753,8 @@ class PartTwoEpisodeTests(PartTwoEpisodeTestCase):
 
                 self.assertFalse(episode.run_scene(state))
 
-                self.assertEqual(state.to_dict(), before)
+                pending = {"part2_descent_pending_carried_lesson": True} if len(answers) == 2 else {}
+                self.assert_deferred_effects(state, before, pending)
                 transcript = "\n".join(output)
                 self.assertNotIn("Mara", transcript)
                 self.assertNotIn("Tobin", transcript)
@@ -761,10 +769,10 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         before = state.to_dict()
 
         self.assertFalse(self._episode(label_choices("Keep moving", None)).run_scene(state))
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_house_under_ash_pending_truth_leave": True})
 
         self.assertTrue(
-            self._episode(label_choices("Keep moving", "child-height handprints")).run_scene(state)
+            self._episode(label_choices("child-height handprints")).run_scene(state)
         )
         self.assertTrue(state.flags["part2_mara_left"])
         self.assertFalse(state.flags["part_two_mara_present"])
@@ -1039,11 +1047,14 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         self.assertFalse(
             self._episode(label_choices("Search every room", "Lift the board", None)).run_scene(state)
         )
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {
+            "part2_burning_memory_pending_search_rooms": True,
+            "part2_burning_memory_pending_floor_board": True,
+        })
 
         self.assertTrue(
             self._episode(
-                label_choices("Search every room", "Lift the board", "Take his hand")
+                label_choices("Take his hand")
             ).run_scene(state)
         )
         self.assertTrue(state.flags["part2_memory_complete"])
@@ -1115,10 +1126,10 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         state.flags["part2_testimony_second"] = True
         before = state.to_dict()
         self.assertFalse(self._episode(label_choices("Warden oath", None)).run_scene(state))
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_calenor_prison_pending_method_oath": True})
 
         self.assertTrue(
-            self._episode(label_choices("Warden oath", "Bring him home")).run_scene(state)
+            self._episode(label_choices("Bring him home")).run_scene(state)
         )
         self.assertIn("calenor_broken_sword", state.character.inventory)
         self.assertIn(QUEST_REACH_CALENOR, state.completed_quests)
@@ -1171,10 +1182,10 @@ class PartTwoLateEpisodeTests(PartTwoEpisodeTestCase):
         self.assertFalse(
             self._episode(label_choices("Divide", None)).run_scene(state)
         )
-        self.assertEqual(state.to_dict(), before)
+        self.assert_deferred_effects(state, before, {"part2_last_seal_pending_ritual_shared": True})
 
         self.assertTrue(
-            self._episode(label_choices("Divide", "Reject")).run_scene(state)
+            self._episode(label_choices("Reject")).run_scene(state)
         )
         self.assertTrue(state.flags["part2_star_rejected"])
         self.assertEqual(state.character.hope, 1)

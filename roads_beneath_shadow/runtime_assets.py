@@ -90,6 +90,13 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
             import pygame as pg
         except ImportError as error:
             raise RuntimeError("pygame-ce is required to verify the pixel runtime") from error
+        try:
+            from pygame._sdl2 import controller
+        except ImportError as error:
+            raise RuntimeError("The mapped gamepad backend is missing from the pixel runtime") from error
+        # Import the native extension without initializing devices. Normal
+        # gameplay can fall back to keyboard input, but complete desktop
+        # downloads must contain their advertised controller support.
         if pg.mixer.get_init() is not None:
             raise RuntimeError("Run the runtime-assets diagnostic before game audio is initialized")
         os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -140,6 +147,7 @@ audio device, decodes WAVs into memory, and never plays a mixer channel.
         return {
             "images": len(images), "world_maps": len(WORLD_MAPS), "fonts": len(font_files),
             "audio": len(wav_files), "metadata": len(metadata), "audio_driver": "dummy",
+            "controller_backend": controller.__name__,
         }
     finally:
         if pg is not None:

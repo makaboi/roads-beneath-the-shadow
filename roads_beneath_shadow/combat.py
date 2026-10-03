@@ -97,7 +97,7 @@ INTENTS: dict[str, IntentSpec] = {
     "cleave": IntentSpec("Ash Cleave", "a broad, punishing sweep", "damage", 1),
     "brace": IntentSpec("Ashen Brace", "fortifies Armor until your next weapon hit", "guard", interruptible=True),
     "menace": IntentSpec("Shadow Mark", "drains Focus and leaves you Exposed", "menace", interruptible=True),
-    "execution": IntentSpec("Ash-Hand Execution", "a devastating blow; interrupt it now", "damage", 4, True),
+    "execution": IntentSpec("Ash-Hand Execution", "a devastating blow; Defend or interrupt it", "damage", 4, True),
 }
 
 
@@ -344,7 +344,7 @@ class CombatEngine:
                     self._notice("You have no Focus left. Choose another action.")
                     continue
                 character.focus -= 1
-                damage = self.rng.randint(3, 5) + max(0, character.mara_trust)
+                damage = self._companion_damage_for_roll(state, "mara", self.rng.randint(3, 5))
                 active.hp = max(0, active.hp - damage)
                 active.statuses["staggered"] = 1
                 active.statuses["bleeding"] = max(2, active.statuses.get("bleeding", 0))
@@ -358,7 +358,7 @@ class CombatEngine:
                     self._notice("You have no Focus left. Choose another action.")
                     continue
                 character.focus -= 1
-                damage = self.rng.randint(2, 4) + max(0, character.tobin_trust)
+                damage = self._companion_damage_for_roll(state, "tobin", self.rng.randint(2, 4))
                 active.hp = max(0, active.hp - damage)
                 active.statuses["weakened"] = max(2, active.statuses.get("weakened", 0))
                 self.ui.write(
@@ -393,6 +393,7 @@ class CombatEngine:
             round_number += 1
             prepare_round = True
             if config.max_rounds and round_number > config.max_rounds and character.alive:
+                self.ui.sound("victory")
                 self.ui.write(
                     "Your objective is complete—the surviving enemies lose their chance to stop you.",
                     color=Color.GREEN,
@@ -541,6 +542,7 @@ class CombatEngine:
                 damage_min=minimum, damage_max=maximum, threat=threat,
                 statuses=self._status_views(enemy.statuses), targeted=enemy is target and enemy.alive,
                 invulnerable=config.objective_enemy_invulnerable,
+                weapon_resistance=self._weapon_resistance(enemy),
             ))
         action_views: list[CombatActionView] = []
         for action, label in zip(actions or (), options or ()):
@@ -561,7 +563,20 @@ class CombatEngine:
             description = self._origin.ability_description if action == "origin" and self._origin else ACTION_DESCRIPTIONS.get(action, "")
             if action == "origin" and self._origin and self._origin.ability_id == "stand_fast" and config.objective_enemy_invulnerable:
                 description = "Guard every incoming physical hit and clear Bleeding and Exposed. This survival stance does not counterattack."
-            action_views.append(CombatActionView(action, label, cost, not reason, reason, description))
+            damage_min, damage_max, conditional = self._action_damage_range(
+                state, target, action, defensive_objective=config.objective_enemy_invulnerable,
+            )
+            if damage_min is not None and damage_max is not None:
+                amount = str(damage_min) if damage_min == damage_max else f"{damage_min}–{damage_max}"
+                preview = (
+                    f"{amount} counter damage if a hit lands and you survive."
+                    if conditional else f"{amount} damage to {target.name}."
+                )
+                description = f"{preview} {description}"
+            action_views.append(CombatActionView(
+                action, label, cost, not reason, reason, description,
+                damage_min, damage_max, conditional,
+            ))
         hook(CombatSnapshot(
             round_number=round_number, phase=phase, difficulty=self._difficulty.value,
             player=player, enemies=tuple(enemy_views),
@@ -805,13 +820,7 @@ class CombatEngine:
             return True, True
         if origin.ability_id == "flanking_strike":
             self._player_statuses["evade"] = 1
-            weapon_attack = ITEMS[character.weapon].attack if character.weapon else 0
-            damage = (
-                self.rng.randint(1, 3)
-                + character.cunning
-                + weapon_attack
-                + self._profile.outgoing_bonus
-            )
+            damage = self._flanking_damage_for_roll(state, self.rng.randint(1, 3))
             enemy.hp = max(0, enemy.hp - damage)
             enemy.statuses.pop("guarded", None)
             enemy.statuses["vulnerable"] = 1
@@ -838,17 +847,19 @@ class CombatEngine:
         return False, False
 
     def _player_damage(self, state: GameState, enemy: Enemy, *, power: bool) -> int:
+        return self._weapon_damage_for_roll(state, enemy, power=power, roll=self.rng.randint(1, 3))
+
+    def _weapon_resistance(self, enemy: Enemy) -> int:
+        return self._profile.boss_resistance if enemy.archetype == "boss" else self._profile.regular_resistance
+
+    def _weapon_damage_for_roll(self, state: GameState, enemy: Enemy, *, power: bool, roll: int) -> int:
+        """Calculate a weapon hit without drawing randomness or using effects."""
+
         character = state.character
         weapon_attack = ITEMS[character.weapon].attack if character.weapon else 0
-        roll = self.rng.randint(1, 3)
         guarded = 0 if power else (2 if enemy.statuses.get("guarded", 0) else 0)
         vulnerable = 2 if enemy.statuses.get("vulnerable", 0) else 0
         bonus = self._profile.power_bonus if power else 0
-        resistance = (
-            self._profile.boss_resistance
-            if enemy.archetype == "boss"
-            else self._profile.regular_resistance
-        )
         return max(
             1,
             roll
@@ -859,8 +870,51 @@ class CombatEngine:
             + self._profile.outgoing_bonus
             - enemy.armor
             - guarded
-            - resistance,
+            - self._weapon_resistance(enemy),
         )
+
+    def _flanking_damage_for_roll(self, state: GameState, roll: int) -> int:
+        character = state.character
+        weapon_attack = ITEMS[character.weapon].attack if character.weapon else 0
+        return roll + character.cunning + weapon_attack + self._profile.outgoing_bonus
+
+    @staticmethod
+    def _companion_damage_for_roll(state: GameState, companion: str, roll: int) -> int:
+        trust = state.character.mara_trust if companion == "mara" else state.character.tobin_trust
+        return roll + max(0, trust)
+
+    def _action_damage_range(
+        self, state: GameState, target: Enemy, action: str, *, defensive_objective: bool,
+    ) -> tuple[int | None, int | None, bool]:
+        """Preview direct damage; counterattacks are explicitly conditional.
+
+        Previews use the same pure calculations as actual attacks, leaving the
+        RNG, live statuses, and target selection untouched. Bleeding after a
+        command is a separate effect, rather than promised immediate damage.
+        """
+
+        if defensive_objective or not target.alive:
+            return None, None, False
+        if action in {"attack", "power"}:
+            power = action == "power"
+            return (
+                self._weapon_damage_for_roll(state, target, power=power, roll=1),
+                self._weapon_damage_for_roll(state, target, power=power, roll=3),
+                False,
+            )
+        if action in {"mara", "tobin"}:
+            minimum, maximum = (3, 5) if action == "mara" else (2, 4)
+            return (
+                self._companion_damage_for_roll(state, action, minimum),
+                self._companion_damage_for_roll(state, action, maximum),
+                False,
+            )
+        if action == "origin" and self._origin:
+            if self._origin.ability_id == "flanking_strike":
+                return self._flanking_damage_for_roll(state, 1), self._flanking_damage_for_roll(state, 3), False
+            if self._origin.ability_id == "stand_fast":
+                return 0, state.character.strength + 2, True
+        return None, None, False
 
     @staticmethod
     def _consume_hit_statuses(enemy: Enemy) -> None:
@@ -885,7 +939,13 @@ class CombatEngine:
         if not consumables:
             self._notice("You have no usable items.")
             return False
-        labels = [f"{ITEMS[item_id].name} x{character.inventory[item_id]}" for item_id in consumables]
+        origin_bonus = 2 if character.origin == "healers_apprentice" else 0
+        cure = ", stops Bleeding" if self._player_statuses.get("bleeding") else ""
+        labels = [
+            f"{ITEMS[item_id].name} x{character.inventory[item_id]} "
+            f"(+{min(character.max_hp - character.hp, ITEMS[item_id].healing + origin_bonus)} Health{cure})"
+            for item_id in consumables
+        ]
         choice = self.ui.choose("Use which item?", labels, allow_back=True)
         if isinstance(choice, bool) or not isinstance(choice, int) or not 1 <= choice <= len(consumables):
             return False
@@ -894,7 +954,6 @@ class CombatEngine:
             self._notice("You are already at full health.")
             return False
         character.remove_item(item.item_id)
-        origin_bonus = 2 if character.origin == "healers_apprentice" else 0
         healed = character.heal(item.healing + origin_bonus)
         cured = bool(self._player_statuses.pop("bleeding", 0))
         message = f"You use {item.name} and recover {healed} Health."
@@ -907,17 +966,21 @@ class CombatEngine:
     def _inspect(self, enemy: Enemy, *, defensive_objective: bool = False) -> None:
         intent, telegraph, interruptible = self._intent_presentation(enemy, defensive_objective=defensive_objective)
         effective_armor = enemy.armor + (2 if enemy.statuses.get("guarded") else 0)
+        resistance = self._weapon_resistance(enemy)
+        resistance_text = f" Shadow resistance {resistance} reduces weapon damage; companions, Flanking Strike, and counters bypass it." if resistance else ""
         health = "Cannot be wounded here" if defensive_objective else f"{enemy.hp}/{enemy.max_hp} Health"
         self.ui.write(
             f"{enemy.name}: {health}, {effective_armor} Armor, Phase {enemy.phase}",
             color=Color.CYAN,
         )
         self.ui.write(f"Intent — {intent.label}: {telegraph}.", color=Color.YELLOW)
+        if resistance_text:
+            self.ui.write(resistance_text.strip(), color=Color.DIM)
         if enemy.description:
             self.ui.narrate(enemy.description, color=Color.DIM)
         summary = (
             f"{enemy.name}: {health}, {effective_armor} Armor, Phase {enemy.phase}. "
-            f"Intent — {intent.label}: {telegraph}."
+            f"Intent — {intent.label}: {telegraph}.{resistance_text}"
         )
         self._feedback("inspect", "player", self._enemy_id(enemy), 0, summary)
         panel = getattr(self.ui, "show_panel", None)
@@ -929,7 +992,7 @@ class CombatEngine:
                 "This intent cannot be interrupted; disruption still reduces its damage."
             )
             sections = [
-                {"heading": "Defenses", "text": f"{health}. Armor {effective_armor}. Phase {enemy.phase}."},
+                {"heading": "Defenses", "text": f"{health}. Armor {effective_armor}. Phase {enemy.phase}.{resistance_text}"},
                 {"heading": f"Intent — {intent.label}", "text": telegraph.capitalize() + ". " + advice},
             ]
             if enemy.description:

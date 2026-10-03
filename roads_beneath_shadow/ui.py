@@ -53,6 +53,9 @@ class TerminalUI:
     independent player preferences and may be changed between scenes.
     """
 
+    supports_checkpoints = False
+    supports_graphical_settings = False
+
     def __init__(
         self,
         *,
@@ -62,6 +65,7 @@ class TerminalUI:
         text_speed: str | float = "normal",
         reduced_motion: bool | None = None,
         screen_reader: bool = False,
+        checkpoint_support: bool | None = None,
         keyboard_navigation: bool = True,
         input_fn: Callable[[str], str] = input,
         output_fn: Callable[[str], None] = print,
@@ -77,6 +81,11 @@ class TerminalUI:
             reduced_motion = os.environ.get("REDUCED_MOTION", "").lower() in {"1", "true", "yes"}
         self.reduced_motion = bool(reduced_motion)
         self.screen_reader = bool(screen_reader)
+        # The player launcher opts terminal play into automatic recovery.
+        # Embedded/injected UIs keep their existing storage-free behavior,
+        # while graphical adapters may supply the capability on their class.
+        if checkpoint_support is not None:
+            self.supports_checkpoints = bool(checkpoint_support)
         self.keyboard_navigation = bool(keyboard_navigation)
         self.input_fn = input_fn
         self.output_fn = output_fn
