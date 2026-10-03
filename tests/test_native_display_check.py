@@ -11,8 +11,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from scripts import check_native_display as native
 
@@ -42,6 +43,50 @@ def step_enabled(name, system, python, always=True):
 
 
 class NativeDisplayHelperTests(unittest.TestCase):
+    def test_cold_start_readiness_has_time_to_arrive_but_keeps_the_owner_deadline(self):
+        with tempfile.TemporaryDirectory(prefix="rbs native delayed readiness ") as temporary:
+            output = Path(temporary)
+            player = SimpleNamespace(pid=12345, poll=lambda: None)
+            state = {"probe_pid": player.pid, "owner_pid": os.getpid(), "ready": False}
+            native.write_json(output / "probe-startup.json", {
+                "probe_pid": player.pid, "owner_pid": os.getpid(), "phase": "source_imports_loaded",
+            })
+
+            def wait(timeout, deadline=50):
+                clock = [0.0]
+                native.write_json(output / "probe-progress.json", state)
+
+                def delayed_start(_seconds):
+                    clock[0] = 6.0
+                    native.write_json(output / "probe-progress.json", {**state, "ready": True})
+
+                with patch.object(native.time, "monotonic", side_effect=lambda: clock[0]), patch.object(
+                    native.time, "sleep", side_effect=delayed_start
+                ):
+                    return native.wait_probe_progress(player, Mock(), output, deadline,
+                                                      lambda value: value["ready"], timeout=timeout)
+
+            with self.assertRaisesRegex(TimeoutError, "last startup phase: source_imports_loaded"):
+                wait(5)
+            self.assertTrue(wait(native.STARTUP_TIMEOUT)["ready"])
+            with self.assertRaises(TimeoutError):
+                wait(native.STARTUP_TIMEOUT, deadline=3)
+
+    def test_startup_wait_rejects_a_foreign_phase_and_an_exited_probe(self):
+        with tempfile.TemporaryDirectory(prefix="rbs native startup identity ") as temporary:
+            output = Path(temporary)
+            player = SimpleNamespace(pid=12345, poll=lambda: None)
+            native.write_json(output / "probe-startup.json", {
+                "probe_pid": 54321, "owner_pid": os.getpid(), "phase": "first_frame_rendered",
+            })
+            with self.assertRaisesRegex(RuntimeError, "startup belongs to another probe/owner"):
+                native.wait_probe_progress(player, Mock(), output, time.monotonic() + 1,
+                                           lambda value: True, timeout=native.STARTUP_TIMEOUT)
+            player.poll = lambda: 1
+            with self.assertRaisesRegex(RuntimeError, "probe exited before completing checks"):
+                native.wait_probe_progress(player, Mock(), output, time.monotonic() + 1,
+                                           lambda value: True, timeout=native.STARTUP_TIMEOUT)
+
     def test_timeout_has_a_small_explicit_upper_bound(self):
         self.assertEqual(native.check_timeout(15), 15)
         self.assertEqual(native.check_timeout(90), 90)

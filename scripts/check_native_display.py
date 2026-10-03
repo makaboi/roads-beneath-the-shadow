@@ -27,6 +27,7 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT = 90
+STARTUP_TIMEOUT = 20
 DESKTOP = (1920, 1200)
 
 
@@ -239,9 +240,6 @@ def display_number(read_fd: int, server: subprocess.Popen, deadline: float) -> i
 def run_probe(output: Path) -> int:
     """Render real source on the main thread; a worker holds a Unicode prompt."""
     sys.path.insert(0, str(ROOT))
-    from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
-    from roads_beneath_shadow.ui import InputClosed
-
     report = {"scope": "Instrumented source PixelWindow on owned real X11; no Game route or public executable claim.",
               "errors": [], "set_mode_calls": [], "handled_native_resizes": 0, "handled_F11": 0,
               "frames": 0, "answers": [], "stale_batch_sequence": 0, "normal_pygame_quit": False,
@@ -250,9 +248,24 @@ def run_probe(output: Path) -> int:
     original_set_mode = None
     request = None
     started = time.monotonic()
+
+    def startup_phase(phase):
+        state = {"probe_pid": report["probe_pid"], "owner_pid": report["owner_pid"],
+                 "phase": phase, "elapsed_seconds": round(time.monotonic() - started, 3)}
+        write_json(output / "probe-startup.json", state)
+        with (output / "probe-startup.jsonl").open("a", encoding="utf-8") as log:
+            log.write(json.dumps(state) + "\n")
+
     try:
+        startup_phase("source_imports_started")
+        from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
+        from roads_beneath_shadow.ui import InputClosed
+
+        startup_phase("source_imports_loaded")
         ui = PixelUI(fast=True, sound=False)
+        startup_phase("pixel_ui_created")
         window = PixelWindow(ui, size=(1200, 900))
+        startup_phase("pixel_window_created")
         pg = window.pg
         original_set_mode = pg.display.set_mode
 
@@ -271,6 +284,7 @@ def run_probe(output: Path) -> int:
 
         worker = threading.Thread(target=prompt, name="native-display-pending-input")
         worker.start()
+        startup_phase("pending_worker_started")
         while not ui.closed.is_set() and time.monotonic() - started < TIMEOUT:
             window.drain()
             if request is None and window.request is not None:
@@ -303,6 +317,8 @@ def run_probe(output: Path) -> int:
                           fullscreen=window.fullscreen, pending_request=window.request is request and request is not None,
                           entry=window.entry, worker_alive=worker.is_alive(), renderer_surface_is_live=window.screen is pg.display.get_surface())
             write_json(output / "probe-progress.json", report)
+            if report["frames"] == 1:
+                startup_phase("first_frame_rendered")
             window.clock.tick(60)
         require(time.monotonic() - started < TIMEOUT, "Native probe exceeded its deadline")
     except BaseException:
@@ -324,6 +340,31 @@ def run_probe(output: Path) -> int:
     return 0 if not report["errors"] and report["worker_joined"] else 1
 
 
+def wait_probe_progress(player, owner: OwnedProcesses, output: Path, deadline: float, predicate,
+                        *, timeout: float = 5) -> dict:
+    """Wait for current-probe state within both this wait and the owner deadline."""
+    end = min(deadline, time.monotonic() + timeout)
+    last_phase = "not recorded"
+    while time.monotonic() < end:
+        require(player.poll() is None, "Native PixelWindow probe exited before completing checks")
+        startup = output / "probe-startup.json"
+        if startup.is_file():
+            value = json.loads(startup.read_text(encoding="utf-8"))
+            require(value["probe_pid"] == player.pid and value["owner_pid"] == os.getpid(),
+                    "Native startup belongs to another probe/owner")
+            last_phase = value["phase"]
+        path = output / "probe-progress.json"
+        if path.is_file():
+            value = json.loads(path.read_text(encoding="utf-8"))
+            require(value["probe_pid"] == player.pid and value["owner_pid"] == os.getpid(),
+                    "Native progress belongs to another probe/owner")
+            if predicate(value):
+                return value
+        owner.discover()
+        time.sleep(0.02)
+    raise TimeoutError("Native display progress did not reach the requested state; last startup phase: " + last_phase)
+
+
 def exercise_native_window(owner: OwnedProcesses, output: Path, tools: dict, environment: dict, deadline: float) -> dict:
     player = owner.launch("probe", [sys.executable, str(Path(__file__).resolve()), "--probe", "--output-dir", str(output)], environment)
     commands, checks = [], []
@@ -343,18 +384,7 @@ def exercise_native_window(owner: OwnedProcesses, output: Path, tools: dict, env
         return result.stdout.strip()
 
     def progress(predicate, timeout=5):
-        end = min(deadline, time.monotonic() + timeout)
-        while time.monotonic() < end:
-            require(player.poll() is None, "Native PixelWindow probe exited before completing checks")
-            path = output / "probe-progress.json"
-            if path.is_file():
-                value = json.loads(path.read_text(encoding="utf-8"))
-                require(value["probe_pid"] == player.pid and value["owner_pid"] == os.getpid(), "Native progress belongs to another probe/owner")
-                if predicate(value):
-                    return value
-            owner.discover()
-            time.sleep(0.02)
-        raise TimeoutError("Native display progress did not reach the requested state")
+        return wait_probe_progress(player, owner, output, deadline, predicate, timeout=timeout)
 
     def window_id():
         values = xdo("search", "--onlyvisible", "--pid", player.pid).splitlines()
@@ -376,7 +406,10 @@ def exercise_native_window(owner: OwnedProcesses, output: Path, tools: dict, env
         checks.append({"check": name, "state": state, **extra})
         write_json(output / "native-check-progress.json", {"checks": checks, "external_commands": commands})
 
-    initial = progress(lambda value: value["pending_request"] and value["worker_alive"])
+    # Cold runner imports/font and display initialization have a separate
+    # bounded readiness allowance. All exercise waits remain five seconds,
+    # and the owner deadline still reserves its original cleanup budget.
+    initial = progress(lambda value: value["pending_request"] and value["worker_alive"], timeout=STARTUP_TIMEOUT)
     require(initial["native_size"] == [1200, 900], "Unexpected initial native dimensions")
     # Xvfb's keyboard map varies across runners. Seed Unicode through the same
     # SDL TEXTINPUT interface tested by the source, then type ASCII externally.

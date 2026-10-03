@@ -16,6 +16,7 @@ on:
       - pyproject.toml
       - .github/workflows/desktop-release.yml
       - scripts/desktop_release.py
+      - scripts/prepare_preview_parts.py
       - scripts/third_party.py
       - scripts/runtime_notices.py
       - third_party/**
@@ -118,6 +119,46 @@ jobs:
           name: desktop-${{ matrix.platform }}
           path: release-packages/*
           if-no-files-found: error
+      - name: Retain bounded archive parts for independent preview review
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
+        run: >-
+          python scripts/prepare_preview_parts.py
+          --input-dir release-packages
+          --output-dir preview-inspection-parts
+          --platform "${{ matrix.platform }}"
+          --expected-version "${{ needs.plan.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
+        with:
+          name: review-desktop-${{ matrix.platform }}-part-1
+          path: preview-inspection-parts/part-001/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
+        with:
+          name: review-desktop-${{ matrix.platform }}-part-2
+          path: preview-inspection-parts/part-002/*
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
+        with:
+          name: review-desktop-${{ matrix.platform }}-part-3
+          path: preview-inspection-parts/part-003/*
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.preview_only)
+        with:
+          name: review-desktop-${{ matrix.platform }}-part-4
+          path: preview-inspection-parts/part-004/*
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
 
   publish:
     name: Publish all verified downloads together
