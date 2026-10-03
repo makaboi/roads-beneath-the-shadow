@@ -16,7 +16,9 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from roads_beneath_shadow.app import Game
 from roads_beneath_shadow.content import ORIGINS
+from roads_beneath_shadow.lighting import Color
 from roads_beneath_shadow.models import Character, GameState
+from roads_beneath_shadow.pixel_theme import AMBER, MUTED, PARCHMENT, RED, SELECTED_TEAL, TEAL
 from roads_beneath_shadow.pixel_transcript import TranscriptView, _normalized
 from roads_beneath_shadow.pixel_ui import PixelUI, PixelWindow
 from roads_beneath_shadow.savegame import SaveManager
@@ -97,6 +99,38 @@ class TranscriptTests(unittest.TestCase):
                 self.assertEqual(self.view.matches, [0])
                 self.assertEqual(self.view._match_positions, [(0, 2, 2 + len(name))])
                 self.assertEqual(self.view.entries[0][0], source)
+
+    def test_search_highlight_keeps_readable_inks_and_unmatched_row_colors(self):
+        def luminance(color):
+            channels = [channel / 255 for channel in color]
+            linear = [channel / 12.92 if channel <= .04045 else ((channel + .055) / 1.055) ** 2.4 for channel in channels]
+            return sum(channel * weight for channel, weight in zip(linear, (.2126, .7152, .0722)))
+
+        colors = ((None, PARCHMENT), (Color.YELLOW, AMBER), (Color.CYAN, TEAL),
+                  (Color.GREEN, TEAL), (Color.RED, RED),
+                  (Color.MAGENTA, (171, 145, 195)), (Color.DIM, MUTED))
+        for size, text_size in (((760, 560), "standard"), ((1200, 900), "larger")):
+            for color, original_ink in colors:
+                with self.subTest(size=size, text_size=text_size, color=color):
+                    self.view = TranscriptView(self.pg)
+                    entries = [("Matched road.", color, False), ("Original road.", color, False)]
+                    self.view.open(entries)
+                    self.draw(size)
+                    self.search("matched")
+                    self.view.draw(self.screen, self.rect, text_size=text_size)
+                    content = self.view._content
+                    selected_row = self.pg.Rect(content.x + 6, content.y, content.width - 22, self.view.line_height)
+                    original_row = selected_row.move(0, self.view.line_height)
+                    selected_pixels = self.pg.image.tobytes(self.screen.subsurface(selected_row), "RGB")
+                    original_pixels = self.pg.image.tobytes(self.screen.subsurface(original_row), "RGB")
+                    selected_ink = SELECTED_TEAL if original_ink == TEAL else original_ink
+                    self.assertIn(selected_ink, set(zip(selected_pixels[0::3], selected_pixels[1::3], selected_pixels[2::3])))
+                    self.assertIn(original_ink, set(zip(original_pixels[0::3], original_pixels[1::3], original_pixels[2::3])))
+                    background = tuple(self.screen.get_at((selected_row.right - 1, selected_row.top)))[:3]
+                    ratio = (luminance(selected_ink) + .05) / (luminance(background) + .05)
+                    self.assertGreaterEqual(ratio, 4.5)
+                    self.assertEqual(self.view.entries, tuple(entries))
+                    self.assertEqual(self.view.matches, [0])
 
     def test_reopening_retains_query_and_place_but_requires_search_focus_to_edit(self):
         entries = [(f"Remembered road {index}.", None, False) for index in range(100)]
