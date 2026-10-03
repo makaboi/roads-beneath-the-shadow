@@ -1,0 +1,47 @@
+name: Prepare pinned CJK Git asset
+
+on:
+  push:
+    branches: [codex/font-asset-builder-20261003]
+    paths:
+      - .github/workflows/font-asset-builder-20261003.yml
+      - font-upload-staging/build_font_blob.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pinned-cjk-asset-20261003
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'makaboi/roads-beneath-the-shadow' && github.ref == 'refs/heads/codex/font-asset-builder-20261003'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the reviewed pure font parser
+        run: python -m pip install --disable-pip-version-check fonttools==4.61.1
+      - name: Fetch the immutable documented original TTC
+        run: curl --fail --location --retry 2 --max-time 90 --output "${RUNNER_TEMP}/NotoSansCJK-Regular.ttc" "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTC/NotoSansCJK-Regular.ttc"
+      - name: Build and prove the exact reviewed Git font blob
+        run: python font-upload-staging/build_font_blob.py --source "${RUNNER_TEMP}/NotoSansCJK-Regular.ttc" --output font-upload-staging/RBSRoadCJK-Regular.otf --report "${RUNNER_TEMP}/font-blob-provenance.json"
+      - name: Retain the proven blob on this owned transport branch
+        run: |
+          git add -- font-upload-staging/RBSRoadCJK-Regular.otf
+          git -c user.name='RBS Font Asset Builder' -c user.email='rbs-font-builder@users.noreply.github.com' commit -m "Store the reproducible reviewed CJK font Git blob"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Retain bounded asset provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-cjk-font-blob-provenance
+          path: ${{ runner.temp }}/font-blob-provenance.json
+          if-no-files-found: warn
+          retention-days: 7
