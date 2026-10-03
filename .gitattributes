@@ -4,6 +4,10 @@
 # Packaged metadata and font notices have identical bytes on every desktop.
 roads_beneath_shadow/pixel_assets/*.json text eol=lf
 roads_beneath_shadow/font_assets/*.txt text eol=lf
+roads_beneath_shadow/font_assets/*.json text eol=lf
+roads_beneath_shadow/font_assets/*.otf -text
+# Preserve the retained upstream notice's intentional trailing blank line.
+roads_beneath_shadow/font_assets/FALLBACK-OFL.txt -whitespace
 
 # Upstream notices and provenance manifests retain their original hashed bytes.
 third_party/** -text -whitespace

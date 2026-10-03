@@ -13,6 +13,7 @@ from typing import Any
 from unicodedata import combining, normalize
 
 from .lighting import Color
+from .pixel_font import caret_positions, text_viewport
 from .pixel_theme import draw_pixel_frame, load_font, wrap_text
 from .text_input import TextEntry
 
@@ -92,6 +93,7 @@ class TranscriptView:
         self._dragging: int | None = None
         self._selecting_query = False
         self._query_view_start = 0
+        self._query_view_end = 0
         self._query_text_x = 0
         self._hits: list[tuple[Any, str]] = []
         self._fonts(17)
@@ -184,6 +186,7 @@ class TranscriptView:
         self._layout_key = self._viewport_key = None
         self._pending_anchor = self._pending_scroll = None
         self._query_view_start = self._query_text_x = 0
+        self._query_view_end = 0
         self._hits.clear()
         for rect in (self._content, self._search_field, self._scrollbar, self._thumb):
             rect.update(0, 0, 0, 0)
@@ -204,12 +207,12 @@ class TranscriptView:
 
     def _place_query_caret(self, pointer_x: int, *, select: bool = False) -> None:
         position = self._query_view_start
-        for index in range(self._query_view_start, len(self.query)):
-            before = self.small_font.size(self.query[self._query_view_start:index])[0]
-            after = self.small_font.size(self.query[self._query_view_start:index + 1])[0]
+        visible = self.query[self._query_view_start:self._query_view_end]
+        advances = caret_positions(self.small_font, visible)
+        for offset, (before, after) in enumerate(zip(advances, advances[1:])):
             if pointer_x < self._query_text_x + (before + after) / 2:
                 break
-            position = index + 1
+            position = self._query_view_start + offset + 1
         self._query_editor.move_to(position, select=select)
 
     def _find_matches(self) -> None:
@@ -455,37 +458,34 @@ class TranscriptView:
         if self._composition:
             displayed = self.query[:selection_start] + self._composition + self.query[selection_end:]
             caret = selection_start + len(self._composition)
-        start = 0
-        while start < caret and self.small_font.size(displayed[start:caret])[0] > available - 10:
-            start += 1
-        while start < caret and combining(displayed[start]):
-            start += 1
+        ellipsis_width = self.small_font.size("…")[0]
+        start, end = text_viewport(self.small_font, displayed, available, caret,
+                                   prefix_width=ellipsis_width, caret_padding=10)
         if start:
             self._text(surface, "…", (query_x, field.y + 9), MUTED, font=self.small_font)
-            query_x += self.small_font.size("…")[0]
-            available -= self.small_font.size("…")[0]
-        end = start
-        while end < len(displayed) and self.small_font.size(displayed[start:end + 1])[0] <= available:
-            end += 1
+            query_x += ellipsis_width
         visible = displayed[start:end]
         self._query_view_start, self._query_text_x = start, query_x
+        self._query_view_end = end
+        advances = caret_positions(self.small_font, visible)
+        position = lambda offset: advances[max(0, min(len(visible), offset - start))]
         query_clip = surface.get_clip()
         surface.set_clip(self._search_field.inflate(-8, -4).clip(query_clip))
         if self._query_selected and not self._composition:
             begin = max(start, selection_start)
             stop = min(end, selection_end)
             if stop > begin:
-                selection_x = query_x + self.small_font.size(displayed[start:begin])[0]
-                pg.draw.rect(surface, (49, 69, 68), (selection_x, field.y + 6, self.small_font.size(displayed[begin:stop])[0], field.height - 12))
+                left, right = query_x + position(begin), query_x + position(stop)
+                pg.draw.rect(surface, (49, 69, 68), (left, field.y + 6, max(2, right - left), field.height - 12))
         self._text(surface, visible if prefix else "Ctrl+F or click to search", (query_x, field.y + 9), PARCHMENT, font=self.small_font)
         if self._composition:
             begin = max(start, selection_start)
             stop = min(end, caret)
             if stop > begin:
-                left = query_x + self.small_font.size(displayed[start:begin])[0]
-                pg.draw.line(surface, TEAL, (left, field.bottom - 6), (left + self.small_font.size(displayed[begin:stop])[0], field.bottom - 6))
+                left, right = query_x + position(begin), query_x + position(stop)
+                pg.draw.line(surface, TEAL, (left, field.bottom - 6), (right, field.bottom - 6))
         if self.searching:
-            caret_x = query_x + self.small_font.size(displayed[start:caret])[0]
+            caret_x = query_x + position(caret)
             pg.draw.line(surface, AMBER, (caret_x, field.y + 7), (caret_x, field.bottom - 7))
         surface.set_clip(query_clip)
         button_x = self._search_field.right + 6

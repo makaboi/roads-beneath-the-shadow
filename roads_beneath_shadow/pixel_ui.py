@@ -21,9 +21,10 @@ from .narrative import NarrativeDirector
 from .combat_view import CombatCommand, CombatTurnSummary
 from .controller_input import GamepadInput
 from .pixel_battle import BattleView
+from .pixel_font import caret_positions, text_clusters, text_viewport
 from .pixel_keyboard import NameKeyboard
 from .pixel_panels import PanelView
-from .pixel_theme import draw_pixel_frame, initial_window_size, load_font
+from .pixel_theme import draw_pixel_frame, initial_window_size, load_font, wrap_text
 from .pixel_transcript import TranscriptView
 from .pixel_world import WorldView
 from .player_view import player_snapshot
@@ -264,31 +265,7 @@ class PixelUI(TerminalUI):
 
 def wrap_pixels(text: str, font: Any, width: int) -> list[str]:
     """Wrap to measured pixels, including unusually long names or words."""
-    width = max(1, width)
-    output: list[str] = []
-    for paragraph in text.split("\n"):
-        if not paragraph:
-            output.append("")
-            continue
-        line = ""
-        for word in paragraph.split():
-            candidate = f"{line} {word}" if line else word
-            if font.size(candidate)[0] <= width:
-                line = candidate
-                continue
-            if line:
-                output.append(line)
-                line = ""
-            while word and font.size(word)[0] > width:
-                cut = 1
-                while cut < len(word) and font.size(word[:cut + 1])[0] <= width:
-                    cut += 1
-                output.append(word[:cut])
-                word = word[cut:]
-            line = word
-        if line:
-            output.append(line)
-    return output or [""]
+    return wrap_text(text, font, width)
 
 
 class PixelWindow:
@@ -328,6 +305,7 @@ class PixelWindow:
         self.history_scroll = 0
         self._entry_editor = TextEntry()
         self._entry_view_start = 0
+        self._entry_view_end = 0
         self._entry_field = pygame.Rect(0, 0, 0, 0)
         self._entry_text_x = 0
         self.entry_composition = ""
@@ -370,6 +348,8 @@ class PixelWindow:
         self._saved_navigation: tuple[int, int, bool] | None = None
         self._settings_navigation: tuple[int, int, bool] | None = None
         self._choice_view_key: tuple[Any, ...] | None = None
+        self._combat_help_layout_key: tuple[Any, ...] | None = None
+        self._combat_help_lines: tuple[list[str], ...] = ()
         self._creation_archive_start: int | None = None
         self._read_boundaries: Any = WeakKeyDictionary()
         self._page_token: Any = None
@@ -492,6 +472,7 @@ class PixelWindow:
                     self._settings_navigation = None
                 self._entry_editor = TextEntry(max_length=self.request.context.get("max_length", 64))
                 self._entry_view_start = 0
+                self._entry_view_end = 0
                 self.entry_composition = ""
                 self.pg.key.start_text_input() if self.request.kind == "text" else self.pg.key.stop_text_input()
                 if self.request.kind == "panel":
@@ -1101,8 +1082,9 @@ class PixelWindow:
                 if getattr(event, "clicks", 1) > 1:
                     self._entry_editor.select_all()
                 else:
-                    positions = range(self._entry_view_start, len(self.entry) + 1)
-                    closest = min(positions, key=lambda index: abs(self._entry_text_x + self.font.size(self.entry[self._entry_view_start:index])[0] - event.pos[0]))
+                    visible = self.entry[self._entry_view_start:self._entry_view_end]
+                    advances = caret_positions(self.font, visible)
+                    closest = self._entry_view_start + min(range(len(advances)), key=lambda index: abs(self._entry_text_x + advances[index] - event.pos[0]))
                     self._entry_editor.move_to(closest, select=bool(pg.key.get_mods() & pg.KMOD_SHIFT))
             elif event.type == pg.KEYDOWN:
                 modifiers = getattr(event, "mod", 0)
@@ -1268,8 +1250,10 @@ class PixelWindow:
             name = hud['name']
             suffix = f"  |  Part {hud['chapter']}"
             if self.small_font.size(name + suffix)[0] > right_width:
-                while name and self.small_font.size(name + "…" + suffix)[0] > right_width:
-                    name = name[:-1]
+                clusters = list(text_clusters(name))
+                while clusters and self.small_font.size("".join(clusters) + "…" + suffix)[0] > right_width:
+                    clusters.pop()
+                name = "".join(clusters)
                 name += "…"
             self._text(name + suffix, (right_x, 19), PARCHMENT, self.small_font)
             self._text(f"HP {hp}/{max_hp}   FOCUS {focus}/{max_focus}", (right_x, 40), TEAL, self.small_font)
@@ -1597,18 +1581,28 @@ class PixelWindow:
         if not actions:
             return
         action = actions[min(self.selected, len(actions) - 1)]
-        description = action.description if action.enabled else action.disabled_reason or "Unavailable."
-        lines = wrap_pixels(description, self.small_font, right.width - 42)
-        height = 57 + len(lines) * 17
+        descriptions = tuple(item.description if item.enabled else item.disabled_reason or "Unavailable."
+                             for item in actions)
+        layout_key = (self._font_key, right.width, descriptions)
+        if layout_key != self._combat_help_layout_key:
+            self._combat_help_layout_key = layout_key
+            self._combat_help_lines = tuple(wrap_pixels(text, self.small_font, right.width - 42)
+                                            for text in descriptions)
+        lines = self._combat_help_lines[min(self.selected, len(actions) - 1)]
+        # Reserve the same help band for every command. Hover must not move a
+        # partially visible button away from the pointer before its click.
+        row_step = max(17, self.small_font.get_linesize() + 2)
+        rows = max(map(len, self._combat_help_lines))
+        height = 26 + row_step + rows * row_step + self.small_font.get_height()
         dock = self.pg.Rect(right.left + 16, right.bottom - height - 12, right.width - 32, height)
         self.menu_rect.height = max(50, dock.top - self.menu_rect.top - 22)
         self._panel(dock, INK)
         cost = f"{action.focus_cost} Focus" if action.focus_cost else "No Focus cost"
         self._text(cost + ("  ·  Free look" if action.id in {"inspect", "target"} else ""), (dock.x + 10, dock.y + 9), TEAL, self.small_font)
         for row, line in enumerate(lines):
-            self._text(line, (dock.x + 10, dock.y + 29 + row * 17), PARCHMENT if action.enabled else MUTED, self.small_font)
+            self._text(line, (dock.x + 10, dock.y + 12 + row_step + row * row_step), PARCHMENT if action.enabled else MUTED, self.small_font)
         hint = "Let the impacts land…" if self.battle.busy else "[ / ] Target  ·  Tab Log"
-        self._text(hint, (dock.x + 10, dock.bottom - 19), AMBER if self.battle.busy else MUTED, self.small_font)
+        self._text(hint, (dock.x + 10, dock.bottom - self.small_font.get_height() - 8), AMBER if self.battle.busy else MUTED, self.small_font)
 
     def _render_utilities(self, right: Any) -> None:
         button_width = (right.width - 42) // 2
@@ -1637,26 +1631,27 @@ class PixelWindow:
         if self.entry_composition:
             text = text[:start] + self.entry_composition + text[end:]
             caret = start + len(self.entry_composition)
-        self._entry_view_start = min(self._entry_view_start, caret)
         available = max(1, field.width - 24)
-        while self._entry_view_start < caret and self.font.size(text[self._entry_view_start:caret] + " ")[0] > available:
-            self._entry_view_start += 1
-        visible_end = len(text)
-        while visible_end > self._entry_view_start and self.font.size(text[self._entry_view_start:visible_end])[0] > available:
-            visible_end -= 1
-        view_start = self._entry_view_start
+        view_start, visible_end = text_viewport(self.font, text, available, caret,
+                                               preferred_start=self._entry_view_start,
+                                               caret_padding=self.font.size(" ")[0])
+        self._entry_view_start = view_start
+        self._entry_view_end = visible_end
+        visible = text[view_start:visible_end]
+        advances = caret_positions(self.font, visible)
+        position = lambda offset: advances[max(0, min(len(visible), offset - view_start))]
         x = self._entry_text_x
         y = field.top + 19
         previous_clip = self.screen.get_clip()
         self.screen.set_clip(field.inflate(-12, -8))
         if self._entry_editor.has_selection and not self.entry_composition:
-            left = x + self.font.size(text[view_start:max(view_start, start)])[0]
-            right = x + self.font.size(text[view_start:max(view_start, end)])[0]
-            pg.draw.rect(self.screen, (42, 63, 66), (left, y - 2, right - left, self.font.get_linesize() + 3))
-        self._text(text[view_start:visible_end], (x, y))
-        caret_x = x + self.font.size(text[view_start:caret])[0]
+            left, right = x + position(start), x + position(end)
+            if min(end, visible_end) > max(start, view_start):
+                pg.draw.rect(self.screen, (42, 63, 66), (left, y - 2, max(2, right - left), self.font.get_linesize() + 3))
+        self._text(visible, (x, y))
+        caret_x = x + position(caret)
         if self.entry_composition:
-            left = x + self.font.size(text[view_start:max(view_start, start)])[0]
+            left = x + position(start)
             pg.draw.line(self.screen, TEAL, (left, y + self.font.get_linesize()), (caret_x, y + self.font.get_linesize()))
         if self.entry_composition or (pg.time.get_ticks() // 500) % 2 == 0:
             pg.draw.line(self.screen, AMBER, (caret_x, y), (caret_x, y + self.font.get_height()), 2)

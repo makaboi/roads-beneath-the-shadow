@@ -44,7 +44,9 @@ class RuntimeAssetTests(unittest.TestCase):
             report = self.verify()
             self.assertEqual(os.environ["SDL_AUDIODRIVER"], "rbs-previous-driver")
         self.assertEqual(report["world_maps"], 13)
-        self.assertEqual(report["fonts"], 2)
+        self.assertEqual(report["fonts"], 4)
+        self.assertEqual(report["font_fallbacks"]["fonts"]["RBSRoadCJK-Regular.otf"]["codepoints"], 44810)
+        self.assertEqual(report["font_fallbacks"]["fonts"]["NotoSansDevanagari-Regular.ttf"]["codepoints"], 272)
         self.assertEqual(report["audio"], 10)
         self.assertEqual(report["audio_driver"], "dummy")
         self.assertEqual(report["controller_backend"], "pygame._sdl2.controller")
@@ -115,6 +117,33 @@ class RuntimeAssetTests(unittest.TestCase):
         self.assertEqual(self.pg.font.get_init(), self.font_initialized)
         self.assertIsNone(self.pg.mixer.get_init())
 
+    def test_damaged_cjk_otf_cannot_silently_render_replacement_boxes(self):
+        (self.package / "font_assets/RBSRoadCJK-Regular.otf").write_bytes(b"damaged fallback font")
+        with self.assertRaisesRegex(ValueError, r"decode RBSRoadCJK-Regular\.otf"):
+            self.verify()
+        self.assertEqual(self.pg.font.get_init(), self.font_initialized)
+        self.assertIsNone(self.pg.mixer.get_init())
+
+    def test_decodable_wrong_font_fails_its_coverage_fingerprint(self):
+        shutil.copyfile(self.package / "font_assets/DejaVuSansMono.ttf",
+                        self.package / "font_assets/RBSRoadCJK-Regular.otf")
+        with self.assertRaisesRegex(ValueError, r"RBSRoadCJK-Regular\.otf: checksum"):
+            self.verify()
+        self.assertEqual(self.pg.font.get_init(), self.font_initialized)
+        self.assertIsNone(self.pg.mixer.get_init())
+
+    def test_missing_fallback_index_or_license_fails_before_decoding(self):
+        for name in ("fallback-coverage.json", "FALLBACK-OFL.txt"):
+            with self.subTest(name=name):
+                path = self.package / "font_assets" / name
+                original = path.read_bytes()
+                path.unlink()
+                with patch.object(self.pg.font, "Font", side_effect=AssertionError("Missing asset opened a font")), self.assertRaisesRegex(
+                    ValueError, "Runtime assets are missing: " + name
+                ):
+                    self.verify()
+                path.write_bytes(original)
+
     def test_damaged_wav_cannot_silently_disable_released_sound(self):
         (self.package / "audio_assets/victory.wav").write_bytes(b"damaged sound")
         with patch.dict(os.environ, {"SDL_AUDIODRIVER": "rbs-previous-driver"}):
@@ -159,6 +188,9 @@ class RuntimeAssetTests(unittest.TestCase):
             def render(instance, *args):
                 return instance.font.render(*args)
 
+            def __getattr__(instance, name):
+                return getattr(instance.font, name)
+
             def __del__(instance):
                 instance.font = None
                 live.discard(id(instance))
@@ -180,14 +212,14 @@ class RuntimeAssetTests(unittest.TestCase):
                             self.verify()
                     else:
                         self.verify()
-                self.assertEqual(lifecycle[-3:], ["released", "released", "quit"])
+                self.assertEqual(lifecycle[-5:], ["released"] * 4 + ["quit"])
         if self.font_initialized:
             self.pg.font.init()
 
     def test_decoded_font_files_can_be_deleted_immediately(self):
         self.pg.font.quit()
         self.verify()
-        for path in (self.package / "font_assets").glob("*.ttf"):
+        for path in (*self.package.glob("font_assets/*.ttf"), *self.package.glob("font_assets/*.otf")):
             path.unlink()
         if self.font_initialized:
             self.pg.font.init()

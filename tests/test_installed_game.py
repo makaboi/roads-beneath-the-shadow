@@ -24,6 +24,9 @@ class InstalledGameTests(unittest.TestCase):
             "pixel_assets/world-motion.png": b"character motion atlas",
             "audio_assets/ambient-buried.wav": b"buried hall soundscape",
             "font_assets/DejaVuSansMono.ttf": b"bundled font",
+            "font_assets/RBSRoadCJK-Regular.otf": b"bundled script fallback",
+            "font_assets/fallback-coverage.json": b'{"schema":1}',
+            "font_assets/FALLBACK-OFL.txt": b"fallback font license",
             "font_assets/LICENSE.txt": b"font license",
         }.items():
             path = self.source / name
@@ -41,10 +44,12 @@ class InstalledGameTests(unittest.TestCase):
 
     def test_complete_regular_wheel_matches_source(self):
         self.check()
-        self.assertEqual(len(self.expected), 6)
+        self.assertEqual(len(self.expected), 9)
 
     def test_omitted_runtime_assets_and_font_license_fail(self):
-        for name in ("font_assets/DejaVuSansMono.ttf", "font_assets/LICENSE.txt", "pixel_assets/world-motion.png", "audio_assets/ambient-buried.wav"):
+        for name in ("font_assets/DejaVuSansMono.ttf", "font_assets/RBSRoadCJK-Regular.otf",
+                     "font_assets/fallback-coverage.json", "font_assets/FALLBACK-OFL.txt", "font_assets/LICENSE.txt",
+                     "pixel_assets/world-motion.png", "audio_assets/ambient-buried.wav"):
             with self.subTest(name=name):
                 self.installed["files"] = {key: value for key, value in self.expected.items() if key != name}
                 with self.assertRaisesRegex(ValueError, "missing") as error:

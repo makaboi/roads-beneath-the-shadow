@@ -9,9 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .pixel_font import FALLBACK_FILES, FallbackFont, text_clusters
 
 FONT_DIRECTORY = Path(__file__).resolve().parent / "font_assets"
-FONT_FILES = ("DejaVuSansMono.ttf", "DejaVuSansMono-Bold.ttf", "LICENSE.txt")
+FONT_FILES = ("DejaVuSansMono.ttf", "DejaVuSansMono-Bold.ttf", "LICENSE.txt", *FALLBACK_FILES)
 
 # Warm ink and quiet metals belong to the road, rather than a desktop widget.
 # Text colors stay bright enough to read on either of the charcoal surfaces.
@@ -23,6 +24,7 @@ EDGE = (65, 78, 79)
 PARCHMENT = (239, 225, 188)
 AMBER = (219, 168, 92)
 TEAL = (105, 156, 151)
+SELECTED_TEAL = (110, 162, 157)
 MUTED = (159, 161, 150)
 RED = (219, 132, 113)
 STEEL = (177, 193, 189)
@@ -95,10 +97,12 @@ def missing_font_assets() -> list[Path]:
 def load_font(pg: Any, size: int, *, bold: bool = False) -> Any:
     """Load readable, consistently measured text, with a damaged-install fallback."""
     filename = "DejaVuSansMono-Bold.ttf" if bold else "DejaVuSansMono.ttf"
+    size = max(1, int(size))
     try:
-        return pg.font.Font(str(FONT_DIRECTORY / filename), max(1, int(size)))
+        base = pg.font.Font(str(FONT_DIRECTORY / filename), size)
     except (OSError, ValueError, pg.error):
-        return pg.font.SysFont("dejavusansmono,courier,monospace", max(1, int(size)), bold=bold)
+        return pg.font.SysFont("dejavusansmono,courier,monospace", size, bold=bold)
+    return FallbackFont(pg, base, size, bold=bold, font_directory=FONT_DIRECTORY)
 
 
 def initial_window_size(desktop: tuple[int, int], preferred: tuple[int, int] = (1200, 900)) -> tuple[int, int]:
@@ -129,9 +133,13 @@ def wrap_text(text: str, font: Any, width: int) -> list[str]:
                 output.append(line)
                 line = ""
             while word and font.size(word)[0] > width:
-                cut = 1
-                while cut < len(word) and font.size(word[:cut + 1])[0] <= width:
-                    cut += 1
+                clusters = list(text_clusters(word))
+                cut = len(clusters[0])
+                for cluster in clusters[1:]:
+                    candidate_cut = cut + len(cluster)
+                    if font.size(word[:candidate_cut])[0] > width:
+                        break
+                    cut = candidate_cut
                 output.append(word[:cut])
                 word = word[cut:]
             line = word

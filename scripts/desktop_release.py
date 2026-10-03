@@ -65,6 +65,21 @@ def project_version() -> str:
     return read_project_version(ROOT / "pyproject.toml")
 
 
+def expected_font_fallbacks() -> dict:
+    """Bind native font diagnostics to the source candidate's coverage index."""
+    coverage = json.loads((ROOT / "roads_beneath_shadow/font_assets/fallback-coverage.json").read_text(encoding="utf-8"))
+    return {"schema": coverage["schema"], "fonts": {
+        entry["filename"]: {"codepoints": entry["codepoints"], "sha256": entry["sha256"]}
+        for entry in coverage["fonts"].values()
+    }}
+
+
+def native_decoder_report_matches(report: object) -> bool:
+    return (isinstance(report, dict) and report.get("audio_driver") == "dummy"
+            and report.get("controller_backend") == "pygame._sdl2.controller"
+            and report.get("fonts") == 4 and report.get("font_fallbacks") == expected_font_fallbacks())
+
+
 def verify_version(version: str) -> None:
     if version != project_version():
         raise ValueError("The requested release version does not match pyproject.toml")
@@ -312,8 +327,7 @@ def smoke_test(
         )
         timings["runtime_decode"] = round(perf_counter() - start, 3)
         decoded_assets = json.loads(decoded.stdout)
-        if (not isinstance(decoded_assets, dict) or decoded_assets.get("audio_driver") != "dummy"
-                or decoded_assets.get("controller_backend") != "pygame._sdl2.controller"):
+        if not native_decoder_report_matches(decoded_assets):
             raise ValueError("The frozen game did not verify its native resource decoders")
         for label, arguments in (
             ("asset_check", ["--check-install"]),
@@ -418,6 +432,9 @@ def assemble_archive(executable: Path, platform: str, version: str, output: Path
         font_license = ROOT / "roads_beneath_shadow" / "font_assets" / "LICENSE.txt"
         if font_license.is_file():
             shutil.copy2(font_license, package / "FONT-LICENSE.txt")
+        fallback_license = font_license.with_name("FALLBACK-OFL.txt")
+        if fallback_license.is_file():
+            shutil.copy2(fallback_license, package / "FONT-FALLBACK-LICENSE.txt")
         if platform.startswith("macOS-"):
             launcher = package / "Play Roads Beneath the Shadow.command"
             shutil.copy2(ROOT / "Play Standalone.command", launcher)
@@ -522,6 +539,8 @@ def extract_player_archive(archive: Path, platform: str, destination: Path) -> t
     ))]
     if (ROOT / "roads_beneath_shadow" / "font_assets" / "LICENSE.txt").is_file():
         required.append(package / "FONT-LICENSE.txt")
+    if (ROOT / "roads_beneath_shadow" / "font_assets" / "FALLBACK-OFL.txt").is_file():
+        required.append(package / "FONT-FALLBACK-LICENSE.txt")
     missing = [path.name for path in required if not path.is_file()]
     if missing:
         raise ValueError("The player archive is incomplete: " + ", ".join(missing))
