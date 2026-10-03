@@ -1306,8 +1306,8 @@ class PanelView:
         minutes = slot.get("play_minutes")
         if isinstance(minutes, int) and not isinstance(minutes, bool) and 0 <= minutes <= 10_000_000:
             hours, remainder = divmod(minutes, 60)
-            elapsed = f"{hours}h {remainder:02d}m" if hours else f"{minutes} min"
-            condition.append(f"Played {elapsed}")
+            journey_time = f"{hours}h {remainder:02d}m" if hours else f"{minutes} min"
+            condition.append(f"Journey time {journey_time}")
         if condition:
             lines.append((" · ".join(condition), MUTED, self.small_font))
         saved_at = slot.get("saved_at")

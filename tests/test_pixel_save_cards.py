@@ -73,7 +73,7 @@ class SaveCardSDLTests(unittest.TestCase):
     def key(self, key):
         return self.panel.handle_event(self.pg.event.Event(self.pg.KEYDOWN, key=key, mod=0, unicode=""))
 
-    def test_real_slot_summary_keeps_name_background_location_elapsed_time_and_timestamp(self):
+    def test_real_slot_summary_keeps_name_background_location_journey_time_and_timestamp(self):
         snapshot = self.snapshot()
         before = deepcopy(snapshot)
         self.panel.open("saves", snapshot)
@@ -82,11 +82,11 @@ class SaveCardSDLTests(unittest.TestCase):
         later = [text for text, _, _ in self.panel._slot_lines(snapshot["slots"][1], "load")]
         self.assertIn("Part I / Bree", first)
         self.assertIn(ORIGINS[0].name, first)
-        self.assertIn("Health 22/28 · Played 37 min", first)
+        self.assertIn("Health 22/28 · Journey time 37 min", first)
         self.assertTrue(any(text.startswith("Saved ") for text in first))
         self.assertIn("Part II / The Last Lantern", later)
         self.assertIn(ORIGINS[1].name, later)
-        self.assertIn("Health 19/25 · Played 2h 12m", later)
+        self.assertIn("Health 19/25 · Journey time 2h 12m", later)
         self.assertEqual(snapshot, before)
         self.assertEqual(self.panel.data, before)
         self.assertEqual(self.manager.load(1).to_dict(), self.first.to_dict())
@@ -188,7 +188,7 @@ class SaveCardSDLTests(unittest.TestCase):
         self.draw(preference="larger")
         lines = [text for text, _, _ in self.panel._slot_lines(self.panel.data["slots"][1], "load")]
         self.assertIn("Part II complete / The Road Ahead", lines)
-        self.assertIn("Health 23/23 · Played 4h 00m", lines)
+        self.assertIn("Health 23/23 · Journey time 4h 00m", lines)
         self.assertFalse(any("living_road" in text or "Hidden Road" in text for text in lines))
         self.assertEqual(self.panel.data["slots"][1]["scene"], "complete")
 
